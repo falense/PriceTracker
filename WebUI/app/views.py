@@ -158,9 +158,37 @@ def add_product(request):
             return render(request, 'product/preview.html', context)
 
         # Authenticated user - proceed with adding product
-        # TODO: Implement actual product adding
-        messages.info(request, 'Product tracking will be implemented soon!')
-        return redirect('dashboard')
+        try:
+            from .services import ProductService
+
+            # Get optional parameters
+            priority = request.GET.get('priority', 'normal')
+            target_price = request.GET.get('target_price')
+
+            if target_price:
+                from decimal import Decimal, InvalidOperation
+                try:
+                    target_price = Decimal(target_price)
+                except (InvalidOperation, ValueError):
+                    target_price = None
+
+            # Use service to add product
+            product = ProductService.add_product(
+                user=request.user,
+                url=url,
+                priority=priority,
+                target_price=target_price
+            )
+
+            messages.success(request, f'Added {product.name}! Fetching current price...')
+            return redirect('product_detail', product_id=product.id)
+
+        except ValueError as e:
+            messages.error(request, str(e))
+            return redirect('dashboard')
+        except Exception as e:
+            messages.error(request, f'Failed to add product: {str(e)}')
+            return redirect('dashboard')
 
     # POST - only for authenticated users
     if not request.user.is_authenticated:
@@ -173,37 +201,37 @@ def add_product(request):
         messages.error(request, 'Please provide a valid product URL.')
         return redirect('dashboard')
 
-    # Check if product already exists
-    existing_product = Product.objects.filter(
-        user=request.user,
-        url=url,
-        active=True
-    ).first()
+    # Get optional parameters
+    priority = request.POST.get('priority', 'normal')
+    target_price = request.POST.get('target_price')
 
-    if existing_product:
-        messages.info(request, f'You are already tracking {existing_product.name}')
-        return redirect('product_detail', product_id=existing_product.id)
+    if target_price:
+        from decimal import Decimal, InvalidOperation
+        try:
+            target_price = Decimal(target_price)
+        except (InvalidOperation, ValueError):
+            target_price = None
 
-    # Extract domain from URL
-    from urllib.parse import urlparse
-    parsed_url = urlparse(url)
-    domain = parsed_url.netloc
+    # Use service to add product
+    try:
+        from .services import ProductService
 
-    # Create product
-    product = Product.objects.create(
-        user=request.user,
-        url=url,
-        domain=domain,
-        name='Loading...',  # Will be updated by fetcher
-        active=True,
-        priority='normal'
-    )
+        product = ProductService.add_product(
+            user=request.user,
+            url=url,
+            priority=priority,
+            target_price=target_price
+        )
 
-    # TODO: Trigger pattern generation and price fetching
-    # This will be implemented when integrating with ExtractorPatternAgent and PriceFetcher
+        messages.success(request, f'Added {product.name}! Fetching current price...')
+        return redirect('product_detail', product_id=product.id)
 
-    messages.success(request, 'Product added! We are fetching the details now.')
-    return redirect('product_detail', product_id=product.id)
+    except ValueError as e:
+        messages.error(request, str(e))
+        return redirect('dashboard')
+    except Exception as e:
+        messages.error(request, f'Failed to add product: {str(e)}')
+        return redirect('dashboard')
 
 
 @login_required
@@ -223,16 +251,68 @@ def delete_product(request, product_id):
 @require_http_methods(["POST"])
 def update_product_settings(request, product_id):
     """Update product settings."""
-    # TODO: Implement
-    return HttpResponse('Not implemented yet')
+    from .services import ProductService
+    from decimal import Decimal, InvalidOperation
+
+    product = get_object_or_404(Product, id=product_id, user=request.user)
+
+    # Collect updated settings
+    updates = {}
+
+    if 'priority' in request.POST:
+        updates['priority'] = request.POST['priority']
+
+    if 'target_price' in request.POST:
+        target_price = request.POST['target_price'].strip()
+        if target_price:
+            try:
+                updates['target_price'] = Decimal(target_price)
+            except (InvalidOperation, ValueError):
+                messages.error(request, 'Invalid target price')
+                return redirect('product_detail', product_id=product_id)
+        else:
+            updates['target_price'] = None
+
+    if 'notify_on_drop' in request.POST:
+        updates['notify_on_drop'] = request.POST['notify_on_drop'] == 'on'
+    else:
+        updates['notify_on_drop'] = False
+
+    if 'notify_on_restock' in request.POST:
+        updates['notify_on_restock'] = request.POST['notify_on_restock'] == 'on'
+    else:
+        updates['notify_on_restock'] = False
+
+    # Update product
+    ProductService.update_product_settings(product, **updates)
+
+    messages.success(request, 'Settings updated successfully')
+
+    if request.headers.get('HX-Request'):
+        # Return updated settings form for HTMX
+        return render(request, 'product/partials/settings_form.html', {'product': product})
+
+    return redirect('product_detail', product_id=product_id)
 
 
 @login_required
 @require_http_methods(["POST"])
 def refresh_price(request, product_id):
     """Trigger immediate price refresh."""
-    # TODO: Implement
-    return JsonResponse({'status': 'queued'})
+    from .services import ProductService
+
+    product = get_object_or_404(Product, id=product_id, user=request.user)
+
+    try:
+        task_id = ProductService.refresh_price(product)
+        messages.success(request, 'Price refresh triggered! Check back in a moment.')
+    except Exception as e:
+        messages.error(request, f'Failed to refresh price: {str(e)}')
+
+    if request.headers.get('HX-Request'):
+        return render(request, 'product/partials/product_status.html', {'product': product})
+
+    return redirect('product_detail', product_id=product_id)
 
 
 # HTMX endpoints
