@@ -34,10 +34,9 @@ def generate_pattern(self, url: str, domain: str, product_id: str = None):
         # Run ExtractorPatternAgent
         result = subprocess.run([
             'python',
-            '/extractor/scripts/generate_pattern.py',
-            '--url', url,
-            '--domain', domain,
-            '--product-id', product_id or ''
+            '/extractor/generate_pattern.py',
+            url,
+            '--domain', domain
         ], timeout=120, capture_output=True, text=True)
 
         if result.returncode == 0:
