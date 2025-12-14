@@ -43,7 +43,7 @@ class PatternLoader:
         Load pattern for a specific domain.
 
         Args:
-            domain: Domain name (e.g., "amazon.com")
+            domain: Domain name (e.g., "amazon.com" or "www.amazon.com")
 
         Returns:
             ExtractionPattern object or None if not found
@@ -52,6 +52,7 @@ class PatternLoader:
         cursor = conn.cursor()
 
         try:
+            # Try exact match first
             cursor.execute(
                 """
                 SELECT domain, pattern_json, created_at, updated_at
@@ -62,6 +63,26 @@ class PatternLoader:
             )
 
             row = cursor.fetchone()
+
+            # If not found, try with/without www prefix
+            if not row:
+                if domain.startswith('www.'):
+                    # Try without www
+                    alt_domain = domain[4:]
+                else:
+                    # Try with www
+                    alt_domain = f'www.{domain}'
+
+                cursor.execute(
+                    """
+                    SELECT domain, pattern_json, created_at, updated_at
+                    FROM app_pattern
+                    WHERE domain = ?
+                    """,
+                    (alt_domain,),
+                )
+                row = cursor.fetchone()
+
             if not row:
                 logger.warning("pattern_not_found", domain=domain)
                 return None

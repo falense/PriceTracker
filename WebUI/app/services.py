@@ -5,6 +5,7 @@ These services coordinate complex operations between models, tasks, and external
 """
 
 from .models import Product, Pattern, Notification, PriceHistory, AdminFlag
+from .utils.currency import format_price, get_currency_from_domain
 from django.utils import timezone
 from django.contrib.auth.models import User
 from urllib.parse import urlparse
@@ -66,7 +67,8 @@ class ProductService:
             product = ProductService._clone_product(other_user_product, user, priority, target_price)
             logger.info(f"Cloned product {product.id} from existing product for user {user.username}")
         else:
-            # Create new product
+            # Create new product with domain-based currency
+            currency_code, _ = get_currency_from_domain(domain)
             product = Product.objects.create(
                 id=uuid.uuid4(),
                 user=user,
@@ -75,8 +77,9 @@ class ProductService:
                 name=f"Product from {domain}",  # Temporary name, updated after first fetch
                 priority=priority,
                 target_price=target_price,
+                currency=currency_code,
             )
-            logger.info(f"Created new product {product.id} for user {user.username}")
+            logger.info(f"Created new product {product.id} for user {user.username} with currency {currency_code}")
 
         # Check if pattern exists for domain
         pattern = Pattern.objects.filter(domain=domain).first()
@@ -242,9 +245,13 @@ class NotificationService:
         drop_amount = old_price - new_price
         drop_percent = (drop_amount / old_price) * 100
 
+        old_price_formatted = format_price(float(old_price), domain=product.domain)
+        new_price_formatted = format_price(float(new_price), domain=product.domain)
+        drop_formatted = format_price(float(drop_amount), domain=product.domain)
+
         message = (
-            f"{product.name} dropped from ${old_price:.2f} to ${new_price:.2f} "
-            f"(-${drop_amount:.2f}, -{drop_percent:.1f}%)"
+            f"{product.name} dropped from {old_price_formatted} to {new_price_formatted} "
+            f"(-{drop_formatted}, -{drop_percent:.1f}%)"
         )
 
         notification = Notification.objects.create(
@@ -290,9 +297,12 @@ class NotificationService:
             logger.debug(f"Already notified about target price for product {product.id} in last 24h")
             return None
 
+        current_formatted = format_price(float(product.current_price), domain=product.domain)
+        target_formatted = format_price(float(product.target_price), domain=product.domain)
+
         message = (
             f"{product.name} reached your target price! "
-            f"Now ${product.current_price:.2f} (target: ${product.target_price:.2f})"
+            f"Now {current_formatted} (target: {target_formatted})"
         )
 
         notification = Notification.objects.create(
@@ -336,7 +346,8 @@ class NotificationService:
 
         message = f"{product.name} is back in stock!"
         if product.current_price:
-            message += f" Price: ${product.current_price:.2f}"
+            price_formatted = format_price(float(product.current_price), domain=product.domain)
+            message += f" Price: {price_formatted}"
 
         notification = Notification.objects.create(
             user=product.user,
@@ -372,9 +383,13 @@ class NotificationService:
         if spike_percent < 20:
             return None
 
+        old_price_formatted = format_price(float(old_price), domain=product.domain)
+        new_price_formatted = format_price(float(new_price), domain=product.domain)
+        spike_formatted = format_price(float(spike_amount), domain=product.domain)
+
         message = (
-            f"{product.name} price increased from ${old_price:.2f} to ${new_price:.2f} "
-            f"(+${spike_amount:.2f}, +{spike_percent:.1f}%)"
+            f"{product.name} price increased from {old_price_formatted} to {new_price_formatted} "
+            f"(+{spike_formatted}, +{spike_percent:.1f}%)"
         )
 
         notification = Notification.objects.create(

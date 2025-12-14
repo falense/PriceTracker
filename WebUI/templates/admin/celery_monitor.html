@@ -1,0 +1,84 @@
+{% extends "admin/base_site.html" %}
+
+{% block extrahead %}
+{{ block.super }}
+<script src="https://unpkg.com/htmx.org@1.9.10"></script>
+<script>
+    document.body.addEventListener('htmx:configRequest', function(event) {
+        event.detail.headers['X-CSRFToken'] = '{{ csrf_token }}';
+    });
+</script>
+<style>
+    #celery-stats-container {
+        min-height: 200px;
+        position: relative;
+    }
+
+    .loading-spinner {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 40px;
+        color: var(--body-quiet-color, #999);
+    }
+
+    .loading-spinner:before {
+        content: "⟳";
+        font-size: 24px;
+        margin-right: 10px;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+
+    .page-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 20px;
+        padding-bottom: 15px;
+        border-bottom: 1px solid var(--hairline-color, #e8e8e8);
+    }
+
+    .page-header h1 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--body-fg);
+    }
+
+    .refresh-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 5px 10px;
+        background: var(--darkened-bg);
+        border: 1px solid var(--border-color, #ddd);
+        border-radius: 3px;
+        font-size: 11px;
+        color: var(--body-quiet-color, #999);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+    <div class="page-header">
+        <h1>📊 Celery Queue Monitor</h1>
+        <div class="refresh-badge">
+            🔄 Auto-refresh: 5s
+        </div>
+    </div>
+
+    <div id="celery-stats-container"
+         hx-get="{% url 'celery_monitor_refresh' %}"
+         hx-trigger="load, every 5s"
+         hx-swap="innerHTML">
+        <div class="loading-spinner">
+            Loading Celery statistics...
+        </div>
+    </div>
+</div>
+{% endblock %}

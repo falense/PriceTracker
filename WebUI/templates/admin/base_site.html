@@ -1,0 +1,15 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{{ title }} | {{ site_title|default:'Django site admin' }}{% endblock %}
+
+{% block branding %}
+<h1 id="site-name"><a href="{% url 'admin:index' %}">{{ site_header|default:'Django administration' }}</a></h1>
+{% endblock %}
+
+{% block nav-global %}
+<div style="float: right; margin-right: 20px;">
+    <a href="{% url 'celery_monitor' %}" style="color: #447e9b; text-decoration: none; padding: 5px 10px; background: rgba(68, 126, 155, 0.1); border-radius: 4px;">
+        📊 Celery Monitor
+    </a>
+</div>
+{% endblock %}

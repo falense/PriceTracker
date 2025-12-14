@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load currency_filters %}
 
 {% block title %}Dashboard - PriceTracker{% endblock %}
 
@@ -192,7 +193,7 @@
             {% for product in products %}
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-md transition-shadow">
                 {% if product.image_url %}
-                <img src="{{ product.image_url }}" alt="{{ product.name }}" class="w-full h-48 object-cover">
+                <img src="{{ product.image_url }}" alt="{{ product.name }}" class="w-full h-48 object-contain bg-white dark:bg-gray-900">
                 {% else %}
                 <div class="w-full h-48 bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
                     <svg class="w-16 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -203,23 +204,31 @@
 
                 <div class="p-6">
                     <h3 class="font-semibold text-gray-900 dark:text-white mb-2 line-clamp-2">
-                        {{ product.name }}
+                        {{ product.extracted_title }}
                     </h3>
                     <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
                         {{ product.domain }}
                     </p>
 
                     {% if product.current_price %}
-                    <div class="flex items-baseline space-x-2 mb-4">
-                        <span class="text-2xl font-bold text-gray-900 dark:text-white">
-                            ${{ product.current_price }}
-                        </span>
-                        {% if product.price_change_24h %}
-                        <span class="text-sm font-medium {% if product.price_change_24h < 0 %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
-                            {% if product.price_change_24h > 0 %}+{% endif %}${{ product.price_change_24h|floatformat:2 }}
-                        </span>
-                        {% endif %}
+                    <div class="mb-2">
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Current Price</p>
+                        <div class="flex items-baseline space-x-2">
+                            <span class="text-2xl font-bold text-gray-900 dark:text-white">
+                                {{ product.current_price|format_currency:product.domain }}
+                            </span>
+                            {% if product.price_change_24h %}
+                            <span class="text-sm font-medium {% if product.price_change_24h < 0 %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+                                {% if product.price_change_24h > 0 %}+{% endif %}{{ product.price_change_24h|floatformat:2|format_currency:product.domain }}
+                            </span>
+                            {% endif %}
+                        </div>
                     </div>
+                    {% if product.lowest_price %}
+                    <div class="mb-4">
+                        <p class="text-xs text-gray-500 dark:text-gray-400">Lowest: <span class="font-semibold text-green-600 dark:text-green-400">{{ product.lowest_price|format_currency:product.domain }}</span></p>
+                    </div>
+                    {% endif %}
                     {% else %}
                     <div class="mb-4 text-gray-500 dark:text-gray-400">
                         Fetching price...

@@ -232,18 +232,24 @@ class Extractor:
 
         Args:
             html: HTML content
-            tag_name: Meta tag property or name
+            tag_name: Meta tag property/name OR CSS selector
 
         Returns:
             Meta tag content or None
         """
         soup = BeautifulSoup(html, "html.parser")
 
-        # Try property attribute first (Open Graph)
-        meta = soup.find("meta", property=tag_name)
-        if not meta:
-            # Try name attribute
-            meta = soup.find("meta", attrs={"name": tag_name})
+        # Check if it's a CSS selector (contains brackets)
+        if '[' in tag_name and ']' in tag_name:
+            # Use CSS selector directly
+            meta = soup.select_one(tag_name)
+        else:
+            # Legacy format: just the tag name
+            # Try property attribute first (Open Graph)
+            meta = soup.find("meta", property=tag_name)
+            if not meta:
+                # Try name attribute
+                meta = soup.find("meta", attrs={"name": tag_name})
 
         if meta:
             content = meta.get("content")

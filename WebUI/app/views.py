@@ -66,10 +66,31 @@ def logout_view(request):
 def dashboard(request):
     """Main dashboard view - accessible to everyone."""
     if request.user.is_authenticated:
+        from django.db.models import OuterRef, Subquery
+        from app.models import PriceHistory
+
+        # Subquery to get the latest extracted title
+        latest_title = PriceHistory.objects.filter(
+            product=OuterRef('pk')
+        ).order_by('-recorded_at').values('extracted_data')[:1]
+
         products = Product.objects.filter(
             user=request.user,
             active=True
+        ).annotate(
+            latest_extracted_data=Subquery(latest_title)
         ).order_by('-last_viewed', '-created_at')[:20]
+
+        # Extract title for each product
+        for product in products:
+            if product.latest_extracted_data:
+                title_data = product.latest_extracted_data.get('title', {})
+                if isinstance(title_data, dict):
+                    product.extracted_title = title_data.get('value', product.name)
+                else:
+                    product.extracted_title = product.name
+            else:
+                product.extracted_title = product.name
 
         notifications = Notification.objects.filter(
             user=request.user,
@@ -111,7 +132,31 @@ def dashboard(request):
 @login_required
 def product_list(request):
     """List all products."""
-    products = Product.objects.filter(user=request.user, active=True)
+    from django.db.models import OuterRef, Subquery
+    from app.models import PriceHistory
+
+    # Subquery to get the latest extracted title
+    latest_title = PriceHistory.objects.filter(
+        product=OuterRef('pk')
+    ).order_by('-recorded_at').values('extracted_data')[:1]
+
+    products = Product.objects.filter(
+        user=request.user,
+        active=True
+    ).annotate(
+        latest_extracted_data=Subquery(latest_title)
+    )
+
+    # Extract title for each product
+    for product in products:
+        if product.latest_extracted_data:
+            title_data = product.latest_extracted_data.get('title', {})
+            if isinstance(title_data, dict):
+                product.extracted_title = title_data.get('value', product.name)
+            else:
+                product.extracted_title = product.name
+        else:
+            product.extracted_title = product.name
 
     # TODO: Add filtering and search
 
@@ -119,20 +164,35 @@ def product_list(request):
     return render(request, 'product/list.html', context)
 
 
-@login_required
 def product_detail(request, product_id):
-    """Product detail page."""
-    product = get_object_or_404(Product, id=product_id, user=request.user)
-
-    # Record view
-    product.record_view()
+    """Product detail page - accessible to all, read-only for guests."""
+    if request.user.is_authenticated:
+        # Authenticated user - show only their products
+        product = get_object_or_404(Product, id=product_id, user=request.user)
+        # Record view for authenticated users
+        product.record_view()
+    else:
+        # Guest user - can view any product (read-only)
+        product = get_object_or_404(Product, id=product_id, active=True)
 
     # Get price history
     price_history = product.price_history.all()[:100]
 
+    # Get extracted title from latest price history
+    latest_history = product.price_history.order_by('-recorded_at').first()
+    if latest_history and latest_history.extracted_data:
+        title_data = latest_history.extracted_data.get('title', {})
+        if isinstance(title_data, dict):
+            product.extracted_title = title_data.get('value', product.name)
+        else:
+            product.extracted_title = product.name
+    else:
+        product.extracted_title = product.name
+
     context = {
         'product': product,
         'price_history': price_history,
+        'is_guest': not request.user.is_authenticated,
     }
     return render(request, 'product/detail.html', context)
 
@@ -235,12 +295,14 @@ def add_product(request):
 
 
 @login_required
-@require_http_methods(["DELETE"])
+@require_http_methods(["POST", "DELETE"])
 def delete_product(request, product_id):
     """Delete (deactivate) product."""
     product = get_object_or_404(Product, id=product_id, user=request.user)
     product.active = False
     product.save()
+
+    messages.success(request, f'Stopped tracking "{product.name}"')
 
     if request.headers.get('HX-Request'):
         return HttpResponse('')
@@ -353,26 +415,62 @@ def search_product(request):
 
     else:
         # Query is a product name - search for existing products
-        if not request.user.is_authenticated:
-            # Guest user - prompt to register
-            context = {'query': query}
-            return render(request, 'search/guest_prompt.html', context)
+        if request.user.is_authenticated:
+            # Authenticated user - search their products
+            products = Product.objects.filter(
+                user=request.user,
+                active=True,
+                name__icontains=query
+            ).order_by('-last_viewed')[:5]
+        else:
+            # Guest user - search all products in the database
+            from django.db.models import OuterRef, Subquery
+            from app.models import PriceHistory
 
-        # Search existing products
-        products = Product.objects.filter(
-            user=request.user,
-            active=True,
-            name__icontains=query
-        ).order_by('-last_viewed')[:5]
+            # Subquery to get the latest extracted title
+            latest_title = PriceHistory.objects.filter(
+                product=OuterRef('pk')
+            ).order_by('-recorded_at').values('extracted_data')[:1]
 
-        if products.exists():
+            products = Product.objects.filter(
+                active=True
+            ).annotate(
+                latest_extracted_data=Subquery(latest_title)
+            ).order_by('-last_viewed')[:20]
+
+            # Extract title and filter by query
+            matched_products = []
+            for product in products:
+                if product.latest_extracted_data:
+                    title_data = product.latest_extracted_data.get('title', {})
+                    if isinstance(title_data, dict):
+                        product.extracted_title = title_data.get('value', product.name)
+                    else:
+                        product.extracted_title = product.name
+                else:
+                    product.extracted_title = product.name
+
+                # Check if query matches extracted title or name
+                if (query.lower() in product.extracted_title.lower() or
+                    query.lower() in product.name.lower()):
+                    matched_products.append(product)
+
+            products = matched_products[:5]
+
+        if products:
             # Found matching products
             context = {'products': products, 'query': query}
             return render(request, 'search/results_found.html', context)
         else:
-            # No products found - prompt for URL
-            context = {'query': query}
-            return render(request, 'search/name_not_found.html', context)
+            # No products found
+            if request.user.is_authenticated:
+                # Authenticated user - prompt for URL
+                context = {'query': query}
+                return render(request, 'search/name_not_found.html', context)
+            else:
+                # Guest user - prompt to register
+                context = {'query': query}
+                return render(request, 'search/guest_prompt.html', context)
 
 
 @login_required

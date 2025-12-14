@@ -21,6 +21,7 @@ import asyncio
 import json
 import sys
 import re
+from pathlib import Path
 from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
 from rich.console import Console
@@ -28,47 +29,40 @@ from rich.panel import Panel
 from rich import print as rprint
 from urllib.parse import urlparse
 
+# Add src to path for stealth utilities
+sys.path.insert(0, str(Path(__file__).parent / "src"))
+from utils.stealth import STEALTH_ARGS, apply_stealth, get_stealth_context_options
+
 console = Console()
 
 
 async def fetch_page(url):
-    """Fetch page with stealth browser."""
+    """Fetch page with comprehensive stealth to avoid bot detection."""
     console.print(f"[cyan]Fetching page:[/cyan] {url}")
 
     async with async_playwright() as p:
+        # Launch with stealth arguments
         browser = await p.chromium.launch(
             headless=True,  # Required for Docker/server environments
-            args=[
-                '--no-sandbox',  # Required for Docker
-                '--disable-setuid-sandbox',
-                '--disable-blink-features=AutomationControlled',
-                '--disable-dev-shm-usage',  # Prevents shared memory issues
-            ]
+            args=STEALTH_ARGS
         )
 
-        context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            viewport={'width': 1920, 'height': 1080},
-            locale='nb-NO',
-            extra_http_headers={
-                'Accept-Language': 'nb-NO,nb;q=0.9,no;q=0.8,en-US;q=0.7,en;q=0.6',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            }
-        )
+        # Create context with stealth options
+        context_options = get_stealth_context_options()
+        context = await browser.new_context(**context_options)
 
         page = await context.new_page()
 
-        # Stealth script
-        await page.add_init_script("""
-            Object.defineProperty(navigator, 'webdriver', {
-                get: () => undefined
-            });
-            window.navigator.chrome = { runtime: {} };
-        """)
+        # Apply comprehensive stealth script
+        await apply_stealth(page)
 
         try:
+            # Navigate with realistic behavior
             await page.goto(url, wait_until='load', timeout=60000)
-            await page.wait_for_timeout(2000)  # Wait for dynamic content
+
+            # Wait for dynamic content (more realistic timing)
+            await page.wait_for_timeout(2000)
+
             html = await page.content()
             console.print(f"[green]✓[/green] Page fetched ({len(html)} bytes)")
             return html

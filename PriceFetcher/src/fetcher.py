@@ -214,7 +214,7 @@ class PriceFetcher:
 
             # Store if valid
             if validation.valid:
-                self.storage.save_price(product_id, extraction, validation)
+                self.storage.save_price(product_id, extraction, validation, url)
                 self.storage.update_pattern_stats(product.domain, success=True)
             else:
                 self.storage.update_pattern_stats(product.domain, success=False)

@@ -7,6 +7,7 @@ from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Dict, List, Optional, Any
+from urllib.parse import urljoin, urlparse
 
 import structlog
 
@@ -40,6 +41,61 @@ class PriceStorage:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         return conn
+
+    def get_product_by_id(self, product_id: str) -> Optional[Product]:
+        """
+        Get a specific product by ID.
+
+        Args:
+            product_id: Product UUID (with or without hyphens)
+
+        Returns:
+            Product object or None if not found
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        # SQLite stores UUIDs without hyphens, so remove them for the query
+        product_id_clean = product_id.replace('-', '')
+
+        query = """
+            SELECT id, url, domain, name, current_price, currency,
+                   check_interval, last_checked, active, priority
+            FROM app_product
+            WHERE id = ?
+            AND active = 1
+        """
+
+        try:
+            cursor.execute(query, (product_id_clean,))
+            row = cursor.fetchone()
+
+            if not row:
+                logger.warning("product_not_found", product_id=product_id)
+                return None
+
+            product = Product(
+                product_id=row["id"],
+                url=row["url"],
+                domain=row["domain"],
+                name=row["name"],
+                current_price=Decimal(str(row["current_price"]))
+                if row["current_price"]
+                else None,
+                currency=row["currency"] or "USD",
+                check_interval=row["check_interval"] or 3600,
+                last_checked=datetime.fromisoformat(row["last_checked"])
+                if row["last_checked"]
+                else None,
+                active=bool(row["active"]),
+                priority=row["priority"] or "normal",
+            )
+
+            logger.info("product_loaded", product_id=product_id)
+            return product
+
+        finally:
+            conn.close()
 
     def get_products_to_fetch(self) -> List[Product]:
         """
@@ -94,11 +150,114 @@ class PriceStorage:
         finally:
             conn.close()
 
+    def get_products_without_images(
+        self, limit: Optional[int] = None
+    ) -> List[Product]:
+        """
+        Get active products where image_url is NULL.
+
+        Args:
+            limit: Maximum number of products to return (None for all)
+
+        Returns:
+            List of Product objects without images
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        query = """
+            SELECT id, url, domain, name, current_price, currency,
+                   check_interval, last_checked, active, priority
+            FROM app_product
+            WHERE active = 1
+            AND (image_url IS NULL OR image_url = '')
+            ORDER BY priority DESC, created_at DESC
+        """
+
+        if limit:
+            query += f" LIMIT {int(limit)}"
+
+        try:
+            cursor.execute(query)
+            rows = cursor.fetchall()
+
+            products = []
+            for row in rows:
+                products.append(
+                    Product(
+                        product_id=row["id"],
+                        url=row["url"],
+                        domain=row["domain"],
+                        name=row["name"],
+                        current_price=Decimal(str(row["current_price"]))
+                        if row["current_price"]
+                        else None,
+                        currency=row["currency"] or "USD",
+                        check_interval=row["check_interval"] or 3600,
+                        last_checked=datetime.fromisoformat(row["last_checked"])
+                        if row["last_checked"]
+                        else None,
+                        active=bool(row["active"]),
+                        priority=row["priority"] or "normal",
+                    )
+                )
+
+            logger.info("products_without_images_loaded", count=len(products))
+            return products
+
+        finally:
+            conn.close()
+
+    def update_product_image(self, product_id: str, image_url: str) -> None:
+        """
+        Update only the image_url field for a product.
+
+        Args:
+            product_id: Product UUID
+            image_url: Image URL to set
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute(
+                """
+                UPDATE app_product
+                SET image_url = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    image_url,
+                    datetime.utcnow().isoformat(),
+                    product_id,
+                ),
+            )
+
+            conn.commit()
+            logger.info(
+                "product_image_updated",
+                product_id=product_id,
+                image_url=image_url,
+            )
+
+        except Exception as e:
+            conn.rollback()
+            logger.error(
+                "product_image_update_failed",
+                product_id=product_id,
+                error=str(e),
+            )
+            raise
+        finally:
+            conn.close()
+
     def save_price(
         self,
         product_id: str,
         extraction: ExtractionResult,
         validation: ValidationResult,
+        product_url: Optional[str] = None,
     ) -> None:
         """
         Save extracted price to history.
@@ -107,6 +266,7 @@ class PriceStorage:
             product_id: Product UUID
             extraction: Extracted data
             validation: Validation result
+            product_url: Product URL for normalizing relative image URLs
         """
         conn = self._get_connection()
         cursor = conn.cursor()
@@ -127,6 +287,24 @@ class PriceStorage:
                 avail_text = extraction.availability.value.lower()
                 available = "stock" in avail_text or "available" in avail_text
 
+            # Extract and normalize image URL
+            image_url = None
+            if extraction.image and extraction.image.value:
+                image_url = extraction.image.value.strip()
+                # Normalize relative URLs to absolute
+                if image_url and not image_url.startswith(('http://', 'https://')):
+                    if product_url:
+                        parsed = urlparse(product_url)
+                        base_url = f"{parsed.scheme}://{parsed.netloc}"
+                        image_url = urljoin(base_url, image_url)
+                    else:
+                        logger.warning(
+                            "relative_image_url_without_base",
+                            product_id=product_id,
+                            image_url=image_url,
+                        )
+                        image_url = None  # Can't normalize without base URL
+
             # Store in price_history table
             cursor.execute(
                 """
@@ -146,12 +324,16 @@ class PriceStorage:
                 ),
             )
 
-            # Update product's current_price and last_checked
+            # Update product's current_price, availability, image_url, and last_checked
             cursor.execute(
                 """
                 UPDATE app_product
                 SET current_price = ?,
                     available = ?,
+                    image_url = CASE
+                        WHEN ? IS NOT NULL THEN ?
+                        ELSE image_url
+                    END,
                     last_checked = ?,
                     updated_at = ?
                 WHERE id = ?
@@ -159,6 +341,8 @@ class PriceStorage:
                 (
                     price_value,
                     available,
+                    image_url,  # For WHEN condition
+                    image_url,  # For THEN clause
                     datetime.utcnow().isoformat(),
                     datetime.utcnow().isoformat(),
                     product_id,
@@ -171,6 +355,7 @@ class PriceStorage:
                 product_id=product_id,
                 price=price_value,
                 confidence=validation.confidence,
+                image_extracted=image_url is not None,
             )
 
         except Exception as e:

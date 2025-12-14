@@ -1,9 +1,10 @@
-"""Browser tools for fetching and rendering web pages."""
+"""Browser tools for fetching and rendering web pages with comprehensive stealth."""
 
 from claude_agent_sdk import tool
 from playwright.async_api import async_playwright
 from typing import Any, Dict
 import logging
+from ..utils.stealth import STEALTH_ARGS, apply_stealth, get_stealth_context_options
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 )
 async def fetch_page_tool(args: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Fetch page HTML with Playwright.
+    Fetch page HTML with Playwright using comprehensive stealth to avoid bot detection.
 
     Args:
         url: The URL to fetch
@@ -31,50 +32,19 @@ async def fetch_page_tool(args: Dict[str, Any]) -> Dict[str, Any]:
 
     try:
         async with async_playwright() as p:
-            # Launch in headless mode for Docker/server environments
+            # Launch in headless mode with comprehensive stealth
             browser = await p.chromium.launch(
                 headless=True,  # Required for Docker/server environments
-                args=[
-                    '--no-sandbox',  # Required for Docker
-                    '--disable-setuid-sandbox',
-                    '--disable-blink-features=AutomationControlled',
-                    '--disable-dev-shm-usage',  # Prevents shared memory issues
-                    '--disable-web-security',
-                    '--disable-features=IsolateOrigins,site-per-process'
-                ]
-            )
-            context = await browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                viewport={'width': 1920, 'height': 1080},
-                locale='nb-NO',
-                timezone_id='Europe/Oslo',
-                java_script_enabled=True,
-                extra_http_headers={
-                    'Accept-Language': 'nb-NO,nb;q=0.9,no;q=0.8,en-US;q=0.7,en;q=0.6',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-                    'Sec-Fetch-Site': 'none',
-                    'Sec-Fetch-Mode': 'navigate',
-                    'Sec-Fetch-User': '?1',
-                    'Sec-Fetch-Dest': 'document'
-                }
+                args=STEALTH_ARGS
             )
 
-            # Add script to remove webdriver property
+            # Create context with stealth options
+            context_options = get_stealth_context_options()
+            context = await browser.new_context(**context_options)
+
+            # Create page and apply stealth
             page = await context.new_page()
-            await page.add_init_script("""
-                Object.defineProperty(navigator, 'webdriver', {
-                    get: () => undefined
-                });
-                window.navigator.chrome = {
-                    runtime: {}
-                };
-                Object.defineProperty(navigator, 'plugins', {
-                    get: () => [1, 2, 3, 4, 5]
-                });
-                Object.defineProperty(navigator, 'languages', {
-                    get: () => ['nb-NO', 'nb', 'no', 'en-US', 'en']
-                });
-            """)
+            await apply_stealth(page)
 
             try:
                 # Navigate to page - use 'load' instead of 'networkidle' to be less strict
@@ -113,7 +83,7 @@ async def fetch_page_tool(args: Dict[str, Any]) -> Dict[str, Any]:
 )
 async def render_js_tool(args: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Render JS and wait for specific selector.
+    Render JS and wait for specific selector with comprehensive stealth.
 
     Args:
         url: The URL to render
@@ -129,50 +99,19 @@ async def render_js_tool(args: Dict[str, Any]) -> Dict[str, Any]:
 
     try:
         async with async_playwright() as p:
-            # Launch in headless mode for Docker/server environments
+            # Launch in headless mode with comprehensive stealth
             browser = await p.chromium.launch(
                 headless=True,  # Required for Docker/server environments
-                args=[
-                    '--no-sandbox',  # Required for Docker
-                    '--disable-setuid-sandbox',
-                    '--disable-blink-features=AutomationControlled',
-                    '--disable-dev-shm-usage',  # Prevents shared memory issues
-                    '--disable-web-security',
-                    '--disable-features=IsolateOrigins,site-per-process'
-                ]
-            )
-            context = await browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                viewport={'width': 1920, 'height': 1080},
-                locale='nb-NO',
-                timezone_id='Europe/Oslo',
-                java_script_enabled=True,
-                extra_http_headers={
-                    'Accept-Language': 'nb-NO,nb;q=0.9,no;q=0.8,en-US;q=0.7,en;q=0.6',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-                    'Sec-Fetch-Site': 'none',
-                    'Sec-Fetch-Mode': 'navigate',
-                    'Sec-Fetch-User': '?1',
-                    'Sec-Fetch-Dest': 'document'
-                }
+                args=STEALTH_ARGS
             )
 
-            # Add script to remove webdriver property
+            # Create context with stealth options
+            context_options = get_stealth_context_options()
+            context = await browser.new_context(**context_options)
+
+            # Create page and apply stealth
             page = await context.new_page()
-            await page.add_init_script("""
-                Object.defineProperty(navigator, 'webdriver', {
-                    get: () => undefined
-                });
-                window.navigator.chrome = {
-                    runtime: {}
-                };
-                Object.defineProperty(navigator, 'plugins', {
-                    get: () => [1, 2, 3, 4, 5]
-                });
-                Object.defineProperty(navigator, 'languages', {
-                    get: () => ['nb-NO', 'nb', 'no', 'en-US', 'en']
-                });
-            """)
+            await apply_stealth(page)
 
             try:
                 # Navigate and wait for load
@@ -215,7 +154,7 @@ async def render_js_tool(args: Dict[str, Any]) -> Dict[str, Any]:
 )
 async def screenshot_page_tool(args: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Take a screenshot of a web page.
+    Take a screenshot of a web page with comprehensive stealth.
 
     Args:
         url: The URL to screenshot
@@ -231,50 +170,19 @@ async def screenshot_page_tool(args: Dict[str, Any]) -> Dict[str, Any]:
 
     try:
         async with async_playwright() as p:
-            # Launch in headless mode for Docker/server environments
+            # Launch in headless mode with comprehensive stealth
             browser = await p.chromium.launch(
                 headless=True,  # Required for Docker/server environments
-                args=[
-                    '--no-sandbox',  # Required for Docker
-                    '--disable-setuid-sandbox',
-                    '--disable-blink-features=AutomationControlled',
-                    '--disable-dev-shm-usage',  # Prevents shared memory issues
-                    '--disable-web-security',
-                    '--disable-features=IsolateOrigins,site-per-process'
-                ]
-            )
-            context = await browser.new_context(
-                viewport={"width": 1920, "height": 1080},
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                locale='nb-NO',
-                timezone_id='Europe/Oslo',
-                java_script_enabled=True,
-                extra_http_headers={
-                    'Accept-Language': 'nb-NO,nb;q=0.9,no;q=0.8,en-US;q=0.7,en;q=0.6',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-                    'Sec-Fetch-Site': 'none',
-                    'Sec-Fetch-Mode': 'navigate',
-                    'Sec-Fetch-User': '?1',
-                    'Sec-Fetch-Dest': 'document'
-                }
+                args=STEALTH_ARGS
             )
 
-            # Add script to remove webdriver property
+            # Create context with stealth options
+            context_options = get_stealth_context_options()
+            context = await browser.new_context(**context_options)
+
+            # Create page and apply stealth
             page = await context.new_page()
-            await page.add_init_script("""
-                Object.defineProperty(navigator, 'webdriver', {
-                    get: () => undefined
-                });
-                window.navigator.chrome = {
-                    runtime: {}
-                };
-                Object.defineProperty(navigator, 'plugins', {
-                    get: () => [1, 2, 3, 4, 5]
-                });
-                Object.defineProperty(navigator, 'languages', {
-                    get: () => ['nb-NO', 'nb', 'no', 'en-US', 'en']
-                });
-            """)
+            await apply_stealth(page)
 
             try:
                 await page.goto(url, wait_until="load", timeout=60000)
@@ -284,13 +192,17 @@ async def screenshot_page_tool(args: Dict[str, Any]) -> Dict[str, Any]:
 
                 logger.info(f"Screenshot captured successfully ({len(screenshot_bytes)} bytes)")
 
+                # Encode as base64 string
+                import base64
+                screenshot_b64 = base64.b64encode(screenshot_bytes).decode('utf-8')
+
                 return {
                     "content": [{
                         "type": "image",
                         "source": {
                             "type": "base64",
                             "media_type": "image/png",
-                            "data": screenshot_bytes.decode("latin-1")
+                            "data": screenshot_b64
                         }
                     }]
                 }

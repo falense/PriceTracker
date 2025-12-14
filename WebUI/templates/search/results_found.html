@@ -1,3 +1,4 @@
+{% load currency_filters %}
 <!-- Search results found -->
 <div class="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
     <div class="bg-gray-50 dark:bg-gray-900/50 px-6 py-3 border-b border-gray-200 dark:border-gray-700">
@@ -25,7 +26,7 @@
 
                 <div class="flex-1 min-w-0">
                     <h4 class="font-medium text-gray-900 dark:text-white truncate">
-                        {{ product.name }}
+                        {{ product.extracted_title|default:product.name }}
                     </h4>
                     <p class="text-sm text-gray-500 dark:text-gray-400">
                         {{ product.domain }}
@@ -35,11 +36,16 @@
                 <div class="text-right flex-shrink-0">
                     {% if product.current_price %}
                     <p class="text-lg font-bold text-gray-900 dark:text-white">
-                        ${{ product.current_price }}
+                        {{ product.current_price|format_currency:product.domain }}
                     </p>
                     {% if product.price_change_24h %}
                     <p class="text-sm {% if product.price_change_24h < 0 %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
-                        {% if product.price_change_24h > 0 %}+{% endif %}${{ product.price_change_24h|floatformat:2 }}
+                        {% if product.price_change_24h > 0 %}+{% endif %}{{ product.price_change_24h|floatformat:2|format_currency:product.domain }}
+                    </p>
+                    {% endif %}
+                    {% if product.lowest_price %}
+                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                        Lowest: <span class="text-green-600 dark:text-green-400">{{ product.lowest_price|format_currency:product.domain }}</span>
                     </p>
                     {% endif %}
                     {% else %}

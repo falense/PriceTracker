@@ -121,6 +121,11 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 
+# Task tracking for admin monitoring
+CELERY_RESULT_EXTENDED = True  # Store additional task metadata including task name
+CELERY_TASK_TRACK_STARTED = True  # Track when tasks start
+CELERY_TASK_SEND_SENT_EVENT = True  # Enable task-sent events
+
 # Logging
 LOGGING = {
     'version': 1,

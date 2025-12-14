@@ -1,0 +1,271 @@
+<style>
+    .celery-section {
+        background: var(--body-bg);
+        border: 1px solid var(--border-color, #ddd);
+        border-radius: 4px;
+        margin-bottom: 20px;
+        padding: 0;
+        overflow: hidden;
+    }
+
+    .celery-section-header {
+        background: var(--darkened-bg);
+        border-bottom: 1px solid var(--border-color, #ddd);
+        padding: 12px 15px;
+        font-weight: 600;
+        font-size: 14px;
+        color: var(--body-fg);
+    }
+
+    .celery-section-body {
+        padding: 15px;
+    }
+
+    .celery-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+    }
+
+    .celery-table thead th {
+        text-align: left;
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--border-color, #ddd);
+        font-weight: 600;
+        color: var(--body-fg);
+        background: var(--darkened-bg);
+    }
+
+    .celery-table tbody tr {
+        border-bottom: 1px solid var(--hairline-color, #e8e8e8);
+    }
+
+    .celery-table tbody tr:hover {
+        background: var(--darkened-bg);
+    }
+
+    .celery-table tbody td {
+        padding: 8px 10px;
+        color: var(--body-fg);
+    }
+
+    .worker-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 6px 12px;
+        background: var(--darkened-bg);
+        border: 1px solid var(--border-color, #ddd);
+        border-radius: 4px;
+        margin-bottom: 8px;
+    }
+
+    .worker-status-online {
+        color: #0c6;
+        margin-left: 8px;
+    }
+
+    .status-success {
+        color: #0c6;
+        font-weight: 500;
+    }
+
+    .status-failure {
+        color: #c30;
+        font-weight: 500;
+    }
+
+    .status-pending {
+        color: var(--body-quiet-color, #666);
+    }
+
+    .empty-state {
+        color: var(--body-quiet-color, #999);
+        padding: 20px;
+        text-align: center;
+        font-style: italic;
+    }
+
+    .error-state {
+        color: #c30;
+        padding: 12px;
+        background: rgba(204, 51, 0, 0.1);
+        border-left: 3px solid #c30;
+        border-radius: 3px;
+    }
+
+    .error-help {
+        color: var(--body-quiet-color, #666);
+        font-size: 12px;
+        margin-top: 8px;
+    }
+
+    .task-name {
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+        font-size: 12px;
+        color: var(--link-fg, #447e9b);
+    }
+
+    .update-time {
+        text-align: right;
+        font-size: 11px;
+        color: var(--body-quiet-color, #999);
+        margin-top: 15px;
+        padding-top: 15px;
+        border-top: 1px solid var(--hairline-color, #e8e8e8);
+    }
+</style>
+
+<!-- Worker Status Section -->
+<div class="celery-section">
+    <div class="celery-section-header">
+        <span style="margin-right: 8px;">🔧</span> Workers
+    </div>
+    <div class="celery-section-body">
+        {% if stats.workers %}
+            {% for worker, info in stats.workers.items %}
+            <div class="worker-badge">
+                <strong>{{ worker }}</strong>
+                <span class="worker-status-online">● Online</span>
+            </div>
+            {% endfor %}
+        {% elif stats.error %}
+            <div class="error-state">
+                ⚠ Error connecting to Celery: {{ stats.error }}
+            </div>
+        {% else %}
+            <div class="error-state">
+                ⚠ No active workers detected
+                <div class="error-help">Check if Celery worker is running: <code>docker-compose logs celery</code></div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Active Tasks Section -->
+<div class="celery-section">
+    <div class="celery-section-header">
+        <span style="margin-right: 8px;">⚡</span> Active Tasks
+    </div>
+    <div class="celery-section-body" style="padding: 0;">
+        {% if stats.active %}
+            <table class="celery-table">
+                <thead>
+                    <tr>
+                        <th>Task</th>
+                        <th>Args</th>
+                        <th>Worker</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for worker, tasks in stats.active.items %}
+                    {% for task in tasks %}
+                    <tr>
+                        <td class="task-name">{{ task.name }}</td>
+                        <td style="color: var(--body-quiet-color);">{{ task.args|truncatechars:50 }}</td>
+                        <td>{{ worker|truncatechars:30 }}</td>
+                    </tr>
+                    {% endfor %}
+                {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <div class="empty-state">No active tasks</div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Scheduled Tasks Section -->
+<div class="celery-section">
+    <div class="celery-section-header">
+        <span style="margin-right: 8px;">📅</span> Scheduled Tasks
+    </div>
+    <div class="celery-section-body" style="padding: 0;">
+        {% if stats.scheduled %}
+            {% with has_tasks=False %}
+                {% for worker, tasks in stats.scheduled.items %}
+                    {% if tasks %}
+                        {% with has_tasks=True %}{% endwith %}
+                    {% endif %}
+                {% endfor %}
+                {% if has_tasks %}
+                    <table class="celery-table">
+                        <thead>
+                            <tr>
+                                <th>Task</th>
+                                <th>ETA</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for worker, tasks in stats.scheduled.items %}
+                            {% for task in tasks %}
+                            <tr>
+                                <td class="task-name">{{ task.request.name }}</td>
+                                <td>{{ task.eta }}</td>
+                            </tr>
+                            {% endfor %}
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <div class="empty-state">No scheduled tasks</div>
+                {% endif %}
+            {% endwith %}
+        {% else %}
+            <div class="empty-state">No scheduled tasks</div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Recent Tasks Section -->
+<div class="celery-section">
+    <div class="celery-section-header">
+        <span style="margin-right: 8px;">📋</span> Recent Tasks (Last 50)
+        <span style="float: right; font-weight: normal; font-size: 11px; color: var(--body-quiet-color);">
+            Task names shortened for display (e.g., "fetch_prices_by_priority" instead of "app.tasks.fetch_prices_by_priority")
+        </span>
+    </div>
+    <div class="celery-section-body" style="padding: 0;">
+        {% if recent_tasks %}
+            <table class="celery-table">
+                <thead>
+                    <tr>
+                        <th>Task</th>
+                        <th style="width: 100px;">Status</th>
+                        <th>Result</th>
+                        <th style="width: 120px;">Completed</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for task in recent_tasks %}
+                <tr>
+                    <td class="task-name">{{ task.task_name|truncatechars:50 }}</td>
+                    <td>
+                        {% if task.status == 'SUCCESS' %}
+                        <span class="status-success">✓ Success</span>
+                        {% elif task.status == 'FAILURE' %}
+                        <span class="status-failure">✗ Failed</span>
+                        {% else %}
+                        <span class="status-pending">{{ task.status }}</span>
+                        {% endif %}
+                    </td>
+                    <td style="color: var(--body-quiet-color); max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        {{ task.result|truncatewords:10 }}
+                    </td>
+                    <td style="color: var(--body-quiet-color);">{{ task.date_done|timesince }} ago</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <div class="empty-state">
+                No recent task history
+                <div style="font-size: 11px; margin-top: 5px;">Task history will appear after tasks complete</div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Last Updated Timestamp -->
+<div class="update-time">
+    🔄 Last updated: {{ now|date:"H:i:s" }}
+</div>

@@ -25,6 +25,7 @@ import asyncio
 import json
 import logging
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import structlog
@@ -35,6 +36,7 @@ sys.path.insert(0, str(FETCHER_ROOT))
 
 from config import load_config
 from src.fetcher import PriceFetcher
+from src.models import FetchSummary
 
 
 def setup_logging(verbose: bool = False):
@@ -125,9 +127,29 @@ async def main():
     try:
         if args.product_id:
             logger.info("fetching_single_product", product_id=args.product_id)
-            # TODO: Implement single product fetch
-            logger.error("single_product_fetch_not_implemented")
-            sys.exit(1)
+
+            # Get product from database
+            product = fetcher.storage.get_product_by_id(args.product_id)
+            if not product:
+                logger.error("product_not_found", product_id=args.product_id)
+                sys.exit(1)
+
+            # Fetch price for single product
+            started_at = datetime.utcnow()
+            result = await fetcher.fetch_product(product)
+            completed_at = datetime.utcnow()
+            duration = (completed_at - started_at).total_seconds()
+
+            # Create summary with single product
+            summary = FetchSummary(
+                total=1,
+                success=1 if result.success else 0,
+                failed=0 if result.success else 1,
+                products=[result],
+                started_at=started_at,
+                completed_at=completed_at,
+                duration_seconds=duration,
+            )
 
         elif args.domain:
             logger.info("fetching_domain", domain=args.domain)
