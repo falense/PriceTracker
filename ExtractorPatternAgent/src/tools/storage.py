@@ -1,63 +1,37 @@
-"""Storage tools for persisting extraction patterns."""
+"""Storage tools for persisting extraction patterns to Django database."""
 
 from claude_agent_sdk import tool
 from typing import Any, Dict
 import json
-import sqlite3
-from pathlib import Path
 import logging
-from datetime import datetime
+import os
+import sys
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Database path - relative to project root
-DB_PATH = Path(__file__).parent.parent.parent / "patterns.db"
+# Setup Django
+DJANGO_PATH = Path(__file__).parent.parent.parent.parent / "WebUI"
+sys.path.insert(0, str(DJANGO_PATH))
 
+# Configure Django settings
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 
-def _init_database():
-    """Initialize the database schema if it doesn't exist."""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
+try:
+    import django
+    django.setup()
 
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS patterns (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            domain TEXT UNIQUE NOT NULL,
-            pattern_json TEXT NOT NULL,
-            confidence REAL DEFAULT 0.0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            validation_count INTEGER DEFAULT 0,
-            last_validated TIMESTAMP
-        )
-    """)
+    # Import Django models after setup
+    from app.models import Pattern
+    from django.utils import timezone
+    from django.db import transaction
 
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS pattern_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            domain TEXT NOT NULL,
-            pattern_json TEXT NOT NULL,
-            confidence REAL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            change_reason TEXT
-        )
-    """)
-
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_domain ON patterns(domain)
-    """)
-
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_confidence ON patterns(confidence)
-    """)
-
-    conn.commit()
-    conn.close()
-    logger.info(f"Database initialized at {DB_PATH}")
-
-
-# Initialize database on module load
-_init_database()
+    logger.info("Django ORM initialized successfully")
+    DJANGO_AVAILABLE = True
+except Exception as e:
+    logger.error(f"Failed to initialize Django ORM: {e}")
+    logger.warning("Storage tools will not function correctly without Django")
+    DJANGO_AVAILABLE = False
 
 
 @tool(
@@ -67,7 +41,7 @@ _init_database()
 )
 async def save_pattern_tool(args: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Save extraction patterns to SQLite database.
+    Save extraction patterns to Django database.
 
     Args:
         domain: The store domain (e.g., "amazon.com")
@@ -77,6 +51,18 @@ async def save_pattern_tool(args: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Dictionary with success status and message
     """
+    if not DJANGO_AVAILABLE:
+        return {
+            "content": [{
+                "type": "text",
+                "text": json.dumps({
+                    "success": False,
+                    "error": "Django ORM not available"
+                }, indent=2)
+            }],
+            "isError": True
+        }
+
     domain = args["domain"]
     patterns = args["patterns"]
     confidence = args.get("confidence", 0.0)
@@ -84,42 +70,26 @@ async def save_pattern_tool(args: Dict[str, Any]) -> Dict[str, Any]:
     logger.info(f"Saving patterns for domain: {domain} (confidence={confidence})")
 
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
+        # Store confidence in metadata
+        pattern_data = {
+            "patterns": patterns,
+            "metadata": {
+                "confidence_score": confidence,
+                "generated_at": timezone.now().isoformat()
+            }
+        }
 
-        # Check if pattern already exists
-        cursor.execute("SELECT pattern_json FROM patterns WHERE domain = ?", (domain,))
-        existing = cursor.fetchone()
+        with transaction.atomic():
+            pattern_obj, created = Pattern.objects.update_or_create(
+                domain=domain,
+                defaults={
+                    'pattern_json': pattern_data,
+                    'last_validated': timezone.now()
+                }
+            )
 
-        pattern_json = json.dumps(patterns, indent=2)
-
-        if existing:
-            # Archive old pattern to history
-            old_pattern = existing[0]
-            cursor.execute("""
-                INSERT INTO pattern_history (domain, pattern_json, confidence, change_reason)
-                VALUES (?, ?, ?, ?)
-            """, (domain, old_pattern, confidence, "Pattern updated"))
-
-            # Update existing pattern
-            cursor.execute("""
-                UPDATE patterns
-                SET pattern_json = ?, confidence = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE domain = ?
-            """, (pattern_json, confidence, domain))
-
-            message = f"Updated existing pattern for {domain}"
-        else:
-            # Insert new pattern
-            cursor.execute("""
-                INSERT INTO patterns (domain, pattern_json, confidence)
-                VALUES (?, ?, ?)
-            """, (domain, pattern_json, confidence))
-
-            message = f"Saved new pattern for {domain}"
-
-        conn.commit()
-        conn.close()
+        action = "created" if created else "updated"
+        message = f"Successfully {action} pattern for {domain} (ID: {pattern_obj.id})"
 
         logger.info(message)
 
@@ -130,7 +100,9 @@ async def save_pattern_tool(args: Dict[str, Any]) -> Dict[str, Any]:
                     "success": True,
                     "message": message,
                     "domain": domain,
-                    "confidence": confidence
+                    "pattern_id": pattern_obj.id,
+                    "confidence": confidence,
+                    "created": created
                 }, indent=2)
             }]
         }
@@ -157,7 +129,7 @@ async def save_pattern_tool(args: Dict[str, Any]) -> Dict[str, Any]:
 )
 async def load_pattern_tool(args: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Load extraction patterns from SQLite database.
+    Load extraction patterns from Django database.
 
     Args:
         domain: The store domain to load patterns for
@@ -165,56 +137,65 @@ async def load_pattern_tool(args: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Dictionary with patterns or error message
     """
+    if not DJANGO_AVAILABLE:
+        return {
+            "content": [{
+                "type": "text",
+                "text": json.dumps({
+                    "success": False,
+                    "error": "Django ORM not available"
+                }, indent=2)
+            }],
+            "isError": True
+        }
+
     domain = args["domain"]
 
     logger.info(f"Loading patterns for domain: {domain}")
 
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
+        pattern_obj = Pattern.objects.get(domain=domain)
 
-        cursor.execute("""
-            SELECT pattern_json, confidence, created_at, updated_at, validation_count
-            FROM patterns
-            WHERE domain = ?
-        """, (domain,))
+        # Extract data
+        pattern_data = pattern_obj.pattern_json
+        confidence = pattern_data.get("metadata", {}).get("confidence_score", 0.0)
+        patterns = pattern_data.get("patterns", pattern_data)
 
-        row = cursor.fetchone()
-        conn.close()
+        result = {
+            "success": True,
+            "domain": domain,
+            "patterns": patterns,
+            "confidence": confidence,
+            "success_rate": pattern_obj.success_rate,
+            "total_attempts": pattern_obj.total_attempts,
+            "successful_attempts": pattern_obj.successful_attempts,
+            "created_at": pattern_obj.created_at.isoformat(),
+            "updated_at": pattern_obj.updated_at.isoformat(),
+            "last_validated": pattern_obj.last_validated.isoformat() if pattern_obj.last_validated else None
+        }
 
-        if row:
-            patterns = json.loads(row[0])
-            result = {
-                "success": True,
-                "domain": domain,
-                "patterns": patterns,
-                "confidence": row[1],
-                "created_at": row[2],
-                "updated_at": row[3],
-                "validation_count": row[4]
-            }
+        logger.info(f"Loaded patterns for {domain} (success_rate={pattern_obj.success_rate:.2f})")
 
-            logger.info(f"Loaded patterns for {domain} (confidence={row[1]})")
+        return {
+            "content": [{
+                "type": "text",
+                "text": json.dumps(result, indent=2)
+            }]
+        }
 
-            return {
-                "content": [{
-                    "type": "text",
-                    "text": json.dumps(result, indent=2)
-                }]
-            }
-        else:
-            logger.info(f"No patterns found for domain: {domain}")
+    except Pattern.DoesNotExist:
+        logger.info(f"No patterns found for domain: {domain}")
 
-            return {
-                "content": [{
-                    "type": "text",
-                    "text": json.dumps({
-                        "success": False,
-                        "message": f"No patterns found for domain: {domain}",
-                        "domain": domain
-                    }, indent=2)
-                }]
-            }
+        return {
+            "content": [{
+                "type": "text",
+                "text": json.dumps({
+                    "success": False,
+                    "message": f"No patterns found for domain: {domain}",
+                    "domain": domain
+                }, indent=2)
+            }]
+        }
 
     except Exception as e:
         logger.error(f"Error loading pattern for {domain}: {e}")
@@ -243,29 +224,40 @@ async def list_patterns_tool(args: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Dictionary with list of patterns
     """
+    if not DJANGO_AVAILABLE:
+        return {
+            "content": [{
+                "type": "text",
+                "text": json.dumps({
+                    "success": False,
+                    "error": "Django ORM not available"
+                }, indent=2)
+            }],
+            "isError": True
+        }
+
     logger.info("Listing all patterns")
 
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            SELECT domain, confidence, created_at, updated_at, validation_count
-            FROM patterns
-            ORDER BY confidence DESC, updated_at DESC
-        """)
-
-        rows = cursor.fetchall()
-        conn.close()
+        pattern_objs = Pattern.objects.all().order_by('-success_rate', '-updated_at')
 
         patterns = []
-        for row in rows:
+        for pattern_obj in pattern_objs:
+            # Extract confidence from metadata if available
+            confidence = 0.0
+            if isinstance(pattern_obj.pattern_json, dict):
+                confidence = pattern_obj.pattern_json.get("metadata", {}).get("confidence_score", 0.0)
+
             patterns.append({
-                "domain": row[0],
-                "confidence": row[1],
-                "created_at": row[2],
-                "updated_at": row[3],
-                "validation_count": row[4]
+                "domain": pattern_obj.domain,
+                "confidence": confidence,
+                "success_rate": pattern_obj.success_rate,
+                "total_attempts": pattern_obj.total_attempts,
+                "successful_attempts": pattern_obj.successful_attempts,
+                "created_at": pattern_obj.created_at.isoformat(),
+                "updated_at": pattern_obj.updated_at.isoformat(),
+                "last_validated": pattern_obj.last_validated.isoformat() if pattern_obj.last_validated else None,
+                "is_healthy": pattern_obj.is_healthy
             })
 
         logger.info(f"Found {len(patterns)} stored patterns")
@@ -310,34 +302,32 @@ async def delete_pattern_tool(args: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Dictionary with success status
     """
+    if not DJANGO_AVAILABLE:
+        return {
+            "content": [{
+                "type": "text",
+                "text": json.dumps({
+                    "success": False,
+                    "error": "Django ORM not available"
+                }, indent=2)
+            }],
+            "isError": True
+        }
+
     domain = args["domain"]
 
     logger.info(f"Deleting patterns for domain: {domain}")
 
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
+        with transaction.atomic():
+            deleted_count, _ = Pattern.objects.filter(domain=domain).delete()
 
-        # Archive to history before deleting
-        cursor.execute("SELECT pattern_json, confidence FROM patterns WHERE domain = ?", (domain,))
-        row = cursor.fetchone()
-
-        if row:
-            cursor.execute("""
-                INSERT INTO pattern_history (domain, pattern_json, confidence, change_reason)
-                VALUES (?, ?, ?, ?)
-            """, (domain, row[0], row[1], "Pattern deleted"))
-
-            cursor.execute("DELETE FROM patterns WHERE domain = ?", (domain,))
-            conn.commit()
-
+        if deleted_count > 0:
             message = f"Deleted pattern for {domain}"
             success = True
         else:
             message = f"No pattern found for {domain}"
             success = False
-
-        conn.close()
 
         logger.info(message)
 
@@ -347,13 +337,99 @@ async def delete_pattern_tool(args: Dict[str, Any]) -> Dict[str, Any]:
                 "text": json.dumps({
                     "success": success,
                     "message": message,
-                    "domain": domain
+                    "domain": domain,
+                    "deleted_count": deleted_count
                 }, indent=2)
             }]
         }
 
     except Exception as e:
         logger.error(f"Error deleting pattern for {domain}: {e}")
+        return {
+            "content": [{
+                "type": "text",
+                "text": json.dumps({
+                    "success": False,
+                    "error": str(e),
+                    "domain": domain
+                }, indent=2)
+            }],
+            "isError": True
+        }
+
+
+@tool(
+    "update_pattern_stats",
+    "Update pattern success statistics after usage",
+    {"domain": str, "success": bool}
+)
+async def update_pattern_stats_tool(args: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Update pattern usage statistics.
+
+    Args:
+        domain: The store domain
+        success: Whether the extraction was successful
+
+    Returns:
+        Dictionary with updated stats
+    """
+    if not DJANGO_AVAILABLE:
+        return {
+            "content": [{
+                "type": "text",
+                "text": json.dumps({
+                    "success": False,
+                    "error": "Django ORM not available"
+                }, indent=2)
+            }],
+            "isError": True
+        }
+
+    domain = args["domain"]
+    success = args["success"]
+
+    logger.info(f"Updating pattern stats for {domain}: success={success}")
+
+    try:
+        pattern_obj = Pattern.objects.get(domain=domain)
+        pattern_obj.record_attempt(success=success)
+
+        message = f"Updated stats for {domain}: {pattern_obj.success_rate:.1%} success rate"
+        logger.info(message)
+
+        return {
+            "content": [{
+                "type": "text",
+                "text": json.dumps({
+                    "success": True,
+                    "message": message,
+                    "domain": domain,
+                    "success_rate": pattern_obj.success_rate,
+                    "total_attempts": pattern_obj.total_attempts,
+                    "successful_attempts": pattern_obj.successful_attempts,
+                    "is_healthy": pattern_obj.is_healthy
+                }, indent=2)
+            }]
+        }
+
+    except Pattern.DoesNotExist:
+        message = f"No pattern found for {domain}"
+        logger.warning(message)
+
+        return {
+            "content": [{
+                "type": "text",
+                "text": json.dumps({
+                    "success": False,
+                    "message": message,
+                    "domain": domain
+                }, indent=2)
+            }]
+        }
+
+    except Exception as e:
+        logger.error(f"Error updating pattern stats for {domain}: {e}")
         return {
             "content": [{
                 "type": "text",

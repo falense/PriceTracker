@@ -31,13 +31,14 @@ async def fetch_page_tool(args: Dict[str, Any]) -> Dict[str, Any]:
 
     try:
         async with async_playwright() as p:
-            # Launch in non-headless mode to avoid detection
+            # Launch in headless mode for Docker/server environments
             browser = await p.chromium.launch(
-                headless=False,
+                headless=True,  # Required for Docker/server environments
                 args=[
+                    '--no-sandbox',  # Required for Docker
+                    '--disable-setuid-sandbox',
                     '--disable-blink-features=AutomationControlled',
-                    '--disable-dev-shm-usage',
-                    '--start-maximized',
+                    '--disable-dev-shm-usage',  # Prevents shared memory issues
                     '--disable-web-security',
                     '--disable-features=IsolateOrigins,site-per-process'
                 ]
@@ -128,13 +129,14 @@ async def render_js_tool(args: Dict[str, Any]) -> Dict[str, Any]:
 
     try:
         async with async_playwright() as p:
-            # Launch in non-headless mode to avoid detection
+            # Launch in headless mode for Docker/server environments
             browser = await p.chromium.launch(
-                headless=False,
+                headless=True,  # Required for Docker/server environments
                 args=[
+                    '--no-sandbox',  # Required for Docker
+                    '--disable-setuid-sandbox',
                     '--disable-blink-features=AutomationControlled',
-                    '--disable-dev-shm-usage',
-                    '--start-maximized',
+                    '--disable-dev-shm-usage',  # Prevents shared memory issues
                     '--disable-web-security',
                     '--disable-features=IsolateOrigins,site-per-process'
                 ]
@@ -229,13 +231,14 @@ async def screenshot_page_tool(args: Dict[str, Any]) -> Dict[str, Any]:
 
     try:
         async with async_playwright() as p:
-            # Launch in non-headless mode to avoid detection
+            # Launch in headless mode for Docker/server environments
             browser = await p.chromium.launch(
-                headless=False,
+                headless=True,  # Required for Docker/server environments
                 args=[
+                    '--no-sandbox',  # Required for Docker
+                    '--disable-setuid-sandbox',
                     '--disable-blink-features=AutomationControlled',
-                    '--disable-dev-shm-usage',
-                    '--start-maximized',
+                    '--disable-dev-shm-usage',  # Prevents shared memory issues
                     '--disable-web-security',
                     '--disable-features=IsolateOrigins,site-per-process'
                 ]

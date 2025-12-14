@@ -37,10 +37,12 @@ async def fetch_page(url):
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(
-            headless=False,
+            headless=True,  # Required for Docker/server environments
             args=[
+                '--no-sandbox',  # Required for Docker
+                '--disable-setuid-sandbox',
                 '--disable-blink-features=AutomationControlled',
-                '--disable-dev-shm-usage',
+                '--disable-dev-shm-usage',  # Prevents shared memory issues
             ]
         )
 
