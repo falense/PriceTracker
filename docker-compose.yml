@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  # Redis - Message broker for Celery
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Django Web Application
+  web:
+    build:
+      context: ./WebUI
+      dockerfile: Dockerfile
+    command: python manage.py runserver 0.0.0.0:8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./db.sqlite3:/app/db.sqlite3
+      - ./WebUI:/app
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_PATH=/app/db.sqlite3
+      - DEBUG=true
+    restart: unless-stopped
+
+  # Celery Worker - Handles async tasks
+  celery:
+    build:
+      context: ./WebUI
+      dockerfile: Dockerfile
+    command: celery -A config worker -l info --concurrency=4
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./db.sqlite3:/app/db.sqlite3
+      - ./WebUI:/app
+      - ./ExtractorPatternAgent:/extractor
+      - ./PriceFetcher:/fetcher
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_PATH=/app/db.sqlite3
+      - EXTRACTOR_PATH=/extractor
+      - FETCHER_PATH=/fetcher
+      - PYTHONPATH=/app:/extractor:/fetcher
+    restart: unless-stopped
+
+  # Celery Beat - Scheduler for periodic tasks
+  celery-beat:
+    build:
+      context: ./WebUI
+      dockerfile: Dockerfile
+    command: celery -A config beat -l info
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./db.sqlite3:/app/db.sqlite3
+      - ./WebUI:/app
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_PATH=/app/db.sqlite3
+    restart: unless-stopped
+
+  # Flower - Celery monitoring (optional)
+  flower:
+    build:
+      context: ./WebUI
+      dockerfile: Dockerfile
+    command: celery -A config flower --port=5555
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+      - celery
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - FLOWER_UNAUTHENTICATED_API=true
+    restart: unless-stopped
+
+volumes:
+  db:
+    driver: local
