@@ -1,0 +1,10 @@
+{% for notification in notifications %}
+<div class="p-4 border-b border-gray-200 dark:border-gray-700 {% if not notification.read %}bg-blue-50 dark:bg-blue-900/10{% endif %}">
+    <p class="text-sm text-gray-900 dark:text-white">{{ notification.message }}</p>
+    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ notification.created_at|timesince }} ago</p>
+</div>
+{% empty %}
+<div class="p-8 text-center text-gray-500 dark:text-gray-400">
+    No notifications
+</div>
+{% endfor %}

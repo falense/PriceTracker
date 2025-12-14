@@ -1,0 +1,40 @@
+<!-- URL confirmation for authenticated users -->
+<div class="bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-800 rounded-xl p-6">
+    <div class="flex items-start space-x-4">
+        <div class="flex-shrink-0">
+            <div class="w-12 h-12 bg-green-100 dark:bg-green-900/40 rounded-full flex items-center justify-center">
+                <svg class="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                </svg>
+            </div>
+        </div>
+
+        <div class="flex-1">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-2">
+                Start tracking this product?
+            </h3>
+
+            <p class="text-sm text-gray-600 dark:text-gray-400 mb-4 break-all">
+                {{ url }}
+            </p>
+
+            <form method="post" action="{% url 'add_product' %}" class="flex flex-col sm:flex-row gap-3">
+                {% csrf_token %}
+                <input type="hidden" name="url" value="{{ url }}">
+                <button type="submit"
+                        class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors">
+                    Yes, Track This Product
+                </button>
+                <button type="button"
+                        onclick="document.getElementById('search-input').value = ''; document.getElementById('search-results').innerHTML = '';"
+                        class="px-6 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-white rounded-lg font-medium transition-colors">
+                    Cancel
+                </button>
+            </form>
+
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-3">
+                We'll fetch the product details and start monitoring the price automatically
+            </p>
+        </div>
+    </div>
+</div>

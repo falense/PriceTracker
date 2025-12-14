@@ -1,0 +1,22 @@
+# ExtractorPatternAgent Dependencies
+
+# Core
+claude-agent-sdk>=0.1.0
+python>=3.12
+
+# Web Scraping
+playwright>=1.40.0
+beautifulsoup4>=4.12.0
+lxml>=5.0.0
+
+# CLI
+click>=8.1.0
+rich>=13.0.0
+
+# Configuration
+pyyaml>=6.0
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0

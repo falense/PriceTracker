@@ -1,0 +1,61 @@
+<!-- Search results found -->
+<div class="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+    <div class="bg-gray-50 dark:bg-gray-900/50 px-6 py-3 border-b border-gray-200 dark:border-gray-700">
+        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">
+            Found {{ products|length }} product{{ products|length|pluralize }} matching "{{ query }}"
+        </h3>
+    </div>
+
+    <div class="divide-y divide-gray-200 dark:divide-gray-700">
+        {% for product in products %}
+        <a href="{% url 'product_detail' product.id %}"
+           class="block p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+            <div class="flex items-center space-x-4">
+                {% if product.image_url %}
+                <img src="{{ product.image_url }}"
+                     alt="{{ product.name }}"
+                     class="w-16 h-16 object-cover rounded-lg flex-shrink-0">
+                {% else %}
+                <div class="w-16 h-16 bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                    </svg>
+                </div>
+                {% endif %}
+
+                <div class="flex-1 min-w-0">
+                    <h4 class="font-medium text-gray-900 dark:text-white truncate">
+                        {{ product.name }}
+                    </h4>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                        {{ product.domain }}
+                    </p>
+                </div>
+
+                <div class="text-right flex-shrink-0">
+                    {% if product.current_price %}
+                    <p class="text-lg font-bold text-gray-900 dark:text-white">
+                        ${{ product.current_price }}
+                    </p>
+                    {% if product.price_change_24h %}
+                    <p class="text-sm {% if product.price_change_24h < 0 %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+                        {% if product.price_change_24h > 0 %}+{% endif %}${{ product.price_change_24h|floatformat:2 }}
+                    </p>
+                    {% endif %}
+                    {% else %}
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                        Fetching...
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+
+    <div class="bg-gray-50 dark:bg-gray-900/50 px-6 py-3 border-t border-gray-200 dark:border-gray-700">
+        <p class="text-xs text-gray-500 dark:text-gray-400 text-center">
+            Want to track a new product? Paste its URL in the search box
+        </p>
+    </div>
+</div>

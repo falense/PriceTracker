@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+# Test outputs and generated files
+*.html
+*_patterns.json
+extraction_results.json
+patterns.db
+patterns.db-journal
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary test scripts (keep organized tests/ directory)
+test_*.py
+!tests/test_*.py
+
+# Logs
+*.log
+
+# Distribution
+dist/
+build/
+*.egg-info/

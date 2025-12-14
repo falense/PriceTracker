@@ -1,0 +1,209 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ product.name }} - PriceTracker{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Back Button -->
+    <div class="mb-6">
+        <a href="{% url 'dashboard' %}" class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">
+            ← Back to Dashboard
+        </a>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- Main Content -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Product Info -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <div class="flex items-start justify-between mb-4">
+                    <h1 class="text-2xl font-bold text-gray-900 dark:text-white flex-1">
+                        {{ product.name }}
+                    </h1>
+                    <span class="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full text-sm">
+                        {{ product.get_priority_display }}
+                    </span>
+                </div>
+
+                <div class="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400 mb-6">
+                    <span>{{ product.domain }}</span>
+                    <span>•</span>
+                    <span>Added {{ product.created_at|date:"M d, Y" }}</span>
+                </div>
+
+                <!-- Current Price -->
+                {% if product.current_price %}
+                <div class="mb-6">
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">Current Price</p>
+                    <div class="flex items-baseline space-x-3">
+                        <span class="text-4xl font-bold text-gray-900 dark:text-white">
+                            ${{ product.current_price }}
+                        </span>
+                        {% if product.price_change_24h %}
+                        <span class="text-lg font-medium {% if product.price_change_24h < 0 %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+                            {% if product.price_change_24h > 0 %}+{% endif %}${{ product.price_change_24h|floatformat:2 }} (24h)
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Price Stats -->
+                <div class="grid grid-cols-3 gap-4 mb-6">
+                    <div>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mb-1">Lowest</p>
+                        <p class="text-lg font-semibold text-green-600 dark:text-green-400">
+                            {% if product.lowest_price %}${{ product.lowest_price }}{% else %}—{% endif %}
+                        </p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mb-1">Highest</p>
+                        <p class="text-lg font-semibold text-red-600 dark:text-red-400">
+                            {% if product.highest_price %}${{ product.highest_price }}{% else %}—{% endif %}
+                        </p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mb-1">Last Checked</p>
+                        <p class="text-lg font-semibold text-gray-900 dark:text-white">
+                            {% if product.last_checked %}{{ product.last_checked|timesince }} ago{% else %}Never{% endif %}
+                        </p>
+                    </div>
+                </div>
+                {% else %}
+                <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-6">
+                    <p class="text-yellow-800 dark:text-yellow-200">
+                        Price information is being fetched. Check back soon!
+                    </p>
+                </div>
+                {% endif %}
+
+                <!-- Actions -->
+                <div class="flex space-x-3">
+                    <a href="{{ product.url }}" target="_blank" rel="noopener noreferrer"
+                       class="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium text-center">
+                        View on {{ product.domain }}
+                    </a>
+                    <button class="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 font-medium">
+                        Refresh Price
+                    </button>
+                </div>
+            </div>
+
+            <!-- Price History -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                    Price History
+                </h2>
+
+                {% if price_history %}
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead>
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    Date
+                                </th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    Price
+                                </th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    Change
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                            {% for history in price_history %}
+                            <tr>
+                                <td class="px-4 py-3 text-sm text-gray-900 dark:text-white">
+                                    {{ history.recorded_at|date:"M d, Y H:i" }}
+                                </td>
+                                <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">
+                                    ${{ history.price }}
+                                </td>
+                                <td class="px-4 py-3 text-sm">
+                                    <!-- Change calculation would go here -->
+                                    <span class="text-gray-500 dark:text-gray-400">—</span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-gray-500 dark:text-gray-400 text-center py-8">
+                    No price history available yet
+                </p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="space-y-6">
+            <!-- Settings -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">
+                    Settings
+                </h3>
+
+                <div class="space-y-4">
+                    <!-- Target Price -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Target Price
+                        </label>
+                        <input type="number"
+                               step="0.01"
+                               value="{{ product.target_price|default:'' }}"
+                               placeholder="Set target"
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    </div>
+
+                    <!-- Notification Settings -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Notifications
+                        </label>
+                        <div class="space-y-2">
+                            <label class="flex items-center">
+                                <input type="checkbox" {% if product.notify_on_drop %}checked{% endif %}
+                                       class="rounded border-gray-300 text-primary-600 focus:ring-primary-500">
+                                <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Price drops</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" {% if product.notify_on_restock %}checked{% endif %}
+                                       class="rounded border-gray-300 text-primary-600 focus:ring-primary-500">
+                                <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Back in stock</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Check Frequency -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Check Frequency
+                        </label>
+                        <select class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                            <option value="high" {% if product.priority == 'high' %}selected{% endif %}>Every 15 minutes</option>
+                            <option value="normal" {% if product.priority == 'normal' %}selected{% endif %}>Every hour</option>
+                            <option value="low" {% if product.priority == 'low' %}selected{% endif %}>Daily</option>
+                        </select>
+                    </div>
+
+                    <button class="w-full px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium">
+                        Save Settings
+                    </button>
+                </div>
+            </div>
+
+            <!-- Danger Zone -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-red-200 dark:border-red-900 p-6">
+                <h3 class="text-lg font-bold text-red-600 dark:text-red-400 mb-4">
+                    Danger Zone
+                </h3>
+                <button class="w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium">
+                    Stop Tracking
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
