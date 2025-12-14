@@ -23,16 +23,18 @@ Usage:
 import argparse
 import asyncio
 import json
+import logging
 import sys
 from pathlib import Path
 
 import structlog
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+# Add PriceFetcher root to path so both 'config' and 'src' modules can be imported
+FETCHER_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(FETCHER_ROOT))
 
 from config import load_config
-from fetcher import PriceFetcher
+from src.fetcher import PriceFetcher
 
 
 def setup_logging(verbose: bool = False):
@@ -49,7 +51,7 @@ def setup_logging(verbose: bool = False):
             structlog.dev.ConsoleRenderer(),
         ],
         wrapper_class=structlog.make_filtering_bound_logger(
-            getattr(structlog.stdlib, log_level)
+            getattr(logging, log_level)
         ),
         context_class=dict,
         logger_factory=structlog.PrintLoggerFactory(),
