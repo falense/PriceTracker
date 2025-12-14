@@ -1,0 +1,64 @@
+# PriceFetcher Configuration
+
+fetcher:
+  # Delay between requests to same domain (seconds)
+  request_delay: 2.0
+
+  # HTTP request timeout (seconds)
+  timeout: 30.0
+
+  # Maximum retry attempts for failed requests
+  max_retries: 3
+
+  # User agent string
+  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+storage:
+  # Path to shared SQLite database (relative to PriceFetcher root)
+  database: "../db.sqlite3"
+
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR
+  level: "INFO"
+
+  # Log format: json or console
+  format: "json"
+
+  # Log file path (optional, logs to stdout if not specified)
+  file: null
+
+validation:
+  # Minimum confidence score to accept extraction (0.0 - 1.0)
+  min_confidence: 0.6
+
+  # Maximum price change percentage before warning
+  max_price_change_pct: 50.0
+
+rate_limits:
+  # Default rate limit (requests per second)
+  default: 0.5  # 1 request every 2 seconds
+
+  # Per-domain rate limits (requests per second)
+  domains:
+    amazon.com: 1.0
+    ebay.com: 0.67  # ~1 request every 1.5 seconds
+    walmart.com: 1.0
+    bestbuy.com: 1.0
+    target.com: 1.0
+
+# Cron schedule configurations
+schedules:
+  # High priority products - every 15 minutes
+  high_priority:
+    enabled: true
+    interval: "*/15 * * * *"
+
+  # Normal priority - every hour
+  normal_priority:
+    enabled: true
+    interval: "0 * * * *"
+
+  # Low priority - every 6 hours
+  low_priority:
+    enabled: true
+    interval: "0 */6 * * *"
