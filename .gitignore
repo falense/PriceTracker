@@ -1,27 +1,32 @@
-.devcontainer/devcontainer.env
-.transcripts/
-.memories/
-
-# Python
+# Development files
+.claude/
+.devcontainer/
+*.pyc
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-venv/
-env/
-ENV/
-
-# Django
 *.log
-db.sqlite3
-db.sqlite3-journal
-staticfiles/
-media/
-
-# IDEs
-.vscode/
-.idea/
+celerybeat-schedule
+*.sqlite3
+*.json
+venv/
+.venv/
+.env
+.DS_Store
 *.swp
 *.swo
 *~
+.pytest_cache/
+htmlcov/
+.coverage
+dist/
+build/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.sublime-*
+
+# AI prompts (personal)
+CLAUDE.md
+GEMINI.md
+
