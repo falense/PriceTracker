@@ -30,7 +30,7 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379/0
       - DATABASE_PATH=/app/db.sqlite3
-      - DEBUG=true
+      - DEBUG=True
     restart: unless-stopped
 
   # Celery Worker - Handles async tasks

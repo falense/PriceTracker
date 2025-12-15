@@ -1,0 +1,178 @@
+{% extends 'base.html' %}
+
+{% block title %}Compare Versions - {{ pattern.domain }}{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+        <div class="flex items-center gap-3 mb-2">
+            <a href="{% url 'pattern_history' pattern.domain %}"
+               class="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                </svg>
+            </a>
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+                Compare Versions
+            </h1>
+        </div>
+        <p class="text-gray-600 dark:text-gray-400 ml-9">
+            {{ pattern.domain }} • Version {{ version1.version_number }} vs Version {{ version2.version_number }}
+        </p>
+    </div>
+
+    <!-- Summary -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 mb-6">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Comparison Summary</h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {% if diff.added_fields %}
+            <div class="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                <p class="text-sm font-medium text-green-800 dark:text-green-200 mb-2">Added Fields</p>
+                <ul class="text-sm text-green-700 dark:text-green-300 space-y-1">
+                    {% for field in diff.added_fields %}
+                    <li>+ {{ field }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
+            {% if diff.removed_fields %}
+            <div class="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                <p class="text-sm font-medium text-red-800 dark:text-red-200 mb-2">Removed Fields</p>
+                <ul class="text-sm text-red-700 dark:text-red-300 space-y-1">
+                    {% for field in diff.removed_fields %}
+                    <li>- {{ field }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
+            {% if diff.modified_fields %}
+            <div class="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                <p class="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-2">Modified Fields</p>
+                <ul class="text-sm text-yellow-700 dark:text-yellow-300 space-y-1">
+                    {% for field in diff.modified_fields %}
+                    <li>~ {{ field }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
+            {% if not diff.added_fields and not diff.removed_fields and not diff.modified_fields %}
+            <div class="col-span-3 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg text-center">
+                <p class="text-gray-600 dark:text-gray-400">No differences found between these versions</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Side-by-Side Comparison -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Version 1 -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div class="p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600 flex justify-between items-center">
+                <div>
+                    <h3 class="font-semibold text-gray-900 dark:text-white">
+                        Version {{ version1.version_number }}
+                    </h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                        {{ version1.created_at|date:"Y-m-d H:i" }}
+                        {% if version1.changed_by %}
+                            • {{ version1.changed_by.username }}
+                        {% endif %}
+                    </p>
+                </div>
+                <form method="post" action="{% url 'pattern_rollback' pattern.domain version1.version_number %}"
+                      onsubmit="return confirm('Rollback to version {{ version1.version_number }}?');"
+                      class="inline">
+                    {% csrf_token %}
+                    <button type="submit"
+                            class="text-sm px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white rounded font-medium transition-colors">
+                        Rollback to This
+                    </button>
+                </form>
+            </div>
+            <div class="p-4">
+                <pre class="text-xs font-mono bg-gray-50 dark:bg-gray-900 p-4 rounded-lg overflow-x-auto max-h-[600px]">{{ version1_json }}</pre>
+            </div>
+        </div>
+
+        <!-- Version 2 -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div class="p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600 flex justify-between items-center">
+                <div>
+                    <h3 class="font-semibold text-gray-900 dark:text-white">
+                        Version {{ version2.version_number }}
+                    </h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                        {{ version2.created_at|date:"Y-m-d H:i" }}
+                        {% if version2.changed_by %}
+                            • {{ version2.changed_by.username }}
+                        {% endif %}
+                    </p>
+                </div>
+                <form method="post" action="{% url 'pattern_rollback' pattern.domain version2.version_number %}"
+                      onsubmit="return confirm('Rollback to version {{ version2.version_number }}?');"
+                      class="inline">
+                    {% csrf_token %}
+                    <button type="submit"
+                            class="text-sm px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white rounded font-medium transition-colors">
+                        Rollback to This
+                    </button>
+                </form>
+            </div>
+            <div class="p-4">
+                <pre class="text-xs font-mono bg-gray-50 dark:bg-gray-900 p-4 rounded-lg overflow-x-auto max-h-[600px]">{{ version2_json }}</pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Changes -->
+    {% if diff.details %}
+    <div class="mt-6 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Detailed Changes</h2>
+
+        <div class="space-y-4">
+            {% for field, changes in diff.details.items %}
+            <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                <div class="p-3 bg-yellow-50 dark:bg-yellow-900/20 border-b border-yellow-200 dark:border-yellow-800">
+                    <p class="font-medium text-yellow-900 dark:text-yellow-200 capitalize">{{ field }}</p>
+                </div>
+                <div class="p-4">
+                    {% if changes.changes %}
+                    <div class="text-sm text-gray-700 dark:text-gray-300 space-y-1">
+                        {% for change_type, change_value in changes.changes.items %}
+                        <p><span class="font-medium">{{ change_type }}:</span> {{ change_value }}</p>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-sm text-gray-600 dark:text-gray-400">Field structure changed</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Metadata Changes -->
+    {% if diff.metadata_changes %}
+    <div class="mt-6 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Metadata Changes</h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Version {{ version1.version_number }}</h3>
+                <pre class="text-xs font-mono bg-gray-50 dark:bg-gray-900 p-3 rounded">{{ diff.metadata_changes.old|safe }}</pre>
+            </div>
+            <div>
+                <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Version {{ version2.version_number }}</h3>
+                <pre class="text-xs font-mono bg-gray-50 dark:bg-gray-900 p-3 rounded">{{ diff.metadata_changes.new|safe }}</pre>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

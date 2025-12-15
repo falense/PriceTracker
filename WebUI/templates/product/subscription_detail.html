@@ -1,0 +1,263 @@
+{% extends 'base.html' %}
+{% load currency_filters %}
+
+{% block title %}{{ product.name }} - PriceTracker{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Back Button -->
+    <div class="mb-6">
+        <a href="{% url 'dashboard' %}" class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">
+            ← Back to Dashboard
+        </a>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- Main Content -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Product Info -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <div class="flex items-start justify-between mb-4">
+                    <h1 class="text-2xl font-bold text-gray-900 dark:text-white flex-1">
+                        {{ product.name }}
+                    </h1>
+                    <span class="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full text-sm">
+                        {% if subscription.priority == 3 %}High Priority
+                        {% elif subscription.priority == 2 %}Normal Priority
+                        {% else %}Low Priority{% endif %}
+                    </span>
+                </div>
+
+                <div class="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400 mb-6">
+                    <span>{{ listings|length }} store{% if listings|length != 1 %}s{% endif %}</span>
+                    <span>•</span>
+                    <span>Subscribed {{ subscription.created_at|date:"M d, Y" }}</span>
+                </div>
+
+                <!-- Product Image -->
+                {% if product.image_url %}
+                <div class="mb-6 flex justify-center">
+                    <img src="{% url 'proxy_image' %}?url={{ product.image_url|urlencode }}" alt="{{ product.name }}" class="h-48 rounded-lg object-contain bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700" loading="lazy">
+                </div>
+                {% endif %}
+
+                <!-- Best Price -->
+                {% if best_listing and best_listing.current_price %}
+                <div class="mb-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                    <p class="text-sm text-green-800 dark:text-green-200 mb-2">Best Available Price</p>
+                    <div class="flex items-baseline space-x-3">
+                        <span class="text-4xl font-bold text-green-900 dark:text-green-100">
+                            {{ best_listing.current_price|format_currency:best_listing.store.domain }}
+                        </span>
+                        <span class="text-lg text-green-700 dark:text-green-300">
+                            at {{ best_listing.store.name }}
+                        </span>
+                    </div>
+                    {% if subscription.target_price %}
+                    <p class="text-sm text-green-800 dark:text-green-200 mt-2">
+                        {% if best_listing.current_price <= subscription.target_price %}
+                            ✓ Below your target price of {{ subscription.target_price|format_currency:best_listing.store.domain }}
+                        {% else %}
+                            Target: {{ subscription.target_price|format_currency:best_listing.store.domain }}
+                        {% endif %}
+                    </p>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <!-- Actions -->
+                <div class="flex space-x-3">
+                    {% if best_listing %}
+                    <a href="{{ best_listing.url }}" target="_blank" rel="noopener noreferrer"
+                       class="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium text-center">
+                        View Best Price
+                    </a>
+                    {% endif %}
+                    <form method="post" action="{% url 'refresh_price' subscription.id %}" class="inline">
+                        {% csrf_token %}
+                        <button type="submit"
+                                class="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 font-medium">
+                            <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                            </svg>
+                            Refresh
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Store Price Comparison -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                    Price Comparison
+                </h2>
+
+                {% if listings %}
+                <div class="space-y-4">
+                    {% for listing in listings %}
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 {% if listing == best_listing %}bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700{% endif %}">
+                        <div class="flex items-center justify-between mb-2">
+                            <div>
+                                <h3 class="font-semibold text-gray-900 dark:text-white">
+                                    {{ listing.store.name }}
+                                    {% if listing == best_listing %}
+                                    <span class="ml-2 px-2 py-0.5 bg-green-600 text-white text-xs rounded-full">Best Price</span>
+                                    {% endif %}
+                                </h3>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">{{ listing.store.domain }}</p>
+                            </div>
+                            <div class="text-right">
+                                {% if listing.current_price %}
+                                <p class="text-2xl font-bold text-gray-900 dark:text-white">
+                                    {{ listing.current_price|format_currency:listing.store.domain }}
+                                </p>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">
+                                    {% if listing.last_checked %}{{ listing.last_checked|timesince }} ago{% endif %}
+                                </p>
+                                {% else %}
+                                <p class="text-gray-500 dark:text-gray-400">Fetching...</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% if listing.current_price %}
+                        <a href="{{ listing.url }}" target="_blank" rel="noopener noreferrer"
+                           class="inline-block mt-2 text-sm text-primary-600 dark:text-primary-400 hover:underline">
+                            View on {{ listing.store.name }} →
+                        </a>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-gray-500 dark:text-gray-400 text-center py-8">
+                    No store listings available yet
+                </p>
+                {% endif %}
+            </div>
+
+            <!-- Price History -->
+            {% if best_listing %}
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                    Price History ({{ best_listing.store.name }})
+                </h2>
+
+                {% if best_listing.history_data %}
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead>
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    Date
+                                </th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    Price
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                            {% for history in best_listing.history_data %}
+                            <tr>
+                                <td class="px-4 py-3 text-sm text-gray-900 dark:text-white">
+                                    {{ history.recorded_at|date:"M d, Y H:i" }}
+                                </td>
+                                <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">
+                                    {{ history.price|format_currency:best_listing.store.domain }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-gray-500 dark:text-gray-400 text-center py-8">
+                    No price history available yet
+                </p>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Sidebar -->
+        <div class="space-y-6">
+            <!-- Settings -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">
+                    Subscription Settings
+                </h3>
+
+                <form method="post" action="{% url 'update_subscription' subscription.id %}">
+                    {% csrf_token %}
+                    <div class="space-y-4">
+                        <!-- Target Price -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Target Price
+                            </label>
+                            <input type="number"
+                                   name="target_price"
+                                   step="0.01"
+                                   value="{{ subscription.target_price|default:'' }}"
+                                   placeholder="Set target"
+                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                        </div>
+
+                        <!-- Notification Settings -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Notifications
+                            </label>
+                            <div class="space-y-2">
+                                <label class="flex items-center">
+                                    <input type="checkbox" name="notify_on_drop" {% if subscription.notify_on_drop %}checked{% endif %}
+                                           class="rounded border-gray-300 text-primary-600 focus:ring-primary-500">
+                                    <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Price drops</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="checkbox" name="notify_on_restock" {% if subscription.notify_on_restock %}checked{% endif %}
+                                           class="rounded border-gray-300 text-primary-600 focus:ring-primary-500">
+                                    <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Back in stock</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Check Frequency -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Check Frequency
+                            </label>
+                            <select name="priority" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                                <option value="normal" {% if subscription.priority == 2 %}selected{% endif %}>Every hour</option>
+                                <option value="low" {% if subscription.priority == 1 %}selected{% endif %}>Daily</option>
+                            </select>
+                        </div>
+
+                        <button type="submit" class="w-full px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium">
+                            Save Settings
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Danger Zone -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-red-200 dark:border-red-900 p-6">
+                <h3 class="text-lg font-bold text-red-600 dark:text-red-400 mb-4">
+                    Danger Zone
+                </h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Unsubscribe from this product. This will stop tracking and remove all notifications.
+                </p>
+                <form method="post" action="{% url 'unsubscribe' subscription.id %}" class="inline" onsubmit="return confirm('Are you sure you want to unsubscribe? This action cannot be undone.');">
+                    {% csrf_token %}
+                    <button type="submit" class="w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium">
+                        <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                        Unsubscribe
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

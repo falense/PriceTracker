@@ -75,7 +75,8 @@ def analyze_html(html, url):
     console.print("\n[cyan]Analyzing HTML structure...[/cyan]")
 
     soup = BeautifulSoup(html, 'html.parser')
-    domain = urlparse(url).netloc
+    # Normalize domain by removing www prefix for consistency
+    domain = urlparse(url).netloc.replace('www.', '').lower()
     patterns = {
         "store_domain": domain,
         "url": url,

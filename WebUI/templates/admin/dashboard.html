@@ -8,15 +8,26 @@
         Admin Dashboard
     </h1>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <!-- Patterns -->
-        <a href="{% url 'patterns_status' %}"
+        <a href="{% url 'pattern_list' %}"
            class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow">
             <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
                 Extraction Patterns
             </h2>
             <p class="text-gray-600 dark:text-gray-400">
-                View and manage domain extraction patterns
+                Manage, test, and validate extraction patterns
+            </p>
+        </a>
+
+        <!-- System Logs -->
+        <a href="{% url 'admin_logs' %}"
+           class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow">
+            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                System Logs
+            </h2>
+            <p class="text-gray-600 dark:text-gray-400">
+                View logs sorted by task type (price fetches, patterns, etc.)
             </p>
         </a>
 

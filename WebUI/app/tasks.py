@@ -16,14 +16,14 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, max_retries=3)
-def generate_pattern(self, url: str, domain: str, product_id: str = None):
+def generate_pattern(self, url: str, domain: str, listing_id: str = None):
     """
     Trigger ExtractorPatternAgent to generate extraction patterns.
 
     Args:
         url: Product URL to analyze
         domain: Domain name (e.g., "amazon.com")
-        product_id: Optional product ID for tracking
+        listing_id: Optional ProductListing ID for tracking
 
     Returns:
         dict: Status and pattern data
@@ -70,30 +70,16 @@ def generate_pattern(self, url: str, domain: str, product_id: str = None):
                     with open(json_path, 'r', encoding='utf-8') as f:
                         pattern_data = json.load(f)
 
-                    # Save to database for both domain variations
-                    # This ensures pattern works regardless of www prefix
-                    domains_to_save = [domain]
-
-                    # Also save for the other variation (with/without www)
-                    if domain.startswith('www.'):
-                        domains_to_save.append(domain[4:])  # Remove www.
-                    else:
-                        domains_to_save.append(f"www.{domain}")  # Add www.
-
-                    patterns_created = []
-                    for save_domain in domains_to_save:
-                        pattern, created = Pattern.objects.update_or_create(
-                            domain=save_domain,
-                            defaults={
-                                'pattern_json': pattern_data,
-                                'last_validated': timezone.now()
-                            }
-                        )
-                        action = "Created" if created else "Updated"
-                        patterns_created.append(f"{action} {save_domain}")
-                        logger.info(f"{action} pattern in database for {save_domain}")
-
-                    logger.info(f"Pattern saved for domains: {', '.join(domains_to_save)}")
+                    # Save to database (domain already normalized by ExtractorPatternAgent)
+                    pattern, created = Pattern.objects.update_or_create(
+                        domain=domain,
+                        defaults={
+                            'pattern_json': pattern_data,
+                            'last_validated': timezone.now()
+                        }
+                    )
+                    action = "Created" if created else "Updated"
+                    logger.info(f"{action} pattern in database for {domain}")
 
                     # Clean up JSON file (optional)
                     try:
@@ -105,8 +91,7 @@ def generate_pattern(self, url: str, domain: str, product_id: str = None):
                     return {
                         'status': 'success',
                         'domain': domain,
-                        'domains_saved': domains_to_save,
-                        'pattern_actions': patterns_created,
+                        'action': action,
                         'fields_found': pattern_data.get('metadata', {}).get('fields_found', 0),
                         'confidence': pattern_data.get('metadata', {}).get('overall_confidence', 0)
                     }
@@ -147,95 +132,102 @@ def generate_pattern(self, url: str, domain: str, product_id: str = None):
 
 
 @shared_task(bind=True, max_retries=3)
-def fetch_product_price(self, product_id: str):
+def fetch_listing_price(self, listing_id: str):
     """
-    Trigger PriceFetcher to get current price for a product.
+    Trigger PriceFetcher to get current price for a product listing.
 
     Args:
-        product_id: Product UUID
+        listing_id: ProductListing UUID
 
     Returns:
         dict: Price data and metadata
     """
     try:
-        logger.info(f"Fetching price for product {product_id}")
+        logger.info(f"Fetching price for listing {listing_id}")
 
-        # Run PriceFetcher
+        # Run PriceFetcher with listing ID
         result = subprocess.run([
             'python',
             '/fetcher/scripts/run_fetch.py',
-            '--product-id', product_id
+            '--listing-id', listing_id
         ], timeout=30, capture_output=True, text=True)
 
         if result.returncode == 0:
-            logger.info(f"Price fetched successfully for {product_id}")
+            logger.info(f"Price fetched successfully for listing {listing_id}")
             return {
                 'status': 'success',
-                'product_id': product_id,
+                'listing_id': listing_id,
                 'stdout': result.stdout
             }
         else:
-            logger.error(f"Price fetch failed for {product_id}: {result.stderr}")
+            logger.error(f"Price fetch failed for listing {listing_id}: {result.stderr}")
             return {
                 'status': 'failed',
-                'product_id': product_id,
+                'listing_id': listing_id,
                 'error': result.stderr
             }
 
     except subprocess.TimeoutExpired:
-        logger.error(f"Price fetch timed out for {product_id}")
+        logger.error(f"Price fetch timed out for listing {listing_id}")
         raise self.retry(countdown=30, max_retries=3)
 
     except Exception as e:
-        logger.exception(f"Price fetch error for {product_id}")
+        logger.exception(f"Price fetch error for listing {listing_id}")
         return {
             'status': 'error',
-            'product_id': product_id,
+            'listing_id': listing_id,
             'error': str(e)
         }
 
 
 @shared_task
-def fetch_prices_by_priority(priority: str):
+def fetch_prices_by_aggregated_priority():
     """
-    Periodic task to fetch prices for products of a given priority.
+    Periodic task to fetch prices for products based on aggregated user priorities.
 
-    Args:
-        priority: "high" (15min), "normal" (1h), "low" (24h)
+    Uses PriorityAggregationService to determine which products are due for checking
+    based on their highest user subscription priority.
+
+    Returns:
+        dict: Statistics about queued listings
     """
-    from app.models import Product
-    from django.db.models import Q
-    from datetime import timedelta
+    from app.services import PriorityAggregationService
+    from app.models import ProductListing
 
-    # Map priority to check_interval
-    intervals = {
-        'high': 900,      # 15 minutes
-        'normal': 3600,   # 1 hour
-        'low': 86400,     # 24 hours
-    }
+    try:
+        # Get products due for checking
+        products_due = PriorityAggregationService.get_products_due_for_check()
 
-    check_interval = intervals.get(priority)
-    if not check_interval:
-        logger.error(f"Invalid priority: {priority}")
-        return
+        listing_count = 0
+        product_count = len(products_due)
 
-    # Get products due for checking
-    now = timezone.now()
-    products = Product.objects.filter(
-        active=True,
-        check_interval=check_interval
-    ).filter(
-        Q(last_checked__isnull=True) |
-        Q(last_checked__lte=now - timedelta(seconds=check_interval))
-    )
+        for product, priority, listings in products_due:
+            # Fetch all listings for this product
+            for listing in listings:
+                fetch_listing_price.delay(str(listing.id))
+                listing_count += 1
 
-    count = 0
-    for product in products:
-        fetch_product_price.delay(str(product.id))
-        count += 1
+            logger.info(
+                f"Queued {len(listings)} listings for product {product.name} "
+                f"(priority={priority})"
+            )
 
-    logger.info(f"Queued {count} {priority} priority products for price checking")
-    return {'priority': priority, 'count': count}
+        logger.info(
+            f"Aggregated priority check complete: "
+            f"{product_count} products, {listing_count} listings queued"
+        )
+
+        return {
+            'products_checked': product_count,
+            'listings_queued': listing_count
+        }
+
+    except Exception as e:
+        logger.exception("Error in fetch_prices_by_aggregated_priority")
+        return {
+            'status': 'error',
+            'error': str(e)
+        }
 
 
 @shared_task

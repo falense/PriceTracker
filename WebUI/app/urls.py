@@ -17,7 +17,12 @@ urlpatterns = [
     path('products/<uuid:product_id>/', views.product_detail, name='product_detail'),
     path('products/<uuid:product_id>/delete/', views.delete_product, name='delete_product'),
     path('products/<uuid:product_id>/settings/', views.update_product_settings, name='update_product_settings'),
-    path('products/<uuid:product_id>/refresh/', views.refresh_price, name='refresh_price'),
+
+    # Subscription management (new multi-store model)
+    path('subscriptions/<uuid:subscription_id>/', views.subscription_detail, name='subscription_detail'),
+    path('subscriptions/<uuid:subscription_id>/update/', views.update_subscription, name='update_subscription'),
+    path('subscriptions/<uuid:subscription_id>/unsubscribe/', views.unsubscribe, name='unsubscribe'),
+    path('subscriptions/<uuid:subscription_id>/refresh/', views.refresh_price, name='refresh_price'),
 
     # HTMX endpoints
     path('search/', views.search_product, name='search_product'),
@@ -31,10 +36,35 @@ urlpatterns = [
 
     # Admin pages (staff only)
     path('admin-dashboard/', views.admin_dashboard, name='admin_dashboard'),
-    path('admin-dashboard/patterns/', views.patterns_status, name='patterns_status'),
+    path('admin-dashboard/logs/', views.admin_logs, name='admin_logs'),
+
+    # Pattern Management
+    path('admin-dashboard/patterns/', views.pattern_list, name='pattern_list'),
+    path('admin-dashboard/patterns/create/', views.pattern_create, name='pattern_create'),
+    path('admin-dashboard/patterns/<str:domain>/', views.pattern_detail, name='pattern_detail'),
+    path('admin-dashboard/patterns/<str:domain>/edit/', views.pattern_edit, name='pattern_edit'),
+    path('admin-dashboard/patterns/<str:domain>/history/', views.pattern_history, name='pattern_history'),
+    path('admin-dashboard/patterns/<str:domain>/compare/<int:v1>/<int:v2>/', views.pattern_compare, name='pattern_compare'),
+    path('admin-dashboard/patterns/<str:domain>/rollback/<int:version>/', views.pattern_rollback, name='pattern_rollback'),
+    path('admin-dashboard/patterns/<str:domain>/delete/', views.pattern_delete, name='pattern_delete'),
+
+    # Pattern HTMX API endpoints
+    path('api/patterns/test/', views.api_test_pattern, name='api_test_pattern'),
+    path('api/patterns/test-selector/', views.api_test_selector, name='api_test_selector'),
+    path('api/patterns/validate/', views.api_validate_pattern, name='api_validate_pattern'),
+    path('api/patterns/fetch-html/', views.api_fetch_html, name='api_fetch_html'),
+    path('api/patterns/regenerate/', views.api_regenerate_pattern, name='api_regenerate_pattern'),
+
+    # Admin Flags
     path('admin-dashboard/flags/', views.admin_flags_list, name='admin_flags_list'),
     path('admin-dashboard/flags/<int:flag_id>/resolve/', views.resolve_admin_flag, name='resolve_admin_flag'),
 
+    # Legacy pattern status view (keep for backward compatibility)
+    path('admin-dashboard/patterns-old/', views.patterns_status, name='patterns_status'),
+
     # Settings
     path('settings/', views.user_settings, name='user_settings'),
+
+    # Utilities
+    path('proxy-image/', views.proxy_image, name='proxy_image'),
 ]

@@ -5,7 +5,7 @@ import time
 from datetime import datetime
 from typing import Dict, List, Optional
 
-import httpx
+from playwright.async_api import async_playwright
 import structlog
 
 from .extractor import Extractor
@@ -13,6 +13,14 @@ from .models import ExtractionResult, FetchResult, FetchSummary, Product
 from .pattern_loader import PatternLoader
 from .storage import PriceStorage
 from .validator import Validator
+from .stealth import (
+    STEALTH_ARGS,
+    apply_stealth,
+    get_stealth_context_options,
+    get_enhanced_context_options,
+    simulate_human_behavior,
+    wait_for_stable_load,
+)
 
 logger = structlog.get_logger()
 
@@ -28,6 +36,9 @@ class PriceFetcher:
         max_retries: int = 3,
         user_agent: Optional[str] = None,
         min_confidence: float = 0.6,
+        browser_timeout: float = 60.0,
+        wait_for_js: bool = True,
+        domain_delays: Optional[Dict[str, float]] = None,
     ):
         """
         Initialize price fetcher.
@@ -35,19 +46,20 @@ class PriceFetcher:
         Args:
             db_path: Path to shared SQLite database
             request_delay: Delay between requests (seconds)
-            timeout: HTTP request timeout (seconds)
+            timeout: Browser operation timeout (seconds)
             max_retries: Maximum retry attempts
-            user_agent: HTTP User-Agent string
+            user_agent: Kept for backwards compatibility (not used - stealth UA applied)
             min_confidence: Minimum confidence threshold for validation
+            browser_timeout: Navigation timeout for browser (seconds)
+            wait_for_js: Whether to wait for JavaScript to finish rendering
+            domain_delays: Per-domain request delays (seconds)
         """
         self.request_delay = request_delay
         self.timeout = timeout
         self.max_retries = max_retries
-        self.user_agent = user_agent or (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
-        )
+        self.browser_timeout = browser_timeout * 1000  # Convert to milliseconds
+        self.wait_for_js = wait_for_js
+        self.domain_delays = domain_delays or {}
 
         # Initialize components
         self.pattern_loader = PatternLoader(db_path)
@@ -60,6 +72,8 @@ class PriceFetcher:
             request_delay=request_delay,
             timeout=timeout,
             max_retries=max_retries,
+            browser_timeout=browser_timeout,
+            wait_for_js=wait_for_js,
         )
 
     async def fetch_all(self) -> FetchSummary:
@@ -137,7 +151,10 @@ class PriceFetcher:
 
                 # Rate limiting: wait between requests (except for last product)
                 if i < len(domain_products) - 1:
-                    await asyncio.sleep(self.request_delay)
+                    # Use domain-specific delay if configured, otherwise use default
+                    delay = self.domain_delays.get(domain, self.request_delay)
+                    logger.debug("rate_limit_delay", domain=domain, delay=delay)
+                    await asyncio.sleep(delay)
 
         completed_at = datetime.utcnow()
         duration = (completed_at - started_at).total_seconds()
@@ -197,7 +214,9 @@ class PriceFetcher:
             extraction = self.extractor.extract_with_pattern(html, pattern)
 
             # Get previous extraction for comparison
-            previous = self.storage.get_latest_price(product_id)
+            previous = self.storage.get_latest_price(
+                product_id=product_id, listing_id=product.listing_id
+            )
             previous_extraction = None
             if previous and previous.get("extracted_data"):
                 try:
@@ -214,7 +233,9 @@ class PriceFetcher:
 
             # Store if valid
             if validation.valid:
-                self.storage.save_price(product_id, extraction, validation, url)
+                self.storage.save_price(
+                    product_id, extraction, validation, url, listing_id=product.listing_id
+                )
                 self.storage.update_pattern_stats(product.domain, success=True)
             else:
                 self.storage.update_pattern_stats(product.domain, success=False)
@@ -222,12 +243,13 @@ class PriceFetcher:
             # Log fetch attempt
             duration_ms = int((time.time() - start_time) * 1000)
             self.storage.log_fetch(
-                product_id,
+                product_id=product_id,
                 success=validation.valid,
                 extraction_method=extraction.price.method,
                 errors=validation.errors,
                 warnings=validation.warnings,
                 duration_ms=duration_ms,
+                listing_id=product.listing_id,
             )
 
             return FetchResult(
@@ -274,7 +296,7 @@ class PriceFetcher:
 
     async def _fetch_html(self, url: str) -> str:
         """
-        Fetch HTML from URL with retry logic.
+        Fetch HTML from URL using Playwright with retry logic.
 
         Args:
             url: Product URL to fetch
@@ -283,66 +305,135 @@ class PriceFetcher:
             HTML content as string
 
         Raises:
-            httpx.HTTPError: If fetch fails after retries
+            Exception: If fetch fails after retries
         """
-        headers = {
-            "User-Agent": self.user_agent,
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5",
-            "Accept-Encoding": "gzip, deflate",
-            "Connection": "keep-alive",
-            "Upgrade-Insecure-Requests": "1",
-        }
+        last_error = None
 
-        async with httpx.AsyncClient(
-            timeout=self.timeout,
-            follow_redirects=True,
-        ) as client:
-            for attempt in range(self.max_retries):
-                try:
-                    logger.debug("http_request", url=url, attempt=attempt + 1)
+        # Extract domain for enhanced stealth detection
+        from urllib.parse import urlparse
+        domain = urlparse(url).netloc.lower()
 
-                    response = await client.get(url, headers=headers)
-                    response.raise_for_status()
+        # Difficult sites that need enhanced stealth
+        difficult_sites = ['amazon.com', 'amazon.co.uk', 'amazon.de', 'walmart.com']
+        use_enhanced_stealth = any(site in domain for site in difficult_sites)
+
+        for attempt in range(self.max_retries):
+            browser = None
+            try:
+                logger.debug(
+                    "browser_fetch_starting",
+                    url=url,
+                    attempt=attempt + 1,
+                    enhanced_stealth=use_enhanced_stealth,
+                )
+
+                async with async_playwright() as p:
+                    # Launch browser with stealth args
+                    browser = await p.chromium.launch(
+                        headless=True,
+                        args=STEALTH_ARGS
+                    )
+
+                    # Create context with stealth options (enhanced for difficult sites)
+                    if use_enhanced_stealth:
+                        context_options = get_enhanced_context_options(domain)
+                        logger.debug("using_enhanced_stealth", domain=domain)
+                    else:
+                        context_options = get_stealth_context_options()
+
+                    context = await browser.new_context(**context_options)
+
+                    # Create page and apply stealth
+                    page = await context.new_page()
+                    await apply_stealth(page)
+
+                    # Navigate (wait for JS if configured)
+                    wait_until = "load" if self.wait_for_js else "domcontentloaded"
+                    await page.goto(
+                        url,
+                        wait_until=wait_until,
+                        timeout=self.browser_timeout
+                    )
+
+                    # For difficult sites, simulate human behavior
+                    if use_enhanced_stealth:
+                        await wait_for_stable_load(page, timeout=30000)
+                        await simulate_human_behavior(page, domain)
+                        logger.debug("human_behavior_simulated", domain=domain)
+
+                    # Get rendered HTML
+                    html = await page.content()
 
                     logger.debug(
-                        "http_success",
+                        "browser_fetch_success",
                         url=url,
-                        status=response.status_code,
-                        size=len(response.text),
-                    )
-
-                    return response.text
-
-                except httpx.HTTPStatusError as e:
-                    logger.warning(
-                        "http_status_error",
-                        url=url,
-                        status=e.response.status_code,
                         attempt=attempt + 1,
+                        html_length=len(html),
                     )
 
-                    # Don't retry on client errors (4xx)
-                    if 400 <= e.response.status_code < 500:
-                        raise
+                    await browser.close()
+                    return html
 
-                    # Retry on server errors (5xx)
+            except Exception as e:
+                last_error = e
+                error_msg = str(e)
+
+                # Close browser on error
+                if browser:
+                    try:
+                        await browser.close()
+                    except Exception:
+                        pass
+
+                # Categorize errors for retry logic
+                should_retry = True
+
+                # DNS/connection errors - don't retry
+                if "ERR_NAME_NOT_RESOLVED" in error_msg:
+                    error_type = "dns_resolution"
+                    should_retry = False
+                elif "ERR_CONNECTION_REFUSED" in error_msg:
+                    error_type = "connection_refused"
+                    should_retry = True
+                elif "ERR_TIMED_OUT" in error_msg or "Timeout" in error_msg:
+                    error_type = "timeout"
+                    should_retry = True
+                # Rate limiting - retry with longer delay
+                elif "429" in error_msg or "Too Many Requests" in error_msg:
+                    error_type = "rate_limited"
+                    should_retry = True
                     if attempt < self.max_retries - 1:
-                        await asyncio.sleep(2 ** attempt)  # Exponential backoff
-                    else:
-                        raise
+                        await asyncio.sleep(5 * (attempt + 1))
+                        continue
+                # Bot detection - retry (might be intermittent)
+                elif "403" in error_msg or "Forbidden" in error_msg:
+                    error_type = "bot_detection"
+                    should_retry = True
+                    logger.warning("bot_detection_suspected", url=url, attempt=attempt + 1)
+                elif "ERR_ABORTED" in error_msg:
+                    error_type = "navigation_aborted"
+                    should_retry = False
+                else:
+                    error_type = "unknown"
+                    should_retry = True
 
-                except (httpx.TimeoutException, httpx.NetworkError) as e:
-                    logger.warning(
-                        "http_network_error",
-                        url=url,
-                        error=str(e),
-                        attempt=attempt + 1,
-                    )
+                logger.warning(
+                    "browser_fetch_error",
+                    url=url,
+                    attempt=attempt + 1,
+                    error=error_msg,
+                    error_type=error_type,
+                    will_retry=should_retry and attempt < self.max_retries - 1,
+                )
 
-                    if attempt < self.max_retries - 1:
-                        await asyncio.sleep(2 ** attempt)  # Exponential backoff
-                    else:
-                        raise
+                if should_retry and attempt < self.max_retries - 1:
+                    # Exponential backoff
+                    await asyncio.sleep(2 ** attempt)
+                elif not should_retry:
+                    break
 
-        raise httpx.HTTPError(f"Failed to fetch {url} after {self.max_retries} attempts")
+        # All retries failed
+        raise Exception(
+            f"Failed to fetch {url} after {self.max_retries} attempts. "
+            f"Last error: {last_error}"
+        )

@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load currency_filters %}
 
-{% block title %}{{ product.extracted_title }} - PriceTracker{% endblock %}
+{% block title %}{{ product.name }} - PriceTracker{% endblock %}
 
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -19,7 +19,7 @@
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
                 <div class="flex items-start justify-between mb-4">
                     <h1 class="text-2xl font-bold text-gray-900 dark:text-white flex-1">
-                        {{ product.extracted_title }}
+                        {{ product.name }}
                     </h1>
                     <span class="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full text-sm">
                         {{ product.get_priority_display }}
@@ -35,7 +35,7 @@
                 <!-- Product Image -->
                 {% if product.image_url %}
                 <div class="mb-6 flex justify-center">
-                    <img src="{{ product.image_url }}" alt="{{ product.extracted_title }}" class="h-48 rounded-lg object-contain bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
+                    <img src="{% url 'proxy_image' %}?url={{ product.image_url|urlencode }}" alt="{{ product.name }}" class="h-48 rounded-lg object-contain bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700" loading="lazy">
                 </div>
                 {% endif %}
 
@@ -198,7 +198,6 @@
                             Check Frequency
                         </label>
                         <select class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
-                            <option value="high" {% if product.priority == 'high' %}selected{% endif %}>Every 15 minutes</option>
                             <option value="normal" {% if product.priority == 'normal' %}selected{% endif %}>Every hour</option>
                             <option value="low" {% if product.priority == 'low' %}selected{% endif %}>Daily</option>
                         </select>

@@ -1,0 +1,148 @@
+{% extends 'base.html' %}
+
+{% block title %}Create Pattern - Pattern Management{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+        <div class="flex items-center gap-3 mb-2">
+            <a href="{% url 'pattern_list' %}"
+               class="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                </svg>
+            </a>
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+                Create New Pattern
+            </h1>
+        </div>
+        <p class="text-gray-600 dark:text-gray-400 ml-9">
+            Create a new extraction pattern for a store domain
+        </p>
+    </div>
+
+    <!-- Form -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+        <form method="post">
+            {% csrf_token %}
+
+            <!-- Domain -->
+            <div class="mb-6">
+                <label for="domain" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Domain <span class="text-red-600">*</span>
+                </label>
+                <input type="text"
+                       name="domain"
+                       id="domain"
+                       value="{{ domain }}"
+                       placeholder="example.com (without www.)"
+                       class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                       required>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    Enter the store domain without 'www.' prefix (e.g., amazon.com, ebay.com)
+                </p>
+            </div>
+
+            <!-- Pattern JSON -->
+            <div class="mb-6">
+                <label for="pattern_json" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Pattern JSON <span class="text-red-600">*</span>
+                </label>
+                <textarea name="pattern_json"
+                          id="pattern_json"
+                          rows="20"
+                          class="w-full font-mono text-sm border border-gray-300 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                          required>{% if pattern_json %}{{ pattern_json }}{% else %}{{ template_json }}{% endif %}</textarea>
+                <div id="json-feedback" class="mt-2 text-sm"></div>
+                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    Define CSS/XPath selectors for extracting product data. A template is provided to get you started.
+                </p>
+            </div>
+
+            <!-- Change Reason -->
+            <div class="mb-6">
+                <label for="change_reason" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Change Reason
+                </label>
+                <input type="text"
+                       name="change_reason"
+                       id="change_reason"
+                       value="{{ change_reason }}"
+                       placeholder="Initial creation"
+                       class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500">
+            </div>
+
+            <!-- Actions -->
+            <div class="flex gap-3">
+                <button type="submit"
+                        class="px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-colors">
+                    Create Pattern
+                </button>
+                <a href="{% url 'pattern_list' %}"
+                   class="px-6 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-white rounded-lg font-medium transition-colors">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Help Section -->
+    <div class="mt-8 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6">
+        <h2 class="text-lg font-semibold text-blue-900 dark:text-blue-200 mb-3">Pattern Structure Guide</h2>
+        <div class="text-sm text-blue-800 dark:text-blue-300 space-y-2">
+            <p><strong>Required fields:</strong> price (must extract successfully)</p>
+            <p><strong>Optional fields:</strong> title, image, availability</p>
+            <p><strong>Selector types:</strong></p>
+            <ul class="list-disc list-inside ml-4 space-y-1">
+                <li><code class="bg-blue-100 dark:bg-blue-900 px-1.5 py-0.5 rounded">css</code> - CSS selector (e.g., ".product-price")</li>
+                <li><code class="bg-blue-100 dark:bg-blue-900 px-1.5 py-0.5 rounded">xpath</code> - XPath expression</li>
+                <li><code class="bg-blue-100 dark:bg-blue-900 px-1.5 py-0.5 rounded">meta</code> - Meta tag property (e.g., "og:title")</li>
+                <li><code class="bg-blue-100 dark:bg-blue-900 px-1.5 py-0.5 rounded">jsonld</code> - JSON-LD path (e.g., "offers.price")</li>
+            </ul>
+            <p class="mt-3"><strong>Tips:</strong></p>
+            <ul class="list-disc list-inside ml-4 space-y-1">
+                <li>Each field should have a primary selector and optional fallbacks</li>
+                <li>Higher confidence values (0.8-1.0) indicate more reliable selectors</li>
+                <li>Test your pattern against real URLs before saving</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- JavaScript -->
+<script>
+const jsonEditor = document.getElementById('pattern_json');
+const feedback = document.getElementById('json-feedback');
+
+// Real-time JSON validation
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+jsonEditor.addEventListener('input', debounce(() => {
+    try {
+        const json = JSON.parse(jsonEditor.value);
+
+        // Basic structure validation
+        if (!json.store_domain) {
+            feedback.innerHTML = '<span class="text-yellow-600 dark:text-yellow-400">⚠ Warning: store_domain is missing</span>';
+        } else if (!json.patterns) {
+            feedback.innerHTML = '<span class="text-yellow-600 dark:text-yellow-400">⚠ Warning: patterns object is missing</span>';
+        } else {
+            feedback.innerHTML = '<span class="text-green-600 dark:text-green-400">✓ Valid JSON</span>';
+        }
+    } catch (e) {
+        feedback.innerHTML = `<span class="text-red-600 dark:text-red-400">✗ ${e.message}</span>`;
+    }
+}, 500));
+</script>
+{% endblock %}

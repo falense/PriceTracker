@@ -4,14 +4,28 @@ fetcher:
   # Delay between requests to same domain (seconds)
   request_delay: 2.0
 
-  # HTTP request timeout (seconds)
+  # Browser operation timeout (seconds)
   timeout: 30.0
+
+  # Browser navigation timeout (seconds)
+  browser_timeout: 60.0
 
   # Maximum retry attempts for failed requests
   max_retries: 3
 
-  # User agent string
+  # Wait for JavaScript to finish rendering
+  wait_for_js: true
+
+  # User agent string (deprecated - now set by stealth utilities)
   user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+  # Per-domain delays for difficult sites (seconds)
+  domain_delays:
+    amazon.com: 10.0
+    amazon.co.uk: 10.0
+    amazon.de: 10.0
+    walmart.com: 8.0
+    default: 2.0
 
 storage:
   # Path to shared SQLite database (relative to PriceFetcher root)

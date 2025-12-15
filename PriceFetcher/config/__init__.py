@@ -34,4 +34,11 @@ def load_config(config_path: str = None) -> Dict[str, Any]:
     if "MIN_CONFIDENCE" in os.environ:
         config["validation"]["min_confidence"] = float(os.environ["MIN_CONFIDENCE"])
 
+    # Browser-specific environment overrides
+    if "BROWSER_TIMEOUT" in os.environ:
+        config["fetcher"]["browser_timeout"] = float(os.environ["BROWSER_TIMEOUT"])
+
+    if "WAIT_FOR_JS" in os.environ:
+        config["fetcher"]["wait_for_js"] = os.environ["WAIT_FOR_JS"].lower() == "true"
+
     return config

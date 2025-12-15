@@ -13,9 +13,10 @@
            class="block p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
             <div class="flex items-center space-x-4">
                 {% if product.image_url %}
-                <img src="{{ product.image_url }}"
+                <img src="{% url 'proxy_image' %}?url={{ product.image_url|urlencode }}"
                      alt="{{ product.name }}"
-                     class="w-16 h-16 object-cover rounded-lg flex-shrink-0">
+                     class="w-16 h-16 object-cover rounded-lg flex-shrink-0"
+                     loading="lazy">
                 {% else %}
                 <div class="w-16 h-16 bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center flex-shrink-0">
                     <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -26,10 +27,10 @@
 
                 <div class="flex-1 min-w-0">
                     <h4 class="font-medium text-gray-900 dark:text-white truncate">
-                        {{ product.extracted_title|default:product.name }}
+                        {{ product.name }}
                     </h4>
                     <p class="text-sm text-gray-500 dark:text-gray-400">
-                        {{ product.domain }}
+                        From {{ product.listings.first.store.name|default:"store" }}
                     </p>
                 </div>
 

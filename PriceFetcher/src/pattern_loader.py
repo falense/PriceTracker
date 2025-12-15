@@ -48,43 +48,26 @@ class PatternLoader:
         Returns:
             ExtractionPattern object or None if not found
         """
+        # Normalize domain by removing www prefix for consistency
+        normalized_domain = domain.replace('www.', '').lower()
+
         conn = self._get_connection()
         cursor = conn.cursor()
 
         try:
-            # Try exact match first
             cursor.execute(
                 """
                 SELECT domain, pattern_json, created_at, updated_at
                 FROM app_pattern
                 WHERE domain = ?
                 """,
-                (domain,),
+                (normalized_domain,),
             )
 
             row = cursor.fetchone()
 
-            # If not found, try with/without www prefix
             if not row:
-                if domain.startswith('www.'):
-                    # Try without www
-                    alt_domain = domain[4:]
-                else:
-                    # Try with www
-                    alt_domain = f'www.{domain}'
-
-                cursor.execute(
-                    """
-                    SELECT domain, pattern_json, created_at, updated_at
-                    FROM app_pattern
-                    WHERE domain = ?
-                    """,
-                    (alt_domain,),
-                )
-                row = cursor.fetchone()
-
-            if not row:
-                logger.warning("pattern_not_found", domain=domain)
+                logger.warning("pattern_not_found", domain=domain, normalized_domain=normalized_domain)
                 return None
 
             pattern_data = json.loads(row["pattern_json"])
@@ -141,6 +124,9 @@ class PatternLoader:
         Returns:
             True if pattern exists, False otherwise
         """
+        # Normalize domain by removing www prefix for consistency
+        normalized_domain = domain.replace('www.', '').lower()
+
         conn = self._get_connection()
         cursor = conn.cursor()
 
@@ -151,12 +137,12 @@ class PatternLoader:
                 FROM app_pattern
                 WHERE domain = ?
                 """,
-                (domain,),
+                (normalized_domain,),
             )
 
             row = cursor.fetchone()
             exists = row["count"] > 0
-            logger.debug("pattern_existence_checked", domain=domain, exists=exists)
+            logger.debug("pattern_existence_checked", domain=domain, normalized_domain=normalized_domain, exists=exists)
             return exists
 
         finally:

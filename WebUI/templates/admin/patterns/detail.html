@@ -1,0 +1,283 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ pattern.domain }} - Pattern Management{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+        <div>
+            <div class="flex items-center gap-3">
+                <a href="{% url 'pattern_list' %}"
+                   class="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                    </svg>
+                </a>
+                <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+                    {{ pattern.domain }}
+                </h1>
+                {% if pattern.success_rate >= 0.8 %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400">
+                        {% widthratio pattern.success_rate 1 100 %}% success
+                    </span>
+                {% elif pattern.success_rate >= 0.6 %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400">
+                        {% widthratio pattern.success_rate 1 100 %}% success
+                    </span>
+                {% else %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400">
+                        {% widthratio pattern.success_rate 1 100 %}% success
+                    </span>
+                {% endif %}
+            </div>
+            <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                {{ pattern.successful_attempts }} / {{ pattern.total_attempts }} successful attempts
+                {% if pattern.last_validated %}
+                    • Last validated: {{ pattern.last_validated|date:"Y-m-d H:i" }}
+                {% endif %}
+            </p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+            <button onclick="savePattern()"
+                    class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-colors">
+                Save Changes
+            </button>
+            <button onclick="validatePattern()"
+                    class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-white rounded-lg font-medium transition-colors">
+                Validate
+            </button>
+            <button hx-post="{% url 'api_regenerate_pattern' %}"
+                    hx-vals='{"domain": "{{ pattern.domain }}"}'
+                    hx-swap="none"
+                    class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-white rounded-lg font-medium transition-colors">
+                Regenerate
+            </button>
+            <a href="{% url 'pattern_history' pattern.domain %}"
+               class="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-white rounded-lg font-medium transition-colors">
+                History ({{ history_count }})
+            </a>
+            <form method="post" action="{% url 'pattern_delete' pattern.domain %}"
+                  onsubmit="return confirm('Are you sure you want to delete this pattern? This action cannot be undone.');"
+                  class="inline">
+                {% csrf_token %}
+                <button type="submit"
+                        class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors">
+                    Delete
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Content - Split Layout -->
+    <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        <!-- Left Panel - Editor (3/5) -->
+        <div class="lg:col-span-3">
+            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Pattern Editor</h2>
+                    <button onclick="copyPattern()"
+                            class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">
+                        Copy JSON
+                    </button>
+                </div>
+
+                <!-- JSON Editor -->
+                <textarea id="pattern-editor"
+                          class="w-full h-96 font-mono text-sm border border-gray-300 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                          spellcheck="false">{{ pattern_json }}</textarea>
+
+                <!-- Editor Feedback -->
+                <div id="editor-feedback" class="mt-2 text-sm"></div>
+
+                <!-- Change Reason (for save) -->
+                <div class="mt-4">
+                    <label for="change-reason" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Change Reason (optional)
+                    </label>
+                    <input type="text"
+                           id="change-reason"
+                           placeholder="Describe what you changed..."
+                           class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500">
+                </div>
+            </div>
+
+            <!-- Validation Results -->
+            <div id="validation-results" class="mt-6"></div>
+        </div>
+
+        <!-- Right Panel - Test Panel (2/5) -->
+        <div class="lg:col-span-2">
+            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6 sticky top-4">
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">Test Pattern</h2>
+
+                <!-- Test Form -->
+                <form hx-post="{% url 'api_test_pattern' %}"
+                      hx-target="#test-results"
+                      hx-indicator="#test-loading"
+                      onsubmit="prepareTest(event)">
+                    {% csrf_token %}
+                    <input type="hidden" name="pattern_json" id="test-pattern-json">
+
+                    <div class="mb-4">
+                        <label for="test-url" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Test URL
+                        </label>
+                        <input type="url"
+                               name="test_url"
+                               id="test-url"
+                               placeholder="https://example.com/product/123"
+                               class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                               required>
+                    </div>
+
+                    <button type="submit"
+                            class="w-full px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-colors">
+                        Run Test
+                    </button>
+
+                    <!-- Loading Indicator -->
+                    <div id="test-loading" class="htmx-indicator mt-4 text-center">
+                        <svg class="animate-spin h-8 w-8 mx-auto text-primary-600" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mt-2">Testing pattern...</p>
+                    </div>
+                </form>
+
+                <!-- Test Results -->
+                <div id="test-results" class="mt-6"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent History -->
+    {% if history %}
+    <div class="mt-8 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Recent History</h2>
+            <a href="{% url 'pattern_history' pattern.domain %}"
+               class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">
+                View All ({{ history_count }})
+            </a>
+        </div>
+
+        <div class="space-y-3">
+            {% for version in history|slice:":5" %}
+            <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <div>
+                    <div class="text-sm font-medium text-gray-900 dark:text-white">
+                        Version {{ version.version_number }}
+                        <span class="text-gray-500 dark:text-gray-400">
+                            {% if version.changed_by %}
+                                by {{ version.changed_by.username }}
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                        {{ version.created_at|date:"Y-m-d H:i" }}
+                        {% if version.change_reason %}
+                            • {{ version.change_reason }}
+                        {% endif %}
+                    </div>
+                </div>
+                <form method="post" action="{% url 'pattern_rollback' pattern.domain version.version_number %}"
+                      onsubmit="return confirm('Rollback to version {{ version.version_number }}?');"
+                      class="inline">
+                    {% csrf_token %}
+                    <button type="submit"
+                            class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">
+                        Rollback
+                    </button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- JavaScript -->
+<script>
+const editor = document.getElementById('pattern-editor');
+const feedback = document.getElementById('editor-feedback');
+const changeReasonInput = document.getElementById('change-reason');
+
+// Debounce function
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// Real-time JSON validation
+editor.addEventListener('input', debounce(() => {
+    try {
+        JSON.parse(editor.value);
+        feedback.innerHTML = '<span class="text-green-600 dark:text-green-400">✓ Valid JSON</span>';
+    } catch (e) {
+        feedback.innerHTML = `<span class="text-red-600 dark:text-red-400">✗ ${e.message}</span>`;
+    }
+}, 500));
+
+// Save pattern
+function savePattern() {
+    try {
+        // Validate JSON first
+        const patternJson = JSON.parse(editor.value);
+
+        // Create form and submit
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '{% url 'pattern_edit' pattern.domain %}';
+
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        form.innerHTML = `
+            <input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}">
+            <input type="hidden" name="pattern_json" value='${editor.value}'>
+            <input type="hidden" name="change_reason" value="${changeReasonInput.value}">
+        `;
+
+        document.body.appendChild(form);
+        form.submit();
+    } catch (e) {
+        alert('Invalid JSON: ' + e.message);
+    }
+}
+
+// Validate pattern
+function validatePattern() {
+    const patternJson = editor.value;
+
+    htmx.ajax('POST', '{% url 'api_validate_pattern' %}', {
+        target: '#validation-results',
+        values: { pattern_json: patternJson }
+    });
+}
+
+// Prepare test (copy editor content to hidden field)
+function prepareTest(event) {
+    document.getElementById('test-pattern-json').value = editor.value;
+}
+
+// Copy pattern to clipboard
+function copyPattern() {
+    editor.select();
+    document.execCommand('copy');
+
+    // Show feedback
+    const originalText = feedback.innerHTML;
+    feedback.innerHTML = '<span class="text-green-600 dark:text-green-400">✓ Copied to clipboard</span>';
+    setTimeout(() => {
+        feedback.innerHTML = originalText;
+    }, 2000);
+}
+</script>
+{% endblock %}

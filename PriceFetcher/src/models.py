@@ -41,10 +41,12 @@ class Product(BaseModel):
     name: Optional[str] = None
     current_price: Optional[Decimal] = None
     currency: str = "USD"
+    image_url: Optional[str] = None
     check_interval: int = 3600  # seconds
     last_checked: Optional[datetime] = None
     active: bool = True
     priority: str = "normal"
+    listing_id: Optional[str] = None  # ProductListing UUID for multi-store support
 
 
 class ExtractedField(BaseModel):

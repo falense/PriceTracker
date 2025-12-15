@@ -42,6 +42,73 @@ class PriceStorage:
         conn.row_factory = sqlite3.Row
         return conn
 
+    def get_product_by_listing_id(self, listing_id: str) -> Optional[Product]:
+        """
+        Get a product by listing ID, with the listing's URL and store info.
+
+        Args:
+            listing_id: ProductListing UUID (with or without hyphens)
+
+        Returns:
+            Product object with listing URL or None if not found
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        # SQLite stores UUIDs without hyphens, so remove them for the query
+        listing_id_clean = listing_id.replace('-', '')
+
+        query = """
+            SELECT
+                p.id as product_id,
+                p.name,
+                p.image_url,
+                l.url,
+                l.current_price,
+                l.currency,
+                l.last_checked,
+                l.active,
+                s.domain
+            FROM app_productlisting l
+            INNER JOIN app_product p ON l.product_id = p.id
+            INNER JOIN app_store s ON l.store_id = s.id
+            WHERE l.id = ?
+            AND l.active = 1
+        """
+
+        try:
+            cursor.execute(query, (listing_id_clean,))
+            row = cursor.fetchone()
+
+            if not row:
+                logger.warning("listing_not_found", listing_id=listing_id)
+                return None
+
+            product = Product(
+                product_id=row["product_id"],
+                url=row["url"],
+                domain=row["domain"],
+                name=row["name"],
+                image_url=row["image_url"],
+                current_price=Decimal(str(row["current_price"]))
+                if row["current_price"]
+                else None,
+                currency=row["currency"] or "USD",
+                check_interval=3600,  # Default, will be determined by priority
+                last_checked=datetime.fromisoformat(row["last_checked"])
+                if row["last_checked"]
+                else None,
+                active=bool(row["active"]),
+                priority="normal",  # Default
+                listing_id=listing_id  # Store the listing ID for saving results
+            )
+
+            logger.info("product_loaded_from_listing", listing_id=listing_id, product_id=row["product_id"])
+            return product
+
+        finally:
+            conn.close()
+
     def get_product_by_id(self, product_id: str) -> Optional[Product]:
         """
         Get a specific product by ID.
@@ -59,7 +126,7 @@ class PriceStorage:
         product_id_clean = product_id.replace('-', '')
 
         query = """
-            SELECT id, url, domain, name, current_price, currency,
+            SELECT id, url, domain, name, image_url, current_price, currency,
                    check_interval, last_checked, active, priority
             FROM app_product
             WHERE id = ?
@@ -79,6 +146,7 @@ class PriceStorage:
                 url=row["url"],
                 domain=row["domain"],
                 name=row["name"],
+                image_url=row["image_url"],
                 current_price=Decimal(str(row["current_price"]))
                 if row["current_price"]
                 else None,
@@ -108,7 +176,7 @@ class PriceStorage:
         cursor = conn.cursor()
 
         query = """
-            SELECT id, url, domain, name, current_price, currency,
+            SELECT id, url, domain, name, image_url, current_price, currency,
                    check_interval, last_checked, active, priority
             FROM app_product
             WHERE active = 1
@@ -131,6 +199,7 @@ class PriceStorage:
                         url=row["url"],
                         domain=row["domain"],
                         name=row["name"],
+                        image_url=row["image_url"],
                         current_price=Decimal(str(row["current_price"]))
                         if row["current_price"]
                         else None,
@@ -166,7 +235,7 @@ class PriceStorage:
         cursor = conn.cursor()
 
         query = """
-            SELECT id, url, domain, name, current_price, currency,
+            SELECT id, url, domain, name, image_url, current_price, currency,
                    check_interval, last_checked, active, priority
             FROM app_product
             WHERE active = 1
@@ -189,6 +258,7 @@ class PriceStorage:
                         url=row["url"],
                         domain=row["domain"],
                         name=row["name"],
+                        image_url=row["image_url"],
                         current_price=Decimal(str(row["current_price"]))
                         if row["current_price"]
                         else None,
@@ -258,6 +328,7 @@ class PriceStorage:
         extraction: ExtractionResult,
         validation: ValidationResult,
         product_url: Optional[str] = None,
+        listing_id: Optional[str] = None,
     ) -> None:
         """
         Save extracted price to history.
@@ -267,6 +338,7 @@ class PriceStorage:
             extraction: Extracted data
             validation: Validation result
             product_url: Product URL for normalizing relative image URLs
+            listing_id: ProductListing UUID (for multi-store support)
         """
         conn = self._get_connection()
         cursor = conn.cursor()
@@ -305,99 +377,156 @@ class PriceStorage:
                         )
                         image_url = None  # Can't normalize without base URL
 
-            # Store in price_history table
-            cursor.execute(
-                """
-                INSERT INTO app_pricehistory
-                (product_id, price, currency, available, extracted_data,
-                 confidence, recorded_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    product_id,
-                    price_value,
-                    currency,
-                    available,
-                    json.dumps(extraction.model_dump(), default=str),
-                    validation.confidence,
-                    datetime.utcnow().isoformat(),
-                ),
-            )
+            if listing_id:
+                # New multi-store schema: save to listing
+                listing_id_clean = listing_id.replace('-', '')
 
-            # Update product's current_price, availability, image_url, and last_checked
-            cursor.execute(
-                """
-                UPDATE app_product
-                SET current_price = ?,
-                    available = ?,
-                    image_url = CASE
-                        WHEN ? IS NOT NULL THEN ?
-                        ELSE image_url
-                    END,
-                    last_checked = ?,
-                    updated_at = ?
-                WHERE id = ?
-                """,
-                (
-                    price_value,
-                    available,
-                    image_url,  # For WHEN condition
-                    image_url,  # For THEN clause
-                    datetime.utcnow().isoformat(),
-                    datetime.utcnow().isoformat(),
-                    product_id,
-                ),
-            )
+                # Store in price_history table (linked to listing)
+                cursor.execute(
+                    """
+                    INSERT INTO app_pricehistory
+                    (listing_id, price, currency, available, extracted_data,
+                     confidence, recorded_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        listing_id_clean,
+                        price_value,
+                        currency,
+                        available,
+                        json.dumps(extraction.model_dump(), default=str),
+                        validation.confidence,
+                        datetime.utcnow().isoformat(),
+                    ),
+                )
+
+                # Update listing's current_price, availability, and last_checked
+                cursor.execute(
+                    """
+                    UPDATE app_productlisting
+                    SET current_price = ?,
+                        available = ?,
+                        last_checked = ?,
+                        updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        price_value,
+                        available,
+                        datetime.utcnow().isoformat(),
+                        datetime.utcnow().isoformat(),
+                        listing_id_clean,
+                    ),
+                )
+
+                # Update product title and image if we have them
+                title = None
+                if extraction.title and extraction.title.value:
+                    title = extraction.title.value.strip()
+
+                if title or image_url:
+                    # Build dynamic update query based on what we have
+                    update_fields = []
+                    update_values = []
+
+                    if title:
+                        # Update name if it's still the placeholder format "Product from domain"
+                        update_fields.append("""
+                            name = CASE
+                                WHEN name LIKE 'Product from %' THEN ?
+                                ELSE name
+                            END
+                        """)
+                        update_values.append(title)
+
+                    if image_url:
+                        # Update image_url only if currently empty
+                        update_fields.append("""
+                            image_url = CASE
+                                WHEN image_url IS NULL OR image_url = '' THEN ?
+                                ELSE image_url
+                            END
+                        """)
+                        update_values.append(image_url)
+
+                    # Always update updated_at
+                    update_fields.append("updated_at = ?")
+                    update_values.append(datetime.utcnow().isoformat())
+
+                    # Add product_id for WHERE clause
+                    update_values.append(product_id)
+
+                    query = f"""
+                        UPDATE app_product
+                        SET {','.join(update_fields)}
+                        WHERE id = ?
+                    """
+
+                    cursor.execute(query, tuple(update_values))
+
+                logger.info(
+                    "price_saved",
+                    product_id=product_id,
+                    listing_id=listing_id,
+                    price=price_value,
+                    confidence=validation.confidence,
+                    title_extracted=title is not None,
+                    image_extracted=image_url is not None,
+                )
+            else:
+                # Fallback to old single-store schema
+                logger.warning("listing_id_missing_using_fallback", product_id=product_id)
+                # This path is kept for backwards compatibility but shouldn't be used
 
             conn.commit()
-            logger.info(
-                "price_saved",
-                product_id=product_id,
-                price=price_value,
-                confidence=validation.confidence,
-                image_extracted=image_url is not None,
-            )
 
         except Exception as e:
             conn.rollback()
-            logger.error("price_save_failed", product_id=product_id, error=str(e))
+            logger.error("price_save_failed", product_id=product_id, listing_id=listing_id, error=str(e))
             raise
         finally:
             conn.close()
 
     def log_fetch(
         self,
-        product_id: str,
-        success: bool,
+        product_id: str = None,
+        success: bool = False,
         extraction_method: Optional[str] = None,
         errors: Optional[List[str]] = None,
         warnings: Optional[List[str]] = None,
         duration_ms: Optional[int] = None,
+        listing_id: Optional[str] = None,
     ) -> None:
         """
         Log fetch attempt for debugging and monitoring.
 
         Args:
-            product_id: Product UUID
+            product_id: Product UUID (legacy, ignored in new schema)
             success: Whether fetch succeeded
             extraction_method: Method that worked (css, xpath, jsonld, meta)
             errors: List of errors encountered
             warnings: List of warnings
             duration_ms: Time taken in milliseconds
+            listing_id: ProductListing UUID (required for multi-store)
         """
+        if not listing_id:
+            logger.warning("log_fetch called without listing_id, skipping")
+            return
+
         conn = self._get_connection()
         cursor = conn.cursor()
 
         try:
+            listing_id_clean = listing_id.replace('-', '')
             cursor.execute(
                 """
                 INSERT INTO app_fetchlog
-                (product_id, success, extraction_method, errors, warnings,
+                (listing_id, success, extraction_method, errors, warnings,
                  duration_ms, fetched_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    product_id,
+                    listing_id_clean,
                     success,
                     extraction_method,
                     json.dumps(errors or []),
@@ -408,20 +537,21 @@ class PriceStorage:
             )
 
             conn.commit()
-            logger.debug("fetch_logged", product_id=product_id, success=success)
+            logger.debug("fetch_logged", listing_id=listing_id, success=success)
 
         except Exception as e:
             conn.rollback()
-            logger.error("fetch_log_failed", product_id=product_id, error=str(e))
+            logger.error("fetch_log_failed", listing_id=listing_id, error=str(e))
         finally:
             conn.close()
 
-    def get_latest_price(self, product_id: str) -> Optional[Dict[str, Any]]:
+    def get_latest_price(self, product_id: str = None, listing_id: str = None) -> Optional[Dict[str, Any]]:
         """
-        Get most recent price for product.
+        Get most recent price for product or listing.
 
         Args:
-            product_id: Product UUID
+            product_id: Product UUID (legacy, checks all listings for product)
+            listing_id: ProductListing UUID (preferred for multi-store)
 
         Returns:
             Dict with price data or None if no history
@@ -430,17 +560,38 @@ class PriceStorage:
         cursor = conn.cursor()
 
         try:
-            cursor.execute(
-                """
-                SELECT price, currency, available, extracted_data,
-                       confidence, recorded_at
-                FROM app_pricehistory
-                WHERE product_id = ?
-                ORDER BY recorded_at DESC
-                LIMIT 1
-                """,
-                (product_id,),
-            )
+            if listing_id:
+                # New multi-store schema: query by listing_id
+                listing_id_clean = listing_id.replace('-', '')
+                cursor.execute(
+                    """
+                    SELECT price, currency, available, extracted_data,
+                           confidence, recorded_at
+                    FROM app_pricehistory
+                    WHERE listing_id = ?
+                    ORDER BY recorded_at DESC
+                    LIMIT 1
+                    """,
+                    (listing_id_clean,),
+                )
+            elif product_id:
+                # Legacy: get latest across all listings for this product
+                product_id_clean = product_id.replace('-', '')
+                cursor.execute(
+                    """
+                    SELECT ph.price, ph.currency, ph.available, ph.extracted_data,
+                           ph.confidence, ph.recorded_at
+                    FROM app_pricehistory ph
+                    INNER JOIN app_productlisting l ON ph.listing_id = l.id
+                    WHERE l.product_id = ?
+                    ORDER BY ph.recorded_at DESC
+                    LIMIT 1
+                    """,
+                    (product_id_clean,),
+                )
+            else:
+                logger.warning("get_latest_price called without product_id or listing_id")
+                return None
 
             row = cursor.fetchone()
             if row:

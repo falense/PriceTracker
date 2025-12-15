@@ -1,13 +1,17 @@
 """
-Django admin configuration for PriceTracker.
+Django admin configuration for PriceTracker - Multi-Store Support.
 """
 from django.contrib import admin
 from django.urls import path
 from django.shortcuts import render
 from django.utils.html import format_html
 from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib import messages
 from datetime import datetime
-from .models import Product, PriceHistory, Pattern, Notification, FetchLog, UserView, AdminFlag
+from .models import (
+    Product, Store, ProductListing, UserSubscription,
+    PriceHistory, Pattern, Notification, FetchLog, UserView, AdminFlag
+)
 
 
 # Customize admin site
@@ -31,97 +35,241 @@ def celery_monitor_view(request):
 @staff_member_required
 def celery_monitor_refresh(request):
     """HTMX endpoint for auto-refresh."""
-    from .admin_services import CeleryMonitorService
+    try:
+        from .admin_services import CeleryMonitorService
 
-    stats = CeleryMonitorService.get_worker_stats()
-    recent_tasks = CeleryMonitorService.get_recent_tasks(limit=50)
+        stats = CeleryMonitorService.get_worker_stats()
+        recent_tasks = CeleryMonitorService.get_recent_tasks(limit=50)
 
-    context = {
-        'stats': stats,
-        'recent_tasks': recent_tasks,
-        'now': datetime.now(),
-    }
-    return render(request, 'admin/partials/celery_stats.html', context)
+        context = {
+            'stats': stats,
+            'recent_tasks': recent_tasks,
+            'now': datetime.now(),
+        }
+        return render(request, 'admin/partials/celery_stats.html', context)
+    except ImportError:
+        # admin_services doesn't exist yet
+        return render(request, 'admin/partials/celery_stats.html', {'stats': {}, 'recent_tasks': []})
 
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ['name', 'user', 'domain', 'current_price', 'priority', 'active', 'last_checked', 'created_at']
-    list_filter = ['priority', 'active', 'domain', 'user', 'created_at']
-    search_fields = ['name', 'url', 'domain', 'user__username']
-    readonly_fields = ['id', 'created_at', 'updated_at', 'view_count', 'last_viewed']
-    actions = ['refresh_prices', 'activate_products', 'deactivate_products']
+    list_display = ['name', 'brand', 'subscriber_count', 'created_at']
+    list_filter = ['brand', 'category', 'created_at']
+    search_fields = ['name', 'canonical_name', 'brand', 'model_number', 'ean', 'upc', 'isbn']
+    readonly_fields = ['id', 'canonical_name', 'subscriber_count', 'created_at', 'updated_at']
+    actions = ['merge_products']
     fieldsets = (
         ('Product Information', {
-            'fields': ('id', 'user', 'url', 'domain', 'name', 'image_url')
+            'fields': ('id', 'name', 'canonical_name', 'brand', 'model_number', 'category', 'image_url')
+        }),
+        ('Product Identifiers', {
+            'fields': ('ean', 'upc', 'isbn'),
+            'classes': ('collapse',)
+        }),
+        ('Subscriptions', {
+            'fields': ('subscriber_count',)
+        }),
+        ('Metadata', {
+            'fields': ('created_at', 'updated_at')
+        }),
+    )
+
+    @admin.action(description="Merge selected products into first one")
+    def merge_products(self, request, queryset):
+        """Admin action to merge duplicate products."""
+        products = list(queryset)
+        if len(products) < 2:
+            self.message_user(request, "Select at least 2 products to merge", level=messages.ERROR)
+            return
+
+        primary = products[0]
+
+        for duplicate in products[1:]:
+            # Move listings
+            duplicate.listings.update(product=primary)
+
+            # Merge subscriptions (avoid duplicates)
+            for sub in duplicate.subscriptions.all():
+                existing = UserSubscription.objects.filter(
+                    user=sub.user, product=primary
+                ).first()
+                if existing:
+                    # Keep highest priority
+                    if sub.priority > existing.priority:
+                        existing.priority = sub.priority
+                        existing.save()
+                    sub.delete()
+                else:
+                    sub.product = primary
+                    sub.save()
+
+            # Delete duplicate
+            duplicate.delete()
+
+        # Update subscriber count
+        primary.subscriber_count = primary.subscriptions.filter(active=True).count()
+        primary.save()
+
+        self.message_user(
+            request,
+            f"Merged {len(products)-1} products into {primary.name}",
+            level=messages.SUCCESS
+        )
+
+
+@admin.register(Store)
+class StoreAdmin(admin.ModelAdmin):
+    list_display = ['name', 'domain', 'active', 'verified', 'has_pattern_display']
+    list_filter = ['active', 'verified', 'country']
+    search_fields = ['name', 'domain']
+    readonly_fields = ['id', 'created_at', 'updated_at']
+    fieldsets = (
+        ('Store Information', {
+            'fields': ('id', 'name', 'domain', 'country', 'currency', 'logo_url')
+        }),
+        ('Status', {
+            'fields': ('active', 'verified')
+        }),
+        ('Configuration', {
+            'fields': ('rate_limit_seconds',)
+        }),
+        ('Metadata', {
+            'fields': ('created_at', 'updated_at')
+        }),
+    )
+
+    def has_pattern_display(self, obj):
+        """Check if extraction pattern exists for this store."""
+        has_pattern = Pattern.objects.filter(domain=obj.domain).exists()
+        if has_pattern:
+            return format_html('<span style="color: green;">✓</span>')
+        return format_html('<span style="color: red;">✗</span>')
+    has_pattern_display.short_description = 'Has Pattern'
+
+
+@admin.register(ProductListing)
+class ProductListingAdmin(admin.ModelAdmin):
+    list_display = ['product', 'store', 'current_price', 'available', 'last_checked']
+    list_filter = ['store', 'available', 'active']
+    search_fields = ['product__name', 'url', 'store__name', 'store_product_id']
+    readonly_fields = ['id', 'created_at', 'updated_at', 'total_price']
+    actions = ['refresh_prices']
+    fieldsets = (
+        ('Listing Information', {
+            'fields': ('id', 'product', 'store', 'url', 'store_product_id')
         }),
         ('Price & Availability', {
-            'fields': ('current_price', 'currency', 'available')
+            'fields': ('current_price', 'currency', 'available', 'shipping_cost', 'total_price')
         }),
-        ('Tracking Configuration', {
-            'fields': ('priority', 'check_interval', 'active', 'last_checked')
+        ('Seller Information', {
+            'fields': ('seller_name', 'seller_rating')
         }),
-        ('Alerts', {
-            'fields': ('target_price', 'notify_on_drop', 'notify_on_restock')
+        ('Tracking', {
+            'fields': ('active', 'last_checked', 'last_available', 'pattern_version')
+        }),
+        ('Metadata', {
+            'fields': ('created_at', 'updated_at')
+        }),
+    )
+
+    @admin.action(description='Refresh prices for selected listings')
+    def refresh_prices(self, request, queryset):
+        """Trigger immediate price refresh for selected listings."""
+        try:
+            from app.tasks import fetch_listing_price
+
+            count = 0
+            for listing in queryset:
+                try:
+                    task = fetch_listing_price.delay(str(listing.id))
+                    count += 1
+                except Exception as e:
+                    self.message_user(
+                        request,
+                        f'Failed to queue refresh for {listing}: {str(e)}',
+                        level=messages.ERROR
+                    )
+
+            if count:
+                self.message_user(
+                    request,
+                    f'Successfully queued {count} price refresh task(s)',
+                    level=messages.SUCCESS
+                )
+        except ImportError:
+            self.message_user(
+                request,
+                'Task module not available yet',
+                level=messages.WARNING
+            )
+
+
+@admin.register(UserSubscription)
+class UserSubscriptionAdmin(admin.ModelAdmin):
+    list_display = ['user', 'product', 'priority_display', 'target_price', 'active', 'created_at']
+    list_filter = ['priority', 'active', 'notify_on_drop', 'notify_on_target', 'notify_on_restock']
+    search_fields = ['user__username', 'product__name']
+    readonly_fields = ['id', 'view_count', 'created_at', 'updated_at']
+    actions = ['activate_subscriptions', 'deactivate_subscriptions']
+    fieldsets = (
+        ('Subscription Information', {
+            'fields': ('id', 'user', 'product', 'active')
+        }),
+        ('Preferences', {
+            'fields': ('priority', 'target_price')
+        }),
+        ('Notifications', {
+            'fields': ('notify_on_drop', 'notify_on_restock', 'notify_on_target')
         }),
         ('Analytics', {
             'fields': ('view_count', 'last_viewed')
         }),
         ('Metadata', {
-            'fields': ('pattern_version', 'created_at', 'updated_at')
+            'fields': ('created_at', 'updated_at')
         }),
     )
 
-    @admin.action(description='Refresh prices for selected products')
-    def refresh_prices(self, request, queryset):
-        """Trigger immediate price refresh for selected products."""
-        from .tasks import fetch_product_price
+    def priority_display(self, obj):
+        """Display priority with color coding."""
+        priority_colors = {
+            3: ('red', 'High'),
+            2: ('orange', 'Normal'),
+            1: ('gray', 'Low'),
+        }
+        color, label = priority_colors.get(obj.priority, ('gray', 'Unknown'))
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            color, label
+        )
+    priority_display.short_description = 'Priority'
 
-        count = 0
-        for product in queryset:
-            try:
-                task = fetch_product_price.delay(str(product.id))
-                count += 1
-            except Exception as e:
-                self.message_user(
-                    request,
-                    f'Failed to queue refresh for {product.name}: {str(e)}',
-                    level='error'
-                )
-
-        if count:
-            self.message_user(
-                request,
-                f'Successfully queued {count} price refresh task(s)',
-                level='success'
-            )
-
-    @admin.action(description='Activate selected products')
-    def activate_products(self, request, queryset):
-        """Bulk activate products."""
+    @admin.action(description='Activate selected subscriptions')
+    def activate_subscriptions(self, request, queryset):
+        """Bulk activate subscriptions."""
         updated = queryset.update(active=True)
         self.message_user(
             request,
-            f'Activated {updated} product(s)',
-            level='success'
+            f'Activated {updated} subscription(s)',
+            level=messages.SUCCESS
         )
 
-    @admin.action(description='Deactivate selected products')
-    def deactivate_products(self, request, queryset):
-        """Bulk deactivate products."""
+    @admin.action(description='Deactivate selected subscriptions')
+    def deactivate_subscriptions(self, request, queryset):
+        """Bulk deactivate subscriptions."""
         updated = queryset.update(active=False)
         self.message_user(
             request,
-            f'Deactivated {updated} product(s)',
-            level='success'
+            f'Deactivated {updated} subscription(s)',
+            level=messages.SUCCESS
         )
 
 
 @admin.register(PriceHistory)
 class PriceHistoryAdmin(admin.ModelAdmin):
-    list_display = ['product', 'price', 'currency', 'available', 'confidence', 'recorded_at']
-    list_filter = ['available', 'recorded_at', 'currency']
-    search_fields = ['product__name']
+    list_display = ['listing', 'price', 'available', 'confidence', 'recorded_at']
+    list_filter = ['available', 'extraction_method', 'recorded_at']
+    search_fields = ['listing__product__name', 'listing__store__name']
     readonly_fields = ['recorded_at']
     ordering = ['-recorded_at']
 
@@ -136,7 +284,7 @@ class PatternAdmin(admin.ModelAdmin):
     actions = ['regenerate_pattern']
     fieldsets = (
         ('Domain Information', {
-            'fields': ('domain',)
+            'fields': ('domain', 'store')
         }),
         ('Pattern Details', {
             'fields': ('formatted_pattern_display',),
@@ -153,7 +301,6 @@ class PatternAdmin(admin.ModelAdmin):
 
     def success_rate_display(self, obj):
         """Display success rate with color coding."""
-        # Handle None values
         if obj.success_rate is None or obj.total_attempts is None:
             return format_html('<span style="color: gray;">N/A</span>')
 
@@ -170,7 +317,6 @@ class PatternAdmin(admin.ModelAdmin):
             color = 'red'
             status = 'Critical'
 
-        # Format percentage separately before passing to format_html
         percentage = f'{obj.success_rate:.1%}'
         return format_html(
             '<span style="color: {}; font-weight: bold;">{}</span> ({})',
@@ -186,10 +332,8 @@ class PatternAdmin(admin.ModelAdmin):
             return format_html('<em style="color: var(--body-quiet-color, #999);">No pattern data</em>')
 
         try:
-            # Format JSON with indentation
             formatted_json = json.dumps(obj.pattern_json, indent=2, ensure_ascii=False)
 
-            # Return formatted HTML with theme-aware styling
             return format_html(
                 '''
                 <div style="background: var(--darkened-bg); border: 1px solid var(--border-color, #ddd); border-radius: 4px; padding: 15px; margin: 10px 0;">
@@ -218,65 +362,73 @@ class PatternAdmin(admin.ModelAdmin):
     @admin.action(description='Regenerate pattern for selected domains')
     def regenerate_pattern(self, request, queryset):
         """Trigger pattern regeneration for selected domains."""
-        from .tasks import generate_pattern
+        try:
+            from app.tasks import generate_pattern
 
-        regenerated = 0
-        failed = []
+            regenerated = 0
+            failed = []
 
-        for pattern in queryset:
-            # Get a sample product URL for this domain
-            sample_product = Product.objects.filter(domain=pattern.domain).first()
+            for pattern in queryset:
+                # Get a sample listing for this domain
+                sample_listing = ProductListing.objects.filter(
+                    store__domain=pattern.domain
+                ).first()
 
-            if not sample_product:
-                failed.append(f"{pattern.domain} (no products found)")
-                continue
+                if not sample_listing:
+                    failed.append(f"{pattern.domain} (no listings found)")
+                    continue
 
-            try:
-                # Trigger pattern generation
-                task = generate_pattern.delay(
-                    url=sample_product.url,
-                    domain=pattern.domain
-                )
+                try:
+                    task = generate_pattern.delay(
+                        url=sample_listing.url,
+                        domain=pattern.domain,
+                        listing_id=str(sample_listing.id)
+                    )
 
-                regenerated += 1
+                    regenerated += 1
+                    self.message_user(
+                        request,
+                        f'Queued pattern regeneration for {pattern.domain} (Task ID: {task.id})',
+                        level=messages.SUCCESS
+                    )
+                except Exception as e:
+                    failed.append(f"{pattern.domain} ({str(e)})")
+
+            if regenerated:
                 self.message_user(
                     request,
-                    f'Queued pattern regeneration for {pattern.domain} (Task ID: {task.id})',
-                    level='success'
+                    f'Successfully queued {regenerated} pattern regeneration task(s)',
+                    level=messages.SUCCESS
                 )
-            except Exception as e:
-                failed.append(f"{pattern.domain} ({str(e)})")
 
-        # Summary message
-        if regenerated:
+            if failed:
+                self.message_user(
+                    request,
+                    f'Failed to queue: {", ".join(failed)}',
+                    level=messages.ERROR
+                )
+        except ImportError:
             self.message_user(
                 request,
-                f'Successfully queued {regenerated} pattern regeneration task(s)',
-                level='success'
-            )
-
-        if failed:
-            self.message_user(
-                request,
-                f'Failed to queue: {", ".join(failed)}',
-                level='error'
+                'Task module not available yet',
+                level=messages.WARNING
             )
 
 
 @admin.register(Notification)
 class NotificationAdmin(admin.ModelAdmin):
-    list_display = ['user', 'product', 'notification_type', 'read', 'created_at']
+    list_display = ['user', 'subscription', 'listing', 'notification_type', 'read', 'created_at']
     list_filter = ['notification_type', 'read', 'created_at']
-    search_fields = ['user__username', 'product__name', 'message']
+    search_fields = ['user__username', 'subscription__product__name', 'listing__store__name', 'message']
     readonly_fields = ['created_at', 'read_at']
     ordering = ['-created_at']
 
 
 @admin.register(FetchLog)
 class FetchLogAdmin(admin.ModelAdmin):
-    list_display = ['product', 'success', 'extraction_method', 'duration_ms', 'fetched_at']
+    list_display = ['listing', 'success', 'extraction_method', 'duration_ms', 'fetched_at']
     list_filter = ['success', 'extraction_method', 'fetched_at']
-    search_fields = ['product__name']
+    search_fields = ['listing__product__name', 'listing__store__name']
     readonly_fields = ['fetched_at']
     ordering = ['-fetched_at']
 
@@ -288,22 +440,22 @@ class FetchLogAdmin(admin.ModelAdmin):
 
 @admin.register(UserView)
 class UserViewAdmin(admin.ModelAdmin):
-    list_display = ['user', 'product', 'viewed_at', 'duration_seconds']
+    list_display = ['user', 'subscription', 'viewed_at', 'duration_seconds']
     list_filter = ['viewed_at']
-    search_fields = ['user__username', 'product__name']
+    search_fields = ['user__username', 'subscription__product__name']
     readonly_fields = ['viewed_at']
     ordering = ['-viewed_at']
 
 
 @admin.register(AdminFlag)
 class AdminFlagAdmin(admin.ModelAdmin):
-    list_display = ['flag_type', 'domain', 'status', 'created_at', 'resolved_by']
+    list_display = ['flag_type', 'domain', 'store', 'status', 'created_at', 'resolved_by']
     list_filter = ['flag_type', 'status', 'created_at']
-    search_fields = ['domain', 'url', 'error_message']
+    search_fields = ['domain', 'url', 'error_message', 'store__name']
     readonly_fields = ['created_at', 'updated_at', 'resolved_at']
     fieldsets = (
         ('Flag Information', {
-            'fields': ('flag_type', 'domain', 'url', 'error_message')
+            'fields': ('flag_type', 'domain', 'store', 'url', 'error_message')
         }),
         ('Status', {
             'fields': ('status', 'resolved_by', 'resolved_at')
@@ -312,6 +464,3 @@ class AdminFlagAdmin(admin.ModelAdmin):
             'fields': ('created_at', 'updated_at')
         }),
     )
-
-
-# Note: Admin site customization is now in PriceTrackerAdminSite class above

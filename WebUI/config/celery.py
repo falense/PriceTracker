@@ -18,20 +18,9 @@ app.autodiscover_tasks()
 
 # Celery Beat Schedule for periodic tasks
 app.conf.beat_schedule = {
-    'fetch-high-priority-products': {
-        'task': 'app.tasks.fetch_prices_by_priority',
-        'schedule': 900.0,  # Every 15 minutes
-        'args': ('high',)
-    },
-    'fetch-normal-priority-products': {
-        'task': 'app.tasks.fetch_prices_by_priority',
-        'schedule': 3600.0,  # Every hour
-        'args': ('normal',)
-    },
-    'fetch-low-priority-products': {
-        'task': 'app.tasks.fetch_prices_by_priority',
-        'schedule': 86400.0,  # Every 24 hours
-        'args': ('low',)
+    'fetch-products-by-aggregated-priority': {
+        'task': 'app.tasks.fetch_prices_by_aggregated_priority',
+        'schedule': 300.0,  # Every 5 minutes - checks all products and queues based on priority
     },
     'check-pattern-health': {
         'task': 'app.tasks.check_pattern_health',
@@ -40,6 +29,10 @@ app.conf.beat_schedule = {
     'cleanup-old-logs': {
         'task': 'app.tasks.cleanup_old_logs',
         'schedule': crontab(day_of_week=0, hour=3, minute=0),  # Weekly on Sunday at 3 AM
+    },
+    'fetch-missing-images': {
+        'task': 'app.tasks.fetch_missing_images',
+        'schedule': crontab(hour=4, minute=0),  # Daily at 4 AM
     },
 }
 

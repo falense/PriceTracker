@@ -2,7 +2,7 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
-#     "httpx>=0.24.0",
+#     "playwright>=1.40.0",
 #     "beautifulsoup4>=4.12.0",
 #     "lxml>=4.9.0",
 #     "pyyaml>=6.0",
@@ -69,6 +69,10 @@ async def main():
         help="Fetch specific product by ID",
     )
     parser.add_argument(
+        "--listing-id",
+        help="Fetch specific listing by ID (will fetch the associated product)",
+    )
+    parser.add_argument(
         "--domain",
         help="Fetch all products from specific domain",
     )
@@ -122,10 +126,39 @@ async def main():
         max_retries=config["fetcher"]["max_retries"],
         user_agent=config["fetcher"]["user_agent"],
         min_confidence=config["validation"]["min_confidence"],
+        browser_timeout=config["fetcher"].get("browser_timeout", 60.0),
+        wait_for_js=config["fetcher"].get("wait_for_js", True),
+        domain_delays=config["fetcher"].get("domain_delays", {}),
     )
 
     try:
-        if args.product_id:
+        if args.listing_id:
+            logger.info("fetching_single_listing", listing_id=args.listing_id)
+
+            # Get product with the listing's URL
+            product = fetcher.storage.get_product_by_listing_id(args.listing_id)
+            if not product:
+                logger.error("listing_not_found", listing_id=args.listing_id)
+                sys.exit(1)
+
+            # Fetch price for the product (this will fetch all its listings)
+            started_at = datetime.utcnow()
+            result = await fetcher.fetch_product(product)
+            completed_at = datetime.utcnow()
+            duration = (completed_at - started_at).total_seconds()
+
+            # Create summary with single product
+            summary = FetchSummary(
+                total=1,
+                success=1 if result.success else 0,
+                failed=0 if result.success else 1,
+                products=[result],
+                started_at=started_at,
+                completed_at=completed_at,
+                duration_seconds=duration,
+            )
+
+        elif args.product_id:
             logger.info("fetching_single_product", product_id=args.product_id)
 
             # Get product from database

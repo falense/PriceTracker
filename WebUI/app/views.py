@@ -1,6 +1,7 @@
 """
 Views for PriceTracker WebUI.
 """
+import logging
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login, logout, authenticate
@@ -8,7 +9,9 @@ from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib import messages
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_http_methods
-from .models import Product, Notification
+from .models import Product, ProductListing, UserSubscription, Notification, Pattern, FetchLog
+
+logger = logging.getLogger(__name__)
 
 
 # Authentication views
@@ -66,48 +69,35 @@ def logout_view(request):
 def dashboard(request):
     """Main dashboard view - accessible to everyone."""
     if request.user.is_authenticated:
-        from django.db.models import OuterRef, Subquery
-        from app.models import PriceHistory
+        from django.db.models import Min, Count
 
-        # Subquery to get the latest extracted title
-        latest_title = PriceHistory.objects.filter(
-            product=OuterRef('pk')
-        ).order_by('-recorded_at').values('extracted_data')[:1]
-
-        products = Product.objects.filter(
+        # Get user's active subscriptions with product and best price info
+        subscriptions = UserSubscription.objects.filter(
             user=request.user,
             active=True
+        ).select_related('product').prefetch_related(
+            'product__listings'
         ).annotate(
-            latest_extracted_data=Subquery(latest_title)
+            store_count=Count('product__listings', distinct=True),
+            best_price=Min('product__listings__current_price')
         ).order_by('-last_viewed', '-created_at')[:20]
 
-        # Extract title for each product
-        for product in products:
-            if product.latest_extracted_data:
-                title_data = product.latest_extracted_data.get('title', {})
-                if isinstance(title_data, dict):
-                    product.extracted_title = title_data.get('value', product.name)
-                else:
-                    product.extracted_title = product.name
-            else:
-                product.extracted_title = product.name
-
         notifications = Notification.objects.filter(
-            user=request.user,
+            subscription__user=request.user,
             read=False
-        )[:5]
+        ).select_related('subscription', 'listing')[:5]
 
         unread_count = notifications.count()
 
         stats = {
-            'total_products': Product.objects.filter(user=request.user, active=True).count(),
+            'total_products': UserSubscription.objects.filter(user=request.user, active=True).count(),
             'price_drops_24h': 0,  # TODO: Implement
             'total_saved': 0,  # TODO: Implement
-            'active_alerts': Product.objects.filter(user=request.user, active=True, target_price__isnull=False).count(),
+            'active_alerts': UserSubscription.objects.filter(user=request.user, active=True, target_price__isnull=False).count(),
         }
 
         context = {
-            'products': products,
+            'subscriptions': subscriptions,
             'notifications': notifications,
             'unread_count': unread_count,
             'stats': stats,
@@ -115,7 +105,7 @@ def dashboard(request):
     else:
         # Non-authenticated users see the search page
         context = {
-            'products': [],
+            'subscriptions': [],
             'notifications': [],
             'unread_count': 0,
             'stats': {
@@ -131,74 +121,92 @@ def dashboard(request):
 
 @login_required
 def product_list(request):
-    """List all products."""
-    from django.db.models import OuterRef, Subquery
-    from app.models import PriceHistory
+    """List all user subscriptions."""
+    from django.db.models import Min, Count
 
-    # Subquery to get the latest extracted title
-    latest_title = PriceHistory.objects.filter(
-        product=OuterRef('pk')
-    ).order_by('-recorded_at').values('extracted_data')[:1]
-
-    products = Product.objects.filter(
+    # Get user's active subscriptions
+    subscriptions = UserSubscription.objects.filter(
         user=request.user,
         active=True
+    ).select_related('product').prefetch_related(
+        'product__listings'
     ).annotate(
-        latest_extracted_data=Subquery(latest_title)
-    )
-
-    # Extract title for each product
-    for product in products:
-        if product.latest_extracted_data:
-            title_data = product.latest_extracted_data.get('title', {})
-            if isinstance(title_data, dict):
-                product.extracted_title = title_data.get('value', product.name)
-            else:
-                product.extracted_title = product.name
-        else:
-            product.extracted_title = product.name
+        store_count=Count('product__listings', distinct=True),
+        best_price=Min('product__listings__current_price')
+    ).order_by('product__name')
 
     # TODO: Add filtering and search
 
-    context = {'products': products}
+    context = {'subscriptions': subscriptions}
     return render(request, 'product/list.html', context)
 
 
+def subscription_detail(request, subscription_id):
+    """Subscription detail page showing all store listings."""
+    subscription = get_object_or_404(
+        UserSubscription,
+        id=subscription_id,
+        user=request.user
+    )
+
+    # Record view
+    subscription.record_view()
+
+    # Get all active listings for this product
+    listings = ProductListing.objects.filter(
+        product=subscription.product,
+        active=True
+    ).select_related('store').prefetch_related('price_history')
+
+    # Get price history for each listing (last 100 records)
+    for listing in listings:
+        listing.history_data = listing.price_history.all()[:100]
+
+    # Find best current price
+    best_listing = min(listings, key=lambda l: l.current_price or float('inf'), default=None)
+
+    context = {
+        'subscription': subscription,
+        'product': subscription.product,
+        'listings': listings,
+        'best_listing': best_listing,
+    }
+    return render(request, 'product/subscription_detail.html', context)
+
+
+# Keep old product_detail for backward compatibility / guest access
 def product_detail(request, product_id):
-    """Product detail page - accessible to all, read-only for guests."""
+    """Product detail page - accessible to all."""
+    product = get_object_or_404(Product, id=product_id)
+
     if request.user.is_authenticated:
-        # Authenticated user - show only their products
-        product = get_object_or_404(Product, id=product_id, user=request.user)
-        # Record view for authenticated users
-        product.record_view()
-    else:
-        # Guest user - can view any product (read-only)
-        product = get_object_or_404(Product, id=product_id, active=True)
+        # Check if user has a subscription
+        subscription = UserSubscription.objects.filter(
+            user=request.user,
+            product=product,
+            active=True
+        ).first()
 
-    # Get price history
-    price_history = product.price_history.all()[:100]
+        if subscription:
+            # Redirect to subscription detail
+            return redirect('subscription_detail', subscription_id=subscription.id)
 
-    # Get extracted title from latest price history
-    latest_history = product.price_history.order_by('-recorded_at').first()
-    if latest_history and latest_history.extracted_data:
-        title_data = latest_history.extracted_data.get('title', {})
-        if isinstance(title_data, dict):
-            product.extracted_title = title_data.get('value', product.name)
-        else:
-            product.extracted_title = product.name
-    else:
-        product.extracted_title = product.name
+    # Get all active listings for this product
+    listings = ProductListing.objects.filter(
+        product=product,
+        active=True
+    ).select_related('store')
 
     context = {
         'product': product,
-        'price_history': price_history,
+        'listings': listings,
         'is_guest': not request.user.is_authenticated,
     }
     return render(request, 'product/detail.html', context)
 
 
 def add_product(request):
-    """Add new product or preview for non-authenticated users."""
+    """Add new product or subscribe to existing product."""
     if request.method == 'GET':
         url = request.GET.get('url', '').strip()
 
@@ -222,7 +230,10 @@ def add_product(request):
             from .services import ProductService
 
             # Get optional parameters
-            priority = request.GET.get('priority', 'normal')
+            priority_str = request.GET.get('priority', 'normal')
+            priority_map = {'high': 3, 'normal': 2, 'low': 1}
+            priority = priority_map.get(priority_str, 2)
+
             target_price = request.GET.get('target_price')
 
             if target_price:
@@ -232,16 +243,20 @@ def add_product(request):
                 except (InvalidOperation, ValueError):
                     target_price = None
 
-            # Use service to add product
-            product = ProductService.add_product(
+            # Use service to add product for user
+            product, subscription, listing, created = ProductService.add_product_for_user(
                 user=request.user,
                 url=url,
                 priority=priority,
                 target_price=target_price
             )
 
-            messages.success(request, f'Added {product.name}! Fetching current price...')
-            return redirect('product_detail', product_id=product.id)
+            if created:
+                messages.success(request, f'Subscribed to {product.name}! Fetching current price...')
+            else:
+                messages.info(request, f'Updated subscription to {product.name}')
+
+            return redirect('subscription_detail', subscription_id=subscription.id)
 
         except ValueError as e:
             messages.error(request, str(e))
@@ -262,7 +277,10 @@ def add_product(request):
         return redirect('dashboard')
 
     # Get optional parameters
-    priority = request.POST.get('priority', 'normal')
+    priority_str = request.POST.get('priority', 'normal')
+    priority_map = {'high': 3, 'normal': 2, 'low': 1}
+    priority = priority_map.get(priority_str, 2)
+
     target_price = request.POST.get('target_price')
 
     if target_price:
@@ -272,19 +290,23 @@ def add_product(request):
         except (InvalidOperation, ValueError):
             target_price = None
 
-    # Use service to add product
+    # Use service to add product for user
     try:
         from .services import ProductService
 
-        product = ProductService.add_product(
+        product, subscription, listing, created = ProductService.add_product_for_user(
             user=request.user,
             url=url,
             priority=priority,
             target_price=target_price
         )
 
-        messages.success(request, f'Added {product.name}! Fetching current price...')
-        return redirect('product_detail', product_id=product.id)
+        if created:
+            messages.success(request, f'Subscribed to {product.name}! Fetching current price...')
+        else:
+            messages.info(request, f'Updated subscription to {product.name}')
+
+        return redirect('subscription_detail', subscription_id=subscription.id)
 
     except ValueError as e:
         messages.error(request, str(e))
@@ -296,85 +318,132 @@ def add_product(request):
 
 @login_required
 @require_http_methods(["POST", "DELETE"])
-def delete_product(request, product_id):
-    """Delete (deactivate) product."""
-    product = get_object_or_404(Product, id=product_id, user=request.user)
-    product.active = False
-    product.save()
+def unsubscribe(request, subscription_id):
+    """Unsubscribe from a product."""
+    subscription = get_object_or_404(UserSubscription, id=subscription_id, user=request.user)
+    product_name = subscription.product.name
 
-    messages.success(request, f'Stopped tracking "{product.name}"')
+    subscription.active = False
+    subscription.save()
+
+    messages.success(request, f'Unsubscribed from "{product_name}"')
 
     if request.headers.get('HX-Request'):
         return HttpResponse('')
     return redirect('dashboard')
 
 
+# Keep old delete_product for backward compatibility
+@login_required
+@require_http_methods(["POST", "DELETE"])
+def delete_product(request, product_id):
+    """Delete (deactivate) product - redirects to unsubscribe."""
+    # Find user's subscription for this product
+    subscription = UserSubscription.objects.filter(
+        user=request.user,
+        product_id=product_id,
+        active=True
+    ).first()
+
+    if subscription:
+        return unsubscribe(request, subscription.id)
+    else:
+        messages.error(request, 'Subscription not found')
+        return redirect('dashboard')
+
+
 @login_required
 @require_http_methods(["POST"])
-def update_product_settings(request, product_id):
-    """Update product settings."""
-    from .services import ProductService
+def update_subscription(request, subscription_id):
+    """Update subscription settings."""
     from decimal import Decimal, InvalidOperation
 
-    product = get_object_or_404(Product, id=product_id, user=request.user)
+    subscription = get_object_or_404(UserSubscription, id=subscription_id, user=request.user)
 
     # Collect updated settings
-    updates = {}
-
     if 'priority' in request.POST:
-        updates['priority'] = request.POST['priority']
+        priority_str = request.POST['priority']
+        priority_map = {'high': 3, 'normal': 2, 'low': 1}
+        subscription.priority = priority_map.get(priority_str, 2)
 
     if 'target_price' in request.POST:
         target_price = request.POST['target_price'].strip()
         if target_price:
             try:
-                updates['target_price'] = Decimal(target_price)
+                subscription.target_price = Decimal(target_price)
             except (InvalidOperation, ValueError):
                 messages.error(request, 'Invalid target price')
-                return redirect('product_detail', product_id=product_id)
+                return redirect('subscription_detail', subscription_id=subscription_id)
         else:
-            updates['target_price'] = None
+            subscription.target_price = None
 
     if 'notify_on_drop' in request.POST:
-        updates['notify_on_drop'] = request.POST['notify_on_drop'] == 'on'
+        subscription.notify_on_drop = request.POST['notify_on_drop'] == 'on'
     else:
-        updates['notify_on_drop'] = False
+        subscription.notify_on_drop = False
 
     if 'notify_on_restock' in request.POST:
-        updates['notify_on_restock'] = request.POST['notify_on_restock'] == 'on'
+        subscription.notify_on_restock = request.POST['notify_on_restock'] == 'on'
     else:
-        updates['notify_on_restock'] = False
+        subscription.notify_on_restock = False
 
-    # Update product
-    ProductService.update_product_settings(product, **updates)
+    subscription.save()
 
-    messages.success(request, 'Settings updated successfully')
+    messages.success(request, 'Subscription settings updated successfully')
 
     if request.headers.get('HX-Request'):
         # Return updated settings form for HTMX
-        return render(request, 'product/partials/settings_form.html', {'product': product})
+        return render(request, 'product/partials/subscription_settings_form.html', {'subscription': subscription})
 
-    return redirect('product_detail', product_id=product_id)
+    return redirect('subscription_detail', subscription_id=subscription_id)
+
+
+# Keep old update_product_settings for backward compatibility
+@login_required
+@require_http_methods(["POST"])
+def update_product_settings(request, product_id):
+    """Update product settings - redirects to update_subscription."""
+    subscription = UserSubscription.objects.filter(
+        user=request.user,
+        product_id=product_id,
+        active=True
+    ).first()
+
+    if subscription:
+        return update_subscription(request, subscription.id)
+    else:
+        messages.error(request, 'Subscription not found')
+        return redirect('dashboard')
 
 
 @login_required
 @require_http_methods(["POST"])
-def refresh_price(request, product_id):
-    """Trigger immediate price refresh."""
-    from .services import ProductService
+def refresh_price(request, subscription_id):
+    """Trigger immediate price refresh for all listings."""
+    from app.tasks import fetch_listing_price
 
-    product = get_object_or_404(Product, id=product_id, user=request.user)
+    subscription = get_object_or_404(UserSubscription, id=subscription_id, user=request.user)
 
     try:
-        task_id = ProductService.refresh_price(product)
-        messages.success(request, 'Price refresh triggered! Check back in a moment.')
+        # Fetch all active listings for this product
+        listings = ProductListing.objects.filter(
+            product=subscription.product,
+            active=True
+        )
+
+        count = 0
+        for listing in listings:
+            fetch_listing_price.delay(str(listing.id))
+            count += 1
+
+        messages.success(request, f'Price refresh triggered for {count} store(s)! Check back in a moment.')
     except Exception as e:
-        messages.error(request, f'Failed to refresh price: {str(e)}')
+        messages.error(request, f'Failed to refresh prices: {str(e)}')
 
     if request.headers.get('HX-Request'):
-        return render(request, 'product/partials/product_status.html', {'product': product})
+        return render(request, 'product/partials/subscription_status.html', {'subscription': subscription})
 
-    return redirect('product_detail', product_id=product_id)
+    return redirect('subscription_detail', subscription_id=subscription_id)
 
 
 # HTMX endpoints
@@ -397,17 +466,20 @@ def search_product(request):
             context = {'url': query}
             return render(request, 'search/guest_prompt.html', context)
 
-        # Check if product already exists
-        existing_product = Product.objects.filter(
-            user=request.user,
-            url=query,
-            active=True
-        ).first()
+        # Check if user already has a subscription to this URL
+        existing_listing = ProductListing.objects.filter(url=query).first()
 
-        if existing_product:
-            # Product already tracked
-            context = {'product': existing_product}
-            return render(request, 'search/already_tracked.html', context)
+        if existing_listing:
+            existing_subscription = UserSubscription.objects.filter(
+                user=request.user,
+                product=existing_listing.product,
+                active=True
+            ).first()
+
+            if existing_subscription:
+                # User already subscribed to this product
+                context = {'subscription': existing_subscription}
+                return render(request, 'search/already_subscribed.html', context)
 
         # Show URL confirmation
         context = {'url': query}
@@ -416,61 +488,41 @@ def search_product(request):
     else:
         # Query is a product name - search for existing products
         if request.user.is_authenticated:
-            # Authenticated user - search their products
-            products = Product.objects.filter(
+            # Authenticated user - search their subscriptions
+            from django.db.models import Min
+
+            subscriptions = UserSubscription.objects.filter(
                 user=request.user,
                 active=True,
-                name__icontains=query
+                product__name__icontains=query
+            ).select_related('product').prefetch_related(
+                'product__listings'
+            ).annotate(
+                best_price=Min('product__listings__current_price')
             ).order_by('-last_viewed')[:5]
+
+            if subscriptions:
+                context = {'subscriptions': subscriptions, 'query': query}
+                return render(request, 'search/subscriptions_found.html', context)
         else:
             # Guest user - search all products in the database
-            from django.db.models import OuterRef, Subquery
-            from app.models import PriceHistory
-
-            # Subquery to get the latest extracted title
-            latest_title = PriceHistory.objects.filter(
-                product=OuterRef('pk')
-            ).order_by('-recorded_at').values('extracted_data')[:1]
-
             products = Product.objects.filter(
-                active=True
-            ).annotate(
-                latest_extracted_data=Subquery(latest_title)
-            ).order_by('-last_viewed')[:20]
+                name__icontains=query
+            ).prefetch_related('listings')[:5]
 
-            # Extract title and filter by query
-            matched_products = []
-            for product in products:
-                if product.latest_extracted_data:
-                    title_data = product.latest_extracted_data.get('title', {})
-                    if isinstance(title_data, dict):
-                        product.extracted_title = title_data.get('value', product.name)
-                    else:
-                        product.extracted_title = product.name
-                else:
-                    product.extracted_title = product.name
+            if products:
+                context = {'products': products, 'query': query}
+                return render(request, 'search/results_found.html', context)
 
-                # Check if query matches extracted title or name
-                if (query.lower() in product.extracted_title.lower() or
-                    query.lower() in product.name.lower()):
-                    matched_products.append(product)
-
-            products = matched_products[:5]
-
-        if products:
-            # Found matching products
-            context = {'products': products, 'query': query}
-            return render(request, 'search/results_found.html', context)
+        # No products found
+        if request.user.is_authenticated:
+            # Authenticated user - prompt for URL
+            context = {'query': query}
+            return render(request, 'search/name_not_found.html', context)
         else:
-            # No products found
-            if request.user.is_authenticated:
-                # Authenticated user - prompt for URL
-                context = {'query': query}
-                return render(request, 'search/name_not_found.html', context)
-            else:
-                # Guest user - prompt to register
-                context = {'query': query}
-                return render(request, 'search/guest_prompt.html', context)
+            # Guest user - prompt to register
+            context = {'query': query}
+            return render(request, 'search/guest_prompt.html', context)
 
 
 @login_required
@@ -546,6 +598,174 @@ def admin_dashboard(request):
 
 
 @login_required
+def admin_logs(request):
+    """Admin logs view - display logs sorted by task type."""
+    if not request.user.is_staff:
+        messages.error(request, 'Access denied.')
+        return redirect('dashboard')
+
+    from django.db.models import Count, Avg, Q
+    from datetime import timedelta
+    from django.utils import timezone
+
+    # Get filter parameters
+    task_type = request.GET.get('task', 'all')  # all, fetch (price fetches), pattern, celery
+    status_filter = request.GET.get('status', 'all')  # all, success, failed
+    time_range = request.GET.get('range', '24h')  # 1h, 24h, 7d, 30d, all
+
+    # Calculate time filter
+    now = timezone.now()
+    time_filters = {
+        '1h': now - timedelta(hours=1),
+        '24h': now - timedelta(hours=24),
+        '7d': now - timedelta(days=7),
+        '30d': now - timedelta(days=30),
+        'all': None,
+    }
+    time_since = time_filters.get(time_range)
+
+    # ========== PRICE FETCHES ==========
+    fetch_logs_query = FetchLog.objects.select_related(
+        'listing__product', 'listing__store'
+    ).order_by('-fetched_at')
+
+    if time_since:
+        fetch_logs_query = fetch_logs_query.filter(fetched_at__gte=time_since)
+
+    if status_filter == 'success':
+        fetch_logs_query = fetch_logs_query.filter(success=True)
+    elif status_filter == 'failed':
+        fetch_logs_query = fetch_logs_query.filter(success=False)
+
+    # Get fetch log statistics
+    fetch_stats = fetch_logs_query.aggregate(
+        total=Count('id'),
+        success_count=Count('id', filter=Q(success=True)),
+        failed_count=Count('id', filter=Q(success=False)),
+        avg_duration=Avg('duration_ms'),
+    )
+
+    # Calculate success rate
+    if fetch_stats['total'] > 0:
+        fetch_stats['success_rate'] = (fetch_stats['success_count'] / fetch_stats['total']) * 100
+    else:
+        fetch_stats['success_rate'] = 0
+
+    # Get recent fetch logs (limit to 100 for performance)
+    recent_fetch_logs = fetch_logs_query[:100] if task_type in ['all', 'fetch'] else []
+
+    # ========== PATTERN HISTORY ==========
+    from .models import PatternHistory
+
+    pattern_history_query = PatternHistory.objects.select_related(
+        'pattern', 'changed_by'
+    ).order_by('-created_at')
+
+    if time_since:
+        pattern_history_query = pattern_history_query.filter(created_at__gte=time_since)
+
+    # Get pattern history statistics
+    pattern_stats = {
+        'total': pattern_history_query.count(),
+        'auto_generated': pattern_history_query.filter(change_type='auto_generated').count(),
+        'manual_edit': pattern_history_query.filter(change_type='manual_edit').count(),
+        'rollback': pattern_history_query.filter(change_type='rollback').count(),
+    }
+
+    # Get recent pattern changes
+    recent_pattern_changes = pattern_history_query[:50] if task_type in ['all', 'pattern'] else []
+
+    # ========== ADMIN FLAGS ==========
+    from .models import AdminFlag
+
+    admin_flags_query = AdminFlag.objects.select_related(
+        'store', 'resolved_by'
+    ).order_by('-created_at')
+
+    if time_since:
+        admin_flags_query = admin_flags_query.filter(created_at__gte=time_since)
+
+    if status_filter == 'success':
+        admin_flags_query = admin_flags_query.filter(status='resolved')
+    elif status_filter == 'failed':
+        admin_flags_query = admin_flags_query.filter(status='pending')
+
+    # Get admin flag statistics
+    flag_stats = {
+        'total': admin_flags_query.count(),
+        'pending': admin_flags_query.filter(status='pending').count(),
+        'in_progress': admin_flags_query.filter(status='in_progress').count(),
+        'resolved': admin_flags_query.filter(status='resolved').count(),
+    }
+
+    # Get recent admin flags
+    recent_admin_flags = admin_flags_query[:50] if task_type in ['all', 'admin'] else []
+
+    # ========== CELERY TASKS (if available) ==========
+    celery_tasks = []
+    celery_stats = {'total': 0, 'success': 0, 'failed': 0, 'pending': 0}
+
+    try:
+        from django_celery_results.models import TaskResult
+
+        celery_query = TaskResult.objects.order_by('-date_done')
+
+        if time_since:
+            celery_query = celery_query.filter(date_done__gte=time_since)
+
+        if status_filter == 'success':
+            celery_query = celery_query.filter(status='SUCCESS')
+        elif status_filter == 'failed':
+            celery_query = celery_query.filter(status='FAILURE')
+
+        celery_stats = {
+            'total': celery_query.count(),
+            'success': celery_query.filter(status='SUCCESS').count(),
+            'failed': celery_query.filter(status='FAILURE').count(),
+            'pending': celery_query.filter(status='PENDING').count(),
+        }
+
+        celery_tasks = celery_query[:50] if task_type in ['all', 'celery'] else []
+
+    except ImportError:
+        # django_celery_results not installed
+        pass
+
+    # ========== AGGREGATE STATS ==========
+    total_logs = (
+        fetch_stats['total'] +
+        pattern_stats['total'] +
+        flag_stats['total'] +
+        celery_stats['total']
+    )
+
+    context = {
+        'task_type': task_type,
+        'status_filter': status_filter,
+        'time_range': time_range,
+        'total_logs': total_logs,
+
+        # Price fetches
+        'fetch_logs': recent_fetch_logs,
+        'fetch_stats': fetch_stats,
+
+        # Pattern changes
+        'pattern_changes': recent_pattern_changes,
+        'pattern_stats': pattern_stats,
+
+        # Admin flags
+        'admin_flags': recent_admin_flags,
+        'flag_stats': flag_stats,
+
+        # Celery tasks
+        'celery_tasks': celery_tasks,
+        'celery_stats': celery_stats,
+    }
+
+    return render(request, 'admin/logs.html', context)
+
+
+@login_required
 def patterns_status(request):
     """Pattern health status."""
     if not request.user.is_staff:
@@ -584,3 +804,565 @@ def user_settings(request):
     """User settings page."""
     # TODO: Implement
     return render(request, 'settings.html')
+
+
+def proxy_image(request):
+    """
+    Proxy external images to bypass hotlink protection.
+
+    Usage: /proxy-image/?url=https://example.com/image.jpg
+    """
+    import httpx
+    from urllib.parse import unquote
+
+    image_url = request.GET.get('url')
+
+    if not image_url:
+        return HttpResponse('Missing url parameter', status=400)
+
+    # Decode URL if it's encoded
+    image_url = unquote(image_url)
+
+    # Validate it's an image URL
+    if not image_url.startswith(('http://', 'https://')):
+        return HttpResponse('Invalid URL', status=400)
+
+    try:
+        # Fetch image with proper headers to bypass hotlink protection
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Referer': image_url.split('/')[0] + '//' + image_url.split('/')[2] + '/',
+            'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        }
+
+        with httpx.Client(timeout=10.0, follow_redirects=True) as client:
+            response = client.get(image_url, headers=headers)
+
+            if response.status_code == 200:
+                # Determine content type
+                content_type = response.headers.get('Content-Type', 'image/jpeg')
+
+                # Return the image
+                return HttpResponse(response.content, content_type=content_type)
+            else:
+                # Return placeholder or error
+                return HttpResponse(f'Failed to fetch image: {response.status_code}', status=response.status_code)
+
+    except Exception as e:
+        logger.error(f'Image proxy error for {image_url}: {e}')
+        return HttpResponse('Failed to fetch image', status=500)
+
+
+# ========== Pattern Management Views ==========
+
+@login_required
+def pattern_list(request):
+    """List all patterns with statistics."""
+    if not request.user.is_staff:
+        messages.error(request, 'Staff access required.')
+        return redirect('dashboard')
+
+    from .pattern_services import PatternManagementService
+
+    # Get search/filter params
+    search_query = request.GET.get('search', '').strip()
+    filter_status = request.GET.get('status', 'all')
+
+    # Get all patterns with stats
+    result = PatternManagementService.get_all_patterns(with_stats=True)
+    patterns = result['patterns']
+    stats = result['stats']
+
+    # Apply search filter
+    if search_query:
+        patterns = patterns.filter(domain__icontains=search_query)
+
+    # Apply status filter
+    if filter_status == 'healthy':
+        patterns = patterns.filter(success_rate__gte=0.8)
+    elif filter_status == 'warning':
+        patterns = patterns.filter(success_rate__gte=0.6, success_rate__lt=0.8)
+    elif filter_status == 'failing':
+        patterns = patterns.filter(success_rate__lt=0.6)
+    elif filter_status == 'pending':
+        patterns = patterns.filter(total_attempts=0)
+
+    context = {
+        'patterns': patterns,
+        'stats': stats,
+        'search_query': search_query,
+        'filter_status': filter_status,
+    }
+
+    return render(request, 'admin/patterns/list.html', context)
+
+
+@login_required
+def pattern_detail(request, domain):
+    """Pattern detail view with editor and test panel."""
+    if not request.user.is_staff:
+        messages.error(request, 'Staff access required.')
+        return redirect('dashboard')
+
+    from .pattern_services import PatternManagementService
+    import json
+
+    pattern = get_object_or_404(Pattern, domain=domain)
+
+    # Get recent history
+    history = pattern.history.select_related('changed_by').order_by('-version_number')[:20]
+
+    # Format pattern JSON for display
+    pattern_json_str = json.dumps(pattern.pattern_json, indent=2)
+
+    context = {
+        'pattern': pattern,
+        'pattern_json': pattern_json_str,
+        'history': history,
+        'history_count': pattern.history.count(),
+    }
+
+    return render(request, 'admin/patterns/detail.html', context)
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def pattern_create(request):
+    """Create new pattern."""
+    if not request.user.is_staff:
+        messages.error(request, 'Staff access required.')
+        return redirect('dashboard')
+
+    if request.method == 'POST':
+        from .pattern_services import PatternManagementService
+        from . import pattern_validators
+        import json
+
+        domain = request.POST.get('domain', '').strip()
+        pattern_json_str = request.POST.get('pattern_json', '').strip()
+        change_reason = request.POST.get('change_reason', 'Initial creation')
+
+        try:
+            # Parse JSON
+            pattern_json = json.loads(pattern_json_str)
+
+            # Validate structure
+            validation = pattern_validators.validate_pattern_structure(pattern_json)
+            if not validation['valid']:
+                messages.error(request, f"Invalid pattern: {', '.join(validation['errors'])}")
+                return render(request, 'admin/patterns/create.html', {
+                    'domain': domain,
+                    'pattern_json': pattern_json_str,
+                    'change_reason': change_reason,
+                })
+
+            # Sanitize
+            pattern_json = pattern_validators.sanitize_pattern_json(pattern_json)
+
+            # Create pattern
+            pattern, created = PatternManagementService.create_pattern(
+                domain=domain,
+                pattern_json=pattern_json,
+                user=request.user,
+                change_reason=change_reason
+            )
+
+            if created:
+                messages.success(request, f'Pattern for {domain} created successfully!')
+            else:
+                messages.info(request, f'Pattern for {domain} already exists and was updated.')
+
+            return redirect('pattern_detail', domain=domain)
+
+        except json.JSONDecodeError as e:
+            messages.error(request, f'Invalid JSON: {str(e)}')
+            return render(request, 'admin/patterns/create.html', {
+                'domain': domain,
+                'pattern_json': pattern_json_str,
+                'change_reason': change_reason,
+            })
+        except Exception as e:
+            messages.error(request, f'Error creating pattern: {str(e)}')
+            return render(request, 'admin/patterns/create.html', {
+                'domain': domain,
+                'pattern_json': pattern_json_str,
+                'change_reason': change_reason,
+            })
+
+    # GET - show form
+    # Provide template pattern JSON
+    template_pattern = {
+        "store_domain": "",
+        "patterns": {
+            "price": {
+                "primary": {
+                    "type": "css",
+                    "selector": ".price",
+                    "confidence": 0.95,
+                    "description": "Primary price selector"
+                },
+                "fallbacks": []
+            },
+            "title": {
+                "primary": {
+                    "type": "css",
+                    "selector": "h1.product-title",
+                    "confidence": 0.90,
+                    "description": "Product title"
+                },
+                "fallbacks": []
+            },
+            "image": {
+                "primary": {
+                    "type": "meta",
+                    "selector": "og:image",
+                    "confidence": 0.85,
+                    "description": "Open Graph image"
+                },
+                "fallbacks": []
+            },
+            "availability": {
+                "primary": {
+                    "type": "css",
+                    "selector": ".stock-status",
+                    "confidence": 0.80,
+                    "description": "Stock availability"
+                },
+                "fallbacks": []
+            }
+        },
+        "metadata": {
+            "validated_count": 0,
+            "confidence_score": 0.0
+        }
+    }
+
+    import json
+    template_json = json.dumps(template_pattern, indent=2)
+
+    return render(request, 'admin/patterns/create.html', {
+        'template_json': template_json
+    })
+
+
+@login_required
+@require_http_methods(["POST"])
+def pattern_edit(request, domain):
+    """Update pattern."""
+    if not request.user.is_staff:
+        return JsonResponse({'error': 'Staff access required'}, status=403)
+
+    from .pattern_services import PatternManagementService
+    from . import pattern_validators
+    import json
+
+    pattern_json_str = request.POST.get('pattern_json', '').strip()
+    change_reason = request.POST.get('change_reason', 'Manual edit')
+
+    try:
+        # Parse JSON
+        pattern_json = json.loads(pattern_json_str)
+
+        # Validate
+        validation = pattern_validators.validate_pattern_structure(pattern_json)
+        if not validation['valid']:
+            messages.error(request, f"Invalid pattern: {', '.join(validation['errors'])}")
+            return redirect('pattern_detail', domain=domain)
+
+        # Sanitize
+        pattern_json = pattern_validators.sanitize_pattern_json(pattern_json)
+
+        # Update pattern
+        pattern = PatternManagementService.update_pattern(
+            domain=domain,
+            pattern_json=pattern_json,
+            user=request.user,
+            change_reason=change_reason
+        )
+
+        messages.success(request, f'Pattern for {domain} updated successfully!')
+        return redirect('pattern_detail', domain=domain)
+
+    except json.JSONDecodeError as e:
+        messages.error(request, f'Invalid JSON: {str(e)}')
+        return redirect('pattern_detail', domain=domain)
+    except Exception as e:
+        messages.error(request, f'Error updating pattern: {str(e)}')
+        return redirect('pattern_detail', domain=domain)
+
+
+@login_required
+@require_http_methods(["POST"])
+def pattern_delete(request, domain):
+    """Delete pattern."""
+    if not request.user.is_staff:
+        return JsonResponse({'error': 'Staff access required'}, status=403)
+
+    from .pattern_services import PatternManagementService
+
+    if PatternManagementService.delete_pattern(domain):
+        messages.success(request, f'Pattern for {domain} deleted successfully.')
+    else:
+        messages.error(request, f'Pattern for {domain} not found.')
+
+    return redirect('pattern_list')
+
+
+@login_required
+def pattern_history(request, domain):
+    """Pattern version history."""
+    if not request.user.is_staff:
+        messages.error(request, 'Staff access required.')
+        return redirect('dashboard')
+
+    from .pattern_services import PatternHistoryService
+
+    pattern = get_object_or_404(Pattern, domain=domain)
+    history = PatternHistoryService.get_pattern_history(domain, limit=100)
+
+    context = {
+        'pattern': pattern,
+        'history': history,
+    }
+
+    return render(request, 'admin/patterns/history.html', context)
+
+
+@login_required
+def pattern_compare(request, domain, v1, v2):
+    """Compare two pattern versions."""
+    if not request.user.is_staff:
+        messages.error(request, 'Staff access required.')
+        return redirect('dashboard')
+
+    from .pattern_services import PatternHistoryService
+    import json
+
+    pattern = get_object_or_404(Pattern, domain=domain)
+    version1 = PatternHistoryService.get_pattern_version(domain, v1)
+    version2 = PatternHistoryService.get_pattern_version(domain, v2)
+
+    if not version1 or not version2:
+        messages.error(request, 'One or both versions not found.')
+        return redirect('pattern_history', domain=domain)
+
+    # Generate diff
+    diff = PatternHistoryService.compare_versions(
+        version1.pattern_json,
+        version2.pattern_json
+    )
+
+    context = {
+        'pattern': pattern,
+        'version1': version1,
+        'version2': version2,
+        'diff': diff,
+        'version1_json': json.dumps(version1.pattern_json, indent=2),
+        'version2_json': json.dumps(version2.pattern_json, indent=2),
+    }
+
+    return render(request, 'admin/patterns/compare.html', context)
+
+
+@login_required
+@require_http_methods(["POST"])
+def pattern_rollback(request, domain, version):
+    """Rollback to previous pattern version."""
+    if not request.user.is_staff:
+        return JsonResponse({'error': 'Staff access required'}, status=403)
+
+    from .pattern_services import PatternManagementService
+
+    try:
+        change_reason = request.POST.get('reason', f'Rollback to version {version}')
+
+        pattern = PatternManagementService.rollback_pattern(
+            domain=domain,
+            version_number=version,
+            user=request.user,
+            change_reason=change_reason
+        )
+
+        messages.success(request, f'Pattern rolled back to version {version} successfully!')
+        return redirect('pattern_detail', domain=domain)
+
+    except Exception as e:
+        messages.error(request, f'Error rolling back pattern: {str(e)}')
+        return redirect('pattern_history', domain=domain)
+
+
+# ========== Pattern HTMX API Endpoints ==========
+
+@login_required
+@require_http_methods(["POST"])
+def api_test_pattern(request):
+    """HTMX endpoint: Test pattern against URL."""
+    if not request.user.is_staff:
+        return JsonResponse({'error': 'Staff access required'}, status=403)
+
+    from .pattern_services import PatternTestService
+    import json
+
+    url = request.POST.get('test_url', '').strip()
+    pattern_json_str = request.POST.get('pattern_json', '').strip()
+
+    if not url:
+        return HttpResponse('<div class="text-red-600">Please enter a URL to test.</div>')
+
+    if not pattern_json_str:
+        return HttpResponse('<div class="text-red-600">Pattern JSON is required.</div>')
+
+    try:
+        pattern_json = json.loads(pattern_json_str)
+
+        # Test pattern
+        result = PatternTestService.test_pattern_against_url(url, pattern_json)
+
+        context = {'result': result, 'url': url}
+        return render(request, 'admin/patterns/partials/test_result.html', context)
+
+    except json.JSONDecodeError as e:
+        return HttpResponse(f'<div class="text-red-600">Invalid JSON: {str(e)}</div>')
+    except Exception as e:
+        return HttpResponse(f'<div class="text-red-600">Error testing pattern: {str(e)}</div>')
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_validate_pattern(request):
+    """HTMX endpoint: Validate pattern syntax."""
+    if not request.user.is_staff:
+        return JsonResponse({'error': 'Staff access required'}, status=403)
+
+    from .pattern_services import PatternTestService
+    import json
+
+    pattern_json_str = request.POST.get('pattern_json', '').strip()
+
+    if not pattern_json_str:
+        return HttpResponse('<div class="text-yellow-600">No pattern to validate.</div>')
+
+    try:
+        pattern_json = json.loads(pattern_json_str)
+
+        # Validate pattern
+        validation = PatternTestService.validate_pattern_syntax(pattern_json)
+
+        context = {'validation': validation}
+        return render(request, 'admin/patterns/partials/validation_result.html', context)
+
+    except json.JSONDecodeError as e:
+        return HttpResponse(f'<div class="text-red-600">Invalid JSON: {str(e)}</div>')
+    except Exception as e:
+        return HttpResponse(f'<div class="text-red-600">Error validating pattern: {str(e)}</div>')
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_test_selector(request):
+    """HTMX endpoint: Test single selector."""
+    if not request.user.is_staff:
+        return JsonResponse({'error': 'Staff access required'}, status=403)
+
+    from .pattern_services import PatternTestService
+
+    html = request.POST.get('html', '')
+    selector_type = request.POST.get('selector_type', '')
+    selector = request.POST.get('selector', '')
+    attribute = request.POST.get('attribute', None)
+
+    selector_config = {
+        'type': selector_type,
+        'selector': selector,
+        'attribute': attribute
+    }
+
+    result = PatternTestService.test_single_selector(html, selector_config)
+
+    return JsonResponse(result)
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_fetch_html(request):
+    """HTMX endpoint: Fetch HTML from URL."""
+    if not request.user.is_staff:
+        return JsonResponse({'error': 'Staff access required'}, status=403)
+
+    from .pattern_services import PatternTestService
+    from django.core.cache import cache
+
+    url = request.POST.get('url', '').strip()
+
+    if not url:
+        return JsonResponse({'error': 'URL is required'}, status=400)
+
+    # Rate limiting check
+    cache_key = f'fetch_html_rate_{request.user.id}'
+    if cache.get(cache_key):
+        return JsonResponse({
+            'error': 'Rate limited. Please wait 30 seconds before fetching again.'
+        }, status=429)
+
+    try:
+        html, metadata = PatternTestService.fetch_html(url, use_cache=True)
+
+        # Set rate limit (30 seconds)
+        cache.set(cache_key, True, 30)
+
+        # Truncate HTML for response (max 50KB)
+        html_truncated = html[:50000]
+
+        return JsonResponse({
+            'success': True,
+            'html': html_truncated,
+            'metadata': metadata
+        })
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_regenerate_pattern(request):
+    """HTMX endpoint: Trigger pattern regeneration."""
+    if not request.user.is_staff:
+        return JsonResponse({'error': 'Staff access required'}, status=403)
+
+    domain = request.POST.get('domain', '').strip()
+
+    if not domain:
+        return JsonResponse({'error': 'Domain is required'}, status=400)
+
+    try:
+        pattern = Pattern.objects.get(domain=domain)
+
+        # Find sample listing for this domain
+        sample_listing = ProductListing.objects.filter(
+            store__domain=domain
+        ).first()
+
+        if not sample_listing:
+            return JsonResponse({
+                'error': f'No product listings found for {domain}. Add a product from this store first.'
+            }, status=400)
+
+        # Trigger Celery task
+        from app.tasks import generate_pattern
+        task = generate_pattern.delay(
+            url=sample_listing.url,
+            domain=domain,
+            listing_id=str(sample_listing.id)
+        )
+
+        return JsonResponse({
+            'success': True,
+            'task_id': task.id,
+            'message': f'Pattern regeneration started (Task ID: {task.id})'
+        })
+
+    except Pattern.DoesNotExist:
+        return JsonResponse({'error': f'Pattern for {domain} not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)

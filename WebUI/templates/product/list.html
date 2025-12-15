@@ -20,12 +20,12 @@
         </a>
     </div>
 
-    {% if products %}
+    {% if subscriptions %}
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {% for product in products %}
+        {% for subscription in subscriptions %}
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-md transition-shadow">
-            {% if product.image_url %}
-            <img src="{{ product.image_url }}" alt="{{ product.name }}" class="w-full h-48 object-contain bg-white dark:bg-gray-900">
+            {% if subscription.product.image_url %}
+            <img src="{% url 'proxy_image' %}?url={{ subscription.product.image_url|urlencode }}" alt="{{ subscription.product.name }}" class="w-full h-48 object-contain bg-white dark:bg-gray-900" loading="lazy">
             {% else %}
             <div class="w-full h-48 bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
                 <svg class="w-16 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -36,38 +36,45 @@
 
             <div class="p-6">
                 <h3 class="font-semibold text-gray-900 dark:text-white mb-2 line-clamp-2">
-                    {{ product.extracted_title }}
+                    {{ subscription.product.name }}
                 </h3>
-                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                    {{ product.domain }}
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                    Available at {{ subscription.store_count }} store{% if subscription.store_count != 1 %}s{% endif %}
                 </p>
 
-                {% if product.current_price %}
+                {% if subscription.best_listing and subscription.best_listing.current_price %}
                 <div class="mb-2">
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Current Price</p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Best Price</p>
                     <div class="flex items-baseline space-x-2">
                         <span class="text-2xl font-bold text-gray-900 dark:text-white">
-                            {{ product.current_price|format_currency:product.domain }}
+                            {{ subscription.best_listing.current_price|format_currency:subscription.best_listing.store.domain }}
                         </span>
-                        {% if product.price_change_24h %}
-                        <span class="text-sm font-medium {% if product.price_change_24h < 0 %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
-                            {% if product.price_change_24h > 0 %}+{% endif %}{{ product.price_change_24h|floatformat:2|format_currency:product.domain }}
+                        {% if not subscription.best_listing.available %}
+                        <span class="text-xs px-2 py-1 bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200 rounded-full">
+                            Out of Stock
                         </span>
                         {% endif %}
                     </div>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        at {{ subscription.best_listing.store.name }}
+                    </p>
                 </div>
-                {% if product.lowest_price %}
+                {% if subscription.target_price %}
                 <div class="mb-4">
-                    <p class="text-xs text-gray-500 dark:text-gray-400">Lowest: <span class="font-semibold text-green-600 dark:text-green-400">{{ product.lowest_price|format_currency:product.domain }}</span></p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                        Target: <span class="font-semibold {% if subscription.best_listing.current_price <= subscription.target_price %}text-green-600 dark:text-green-400{% else %}text-orange-600 dark:text-orange-400{% endif %}">
+                            {{ subscription.target_price|format_currency:subscription.best_listing.store.domain }}
+                        </span>
+                    </p>
                 </div>
                 {% endif %}
                 {% else %}
                 <div class="mb-4 text-gray-500 dark:text-gray-400">
-                    Fetching price...
+                    Fetching prices...
                 </div>
                 {% endif %}
 
-                <a href="{% url 'product_detail' product.id %}"
+                <a href="{% url 'subscription_detail' subscription.id %}"
                    class="block w-full text-center px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 font-medium">
                     View Details
                 </a>

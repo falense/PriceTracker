@@ -1,0 +1,189 @@
+{% extends 'base.html' %}
+
+{% block title %}Pattern Management - PriceTracker{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+                Pattern Management
+            </h1>
+            <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                Manage, test, and validate extraction patterns for product data
+            </p>
+        </div>
+        <a href="{% url 'pattern_create' %}"
+           class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-colors">
+            Create New Pattern
+        </a>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+            <div class="text-sm text-gray-600 dark:text-gray-400">Total Patterns</div>
+            <div class="text-2xl font-bold text-gray-900 dark:text-white mt-1">{{ stats.total }}</div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+            <div class="text-sm text-green-600 dark:text-green-400">Healthy</div>
+            <div class="text-2xl font-bold text-green-600 dark:text-green-400 mt-1">{{ stats.healthy }}</div>
+            <div class="text-xs text-gray-500 mt-1">≥80% success</div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+            <div class="text-sm text-yellow-600 dark:text-yellow-400">Warning</div>
+            <div class="text-2xl font-bold text-yellow-600 dark:text-yellow-400 mt-1">{{ stats.warning }}</div>
+            <div class="text-xs text-gray-500 mt-1">60-80% success</div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+            <div class="text-sm text-red-600 dark:text-red-400">Failing</div>
+            <div class="text-2xl font-bold text-red-600 dark:text-red-400 mt-1">{{ stats.failing }}</div>
+            <div class="text-xs text-gray-500 mt-1">&lt;60% success</div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+            <div class="text-sm text-gray-600 dark:text-gray-400">Pending</div>
+            <div class="text-2xl font-bold text-gray-600 dark:text-gray-400 mt-1">{{ stats.pending }}</div>
+            <div class="text-xs text-gray-500 mt-1">No attempts yet</div>
+        </div>
+    </div>
+
+    <!-- Search and Filters -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 mb-6">
+        <form method="get" class="flex flex-col md:flex-row gap-4">
+            <!-- Search -->
+            <div class="flex-1">
+                <input type="text"
+                       name="search"
+                       value="{{ search_query }}"
+                       placeholder="Search by domain..."
+                       class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500">
+            </div>
+
+            <!-- Status Filter -->
+            <div>
+                <select name="status"
+                        onchange="this.form.submit()"
+                        class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500">
+                    <option value="all" {% if filter_status == 'all' %}selected{% endif %}>All Patterns</option>
+                    <option value="healthy" {% if filter_status == 'healthy' %}selected{% endif %}>Healthy</option>
+                    <option value="warning" {% if filter_status == 'warning' %}selected{% endif %}>Warning</option>
+                    <option value="failing" {% if filter_status == 'failing' %}selected{% endif %}>Failing</option>
+                    <option value="pending" {% if filter_status == 'pending' %}selected{% endif %}>Pending</option>
+                </select>
+            </div>
+
+            <!-- Search Button -->
+            <button type="submit"
+                    class="px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-colors">
+                Search
+            </button>
+
+            {% if search_query or filter_status != 'all' %}
+            <a href="{% url 'pattern_list' %}"
+               class="px-6 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-white rounded-lg font-medium transition-colors">
+                Clear
+            </a>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Patterns Table -->
+    <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Domain
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Success Rate
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Attempts
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Last Validated
+                        </th>
+                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Actions
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                    {% for pattern in patterns %}
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center">
+                                <div>
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                        {{ pattern.domain }}
+                                    </div>
+                                    {% if pattern.store %}
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                                        {{ pattern.store.name }}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {% if pattern.success_rate >= 0.8 %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400">
+                                    {% widthratio pattern.success_rate 1 100 %}%
+                                </span>
+                            {% elif pattern.success_rate >= 0.6 %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400">
+                                    {% widthratio pattern.success_rate 1 100 %}%
+                                </span>
+                            {% else %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400">
+                                    {% widthratio pattern.success_rate 1 100 %}%
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                            {{ pattern.successful_attempts }} / {{ pattern.total_attempts }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                            {% if pattern.last_validated %}
+                                {{ pattern.last_validated|date:"Y-m-d H:i" }}
+                            {% else %}
+                                Never
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <a href="{% url 'pattern_detail' pattern.domain %}"
+                               class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 mr-3">
+                                View
+                            </a>
+                            <a href="{% url 'pattern_history' pattern.domain %}"
+                               class="text-gray-600 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300">
+                                History
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                            <svg class="mx-auto h-12 w-12 text-gray-400 dark:text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                            <p class="text-lg font-medium">No patterns found</p>
+                            <p class="mt-1">
+                                {% if search_query or filter_status != 'all' %}
+                                    Try adjusting your search or filter criteria.
+                                {% else %}
+                                    Create your first pattern to get started.
+                                {% endif %}
+                            </p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
