@@ -185,12 +185,28 @@ def generate_pattern(self, url: str, domain: str, listing_id: str = None):
                     except Exception:
                         pass  # Not critical if cleanup fails
 
+                    fetch_task_id = None
+                    if listing_id:
+                        try:
+                            fetch_task = fetch_listing_price.delay(listing_id)
+                            fetch_task_id = fetch_task.id
+                            logger.info(
+                                f"Queued price fetch task {fetch_task_id} after pattern generation "
+                                f"for listing {listing_id}"
+                            )
+                        except Exception as e:
+                            logger.error(
+                                f"Failed to queue price fetch after pattern generation for listing "
+                                f"{listing_id}: {e}"
+                            )
+
                     return {
                         'status': 'success',
                         'domain': domain,
                         'action': action,
                         'fields_found': pattern_data.get('metadata', {}).get('fields_found', 0),
-                        'confidence': pattern_data.get('metadata', {}).get('overall_confidence', 0)
+                        'confidence': pattern_data.get('metadata', {}).get('overall_confidence', 0),
+                        'fetch_task_id': fetch_task_id,
                     }
 
                 except json.JSONDecodeError as e:

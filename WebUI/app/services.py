@@ -59,7 +59,7 @@ class ProductService:
         4. Create Store/Product/Listing as needed
         5. Create or update UserSubscription
         6. Trigger pattern generation if needed
-        7. Trigger initial price fetch
+        7. Trigger initial price fetch (after pattern exists)
 
         Args:
             user: User object
@@ -153,9 +153,8 @@ class ProductService:
         if not Pattern.objects.filter(domain=domain).exists():
             logger.info(f"No pattern found for {domain}, triggering generation")
             ProductService._trigger_pattern_generation(url, domain, str(listing.id))
-
-        # Step 7: Trigger immediate price fetch
-        ProductService._trigger_fetch_listing(str(listing.id))
+        else:
+            ProductService._trigger_fetch_listing(str(listing.id))
 
         return product, subscription, listing, created
 
