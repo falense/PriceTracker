@@ -9,98 +9,10 @@ These tasks handle async operations:
 
 from celery import shared_task
 from django.utils import timezone
-import subprocess
 import logging
-import json
-from datetime import datetime
-from dateutil import parser as date_parser
+import asyncio
 
 logger = logging.getLogger(__name__)
-
-
-def parse_and_store_logs(service, task_id, stdout, listing_id=None, product_id=None):
-    """
-    Parse JSON logs from subprocess and store in OperationLog database.
-
-    Args:
-        service: Service name ('fetcher', 'extractor', 'celery')
-        task_id: Celery task ID for correlation
-        stdout: Standard output from subprocess (contains JSON log lines)
-        listing_id: Optional ProductListing ID
-        product_id: Optional Product ID
-    """
-    from app.models import OperationLog, ProductListing, Product
-
-    # Get listing and product objects if IDs provided
-    listing = None
-    product = None
-
-    if listing_id:
-        try:
-            listing = ProductListing.objects.get(id=listing_id.replace('-', ''))
-            product = listing.product
-        except ProductListing.DoesNotExist:
-            logger.warning(f"Listing {listing_id} not found for log storage")
-
-    if product_id and not product:
-        try:
-            product = Product.objects.get(id=product_id.replace('-', ''))
-        except Product.DoesNotExist:
-            logger.warning(f"Product {product_id} not found for log storage")
-
-    logs_stored = 0
-    for line in stdout.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-
-        try:
-            log_entry = json.loads(line)
-
-            # Extract fields from structured log
-            timestamp_str = log_entry.get('timestamp', log_entry.get('time'))
-            if timestamp_str:
-                try:
-                    timestamp = date_parser.isoparse(timestamp_str)
-                except Exception:
-                    timestamp = timezone.now()
-            else:
-                timestamp = timezone.now()
-
-            level = log_entry.get('level', log_entry.get('log_level', 'INFO')).upper()
-            event = log_entry.get('event', '')
-            message = log_entry.get('message', '')
-            filename = log_entry.get('filename', '')
-            duration_ms = log_entry.get('duration_ms')
-
-            # Store full log entry as context
-            context = log_entry.copy()
-
-            # Create log entry
-            OperationLog.objects.create(
-                service=service,
-                task_id=task_id,
-                listing=listing,
-                product=product,
-                level=level,
-                event=event,
-                message=message,
-                context=context,
-                filename=filename,
-                timestamp=timestamp,
-                duration_ms=duration_ms,
-            )
-            logs_stored += 1
-
-        except json.JSONDecodeError:
-            # Skip non-JSON lines (e.g., Rich output, tracebacks)
-            continue
-        except Exception as e:
-            logger.error(f"Error storing log entry: {e}", exc_info=True)
-            continue
-
-    logger.debug(f"Stored {logs_stored} log entries for task {task_id}")
-    return logs_stored
 
 
 @shared_task(bind=True, max_retries=3)
@@ -116,136 +28,56 @@ def generate_pattern(self, url: str, domain: str, listing_id: str = None):
     Returns:
         dict: Status and pattern data
     """
-    import json
-    import os
+    return asyncio.run(_generate_pattern_async(self, url, domain, listing_id))
+
+
+async def _generate_pattern_async(task_self, url: str, domain: str, listing_id: str = None):
+    """Async implementation of generate_pattern."""
     from app.models import Pattern
+    from ExtractorPatternAgent import PatternGenerator
 
     try:
         logger.info(f"Generating pattern for {domain}: {url}")
 
-        # Run ExtractorPatternAgent with JSON logging
-        result = subprocess.run([
-            'python',
-            '/extractor/generate_pattern.py',
-            url,
-            '--domain', domain,
-            '--log-format', 'json'
-        ], timeout=120, capture_output=True, text=True, cwd='/extractor')
+        # Create generator and run pattern generation
+        generator = PatternGenerator()
+        pattern_data = await generator.generate(url, domain)
 
-        if result.returncode == 0:
-            logger.info(f"Pattern generated successfully for {domain}")
-
-            # Parse and store logs
-            parse_and_store_logs(
-                service='extractor',
-                task_id=self.request.id,
-                stdout=result.stdout,
-                listing_id=listing_id
-            )
-
-            # Try multiple filename patterns to handle domain variations
-            possible_filenames = [
-                f"{domain.replace('.', '_')}_patterns.json",  # e.g., proshop_no_patterns.json
-                f"www_{domain.replace('.', '_')}_patterns.json",  # e.g., www_proshop_no_patterns.json
-            ]
-
-            # If domain doesn't start with www, also try without www prefix
-            if not domain.startswith('www.'):
-                www_domain = f"www.{domain}"
-                possible_filenames.insert(1, f"{www_domain.replace('.', '_')}_patterns.json")
-
-            json_path = None
-            for filename in possible_filenames:
-                test_path = os.path.join('/extractor', filename)
-                if os.path.exists(test_path):
-                    json_path = test_path
-                    logger.info(f"Found pattern file: {filename}")
-                    break
-
-            if json_path:
-                try:
-                    with open(json_path, 'r', encoding='utf-8') as f:
-                        pattern_data = json.load(f)
-
-                    # Save to database (domain already normalized by ExtractorPatternAgent)
-                    pattern, created = Pattern.objects.update_or_create(
-                        domain=domain,
-                        defaults={
-                            'pattern_json': pattern_data,
-                            'last_validated': timezone.now()
-                        }
-                    )
-                    action = "Created" if created else "Updated"
-                    logger.info(f"{action} pattern in database for {domain}")
-
-                    # Clean up JSON file (optional)
-                    try:
-                        os.remove(json_path)
-                        logger.debug(f"Cleaned up temporary file: {json_path}")
-                    except Exception:
-                        pass  # Not critical if cleanup fails
-
-                    fetch_task_id = None
-                    if listing_id:
-                        try:
-                            fetch_task = fetch_listing_price.delay(listing_id)
-                            fetch_task_id = fetch_task.id
-                            logger.info(
-                                f"Queued price fetch task {fetch_task_id} after pattern generation "
-                                f"for listing {listing_id}"
-                            )
-                        except Exception as e:
-                            logger.error(
-                                f"Failed to queue price fetch after pattern generation for listing "
-                                f"{listing_id}: {e}"
-                            )
-
-                    return {
-                        'status': 'success',
-                        'domain': domain,
-                        'action': action,
-                        'fields_found': pattern_data.get('metadata', {}).get('fields_found', 0),
-                        'confidence': pattern_data.get('metadata', {}).get('overall_confidence', 0),
-                        'fetch_task_id': fetch_task_id,
-                    }
-
-                except json.JSONDecodeError as e:
-                    logger.error(f"Failed to parse pattern JSON for {domain}: {e}")
-                    return {
-                        'status': 'failed',
-                        'domain': domain,
-                        'error': f'Invalid JSON output: {str(e)}'
-                    }
-            else:
-                logger.warning(f"Pattern JSON file not found. Tried: {', '.join(possible_filenames)}")
-                return {
-                    'status': 'failed',
-                    'domain': domain,
-                    'error': f'Pattern file not generated. Tried: {", ".join(possible_filenames)}'
-                }
-        else:
-            logger.error(f"Pattern generation failed for {domain}: {result.stderr}")
-
-            # Still try to parse logs even on failure
-            try:
-                parse_and_store_logs(
-                    service='extractor',
-                    task_id=self.request.id,
-                    stdout=result.stdout,
-                    listing_id=listing_id
-                )
-            except Exception:
-                pass
-
-            return {
-                'status': 'failed',
-                'domain': domain,
-                'error': result.stderr
+        # Save to database
+        pattern, created = Pattern.objects.update_or_create(
+            domain=domain,
+            defaults={
+                'pattern_json': pattern_data,
+                'last_validated': timezone.now()
             }
+        )
+        action = "Created" if created else "Updated"
+        logger.info(f"{action} pattern in database for {domain}")
 
-    except subprocess.TimeoutExpired:
-        logger.error(f"Pattern generation timed out for {domain}")
-        raise self.retry(countdown=60, max_retries=3)
+        # Queue fetch task if listing_id provided
+        fetch_task_id = None
+        if listing_id:
+            try:
+                fetch_task = fetch_listing_price.delay(listing_id)
+                fetch_task_id = fetch_task.id
+                logger.info(
+                    f"Queued price fetch task {fetch_task_id} after pattern generation "
+                    f"for listing {listing_id}"
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to queue price fetch after pattern generation for listing "
+                    f"{listing_id}: {e}"
+                )
+
+        return {
+            'status': 'success',
+            'domain': domain,
+            'action': action,
+            'fields_found': pattern_data.get('metadata', {}).get('fields_found', 0),
+            'confidence': pattern_data.get('metadata', {}).get('overall_confidence', 0),
+            'fetch_task_id': fetch_task_id,
+        }
 
     except Exception as e:
         logger.exception(f"Pattern generation error for {domain}")
@@ -267,56 +99,28 @@ def fetch_listing_price(self, listing_id: str):
     Returns:
         dict: Price data and metadata
     """
+    return asyncio.run(_fetch_listing_price_async(self, listing_id))
+
+
+async def _fetch_listing_price_async(task_self, listing_id: str):
+    """Async implementation of fetch_listing_price."""
+    from django.conf import settings
+    from src.celery_api import fetch_listing_price_direct
+
     try:
         logger.info(f"Fetching price for listing {listing_id}")
 
-        # Run PriceFetcher with listing ID and JSON logging
-        result = subprocess.run([
-            'python',
-            '/fetcher/scripts/run_fetch.py',
-            '--listing-id', listing_id,
-            '--log-format', 'json'
-        ], timeout=30, capture_output=True, text=True)
+        # Get database path from Django settings
+        db_path = str(settings.DATABASES['default']['NAME'])
 
-        if result.returncode == 0:
-            logger.info(f"Price fetched successfully for listing {listing_id}")
+        # Call async function directly
+        result = await fetch_listing_price_direct(
+            listing_id=listing_id,
+            db_path=db_path
+        )
 
-            # Parse and store logs
-            parse_and_store_logs(
-                service='fetcher',
-                task_id=self.request.id,
-                stdout=result.stdout,
-                listing_id=listing_id
-            )
-
-            return {
-                'status': 'success',
-                'listing_id': listing_id,
-                'stdout': result.stdout
-            }
-        else:
-            logger.error(f"Price fetch failed for listing {listing_id}: {result.stderr}")
-
-            # Still try to parse logs even on failure
-            try:
-                parse_and_store_logs(
-                    service='fetcher',
-                    task_id=self.request.id,
-                    stdout=result.stdout,
-                    listing_id=listing_id
-                )
-            except Exception:
-                pass
-
-            return {
-                'status': 'failed',
-                'listing_id': listing_id,
-                'error': result.stderr
-            }
-
-    except subprocess.TimeoutExpired:
-        logger.error(f"Price fetch timed out for listing {listing_id}")
-        raise self.retry(countdown=30, max_retries=3)
+        logger.info(f"Price fetch completed for listing {listing_id}: {result['status']}")
+        return result
 
     except Exception as e:
         logger.exception(f"Price fetch error for listing {listing_id}")
@@ -438,39 +242,31 @@ def fetch_missing_images():
     Processes up to 50 products per run to avoid overload.
     This catches new products and retries for products where image extraction failed.
     """
+    return asyncio.run(_fetch_missing_images_async())
+
+
+async def _fetch_missing_images_async():
+    """Async implementation of fetch_missing_images."""
+    from django.conf import settings
+    from src.celery_api import backfill_images_direct
+
     try:
         logger.info("Starting fetch_missing_images task")
 
-        # Run backfill script with limited batch size
-        result = subprocess.run([
-            'python',
-            '/fetcher/scripts/backfill_images.py',
-            '--limit', '50',
-            '--delay', '2.0'
-        ], timeout=600, capture_output=True, text=True, cwd='/fetcher/scripts')
+        # Get database path from Django settings
+        db_path = str(settings.DATABASES['default']['NAME'])
 
-        if result.returncode == 0:
-            logger.info("Missing images fetch completed successfully")
-            logger.info(f"Output: {result.stdout}")
+        # Call async function directly
+        result = await backfill_images_direct(
+            db_path=db_path,
+            limit=50,
+            request_delay=2.0
+        )
 
-            # Parse output for statistics (optional)
-            return {
-                'status': 'success',
-                'stdout': result.stdout
-            }
-        else:
-            logger.error(f"Missing images fetch failed: {result.stderr}")
-            return {
-                'status': 'failed',
-                'error': result.stderr
-            }
-
-    except subprocess.TimeoutExpired:
-        logger.error("Missing images fetch timed out")
-        return {
-            'status': 'timeout',
-            'error': 'Fetch process exceeded 10 minute timeout'
-        }
+        logger.info(
+            f"Missing images fetch completed: {result['success']}/{result['total']} successful"
+        )
+        return result
 
     except Exception as e:
         logger.exception("Error in fetch_missing_images task")
