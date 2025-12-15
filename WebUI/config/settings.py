@@ -127,36 +127,26 @@ CELERY_TASK_TRACK_STARTED = True  # Track when tasks start
 CELERY_TASK_SEND_SENT_EVENT = True  # Enable task-sent events
 
 # Logging
+# Note: Structlog is configured in app/apps.py AppConfig.ready() and config/celery.py
+# This minimal Django LOGGING configuration is kept for compatibility but will be
+# enhanced by structlog's configuration at startup.
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {
-        'verbose': {
-            'format': '{levelname} {asctime} {module} {message}',
-            'style': '{',
+        'simple': {
+            'format': '%(levelname)s %(message)s',
         },
     },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
-            'formatter': 'verbose',
+            'formatter': 'simple',
         },
     },
     'root': {
         'handlers': ['console'],
         'level': 'INFO',
-    },
-    'loggers': {
-        'django': {
-            'handlers': ['console'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-        'app': {
-            'handlers': ['console'],
-            'level': 'DEBUG',
-            'propagate': False,
-        },
     },
 }
 

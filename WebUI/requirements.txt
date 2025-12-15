@@ -16,6 +16,9 @@ lxml>=5.0.0
 # Data validation (for PriceFetcher)
 pydantic>=2.0.0
 
+# Structured logging
+structlog>=24.0.0
+
 # Date parsing for log timestamps
 python-dateutil>=2.8.0
 

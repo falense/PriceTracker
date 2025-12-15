@@ -4,6 +4,7 @@ Celery configuration for PriceTracker WebUI.
 import os
 from celery import Celery
 from celery.schedules import crontab
+from celery.signals import worker_process_init
 
 # Set the default Django settings module
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
@@ -15,6 +16,18 @@ app.config_from_object('django.conf:settings', namespace='CELERY')
 
 # Auto-discover tasks in all installed apps
 app.autodiscover_tasks()
+
+
+@worker_process_init.connect
+def configure_structlog_for_celery(**kwargs):
+    """
+    Configure structlog when Celery worker process starts.
+
+    This ensures Celery workers use JSON logging format for production
+    log aggregation, while Django dev server uses colored console output.
+    """
+    from config.logging_config import configure_structlog
+    configure_structlog(environment='celery')
 
 # Celery Beat Schedule for periodic tasks
 app.conf.beat_schedule = {
