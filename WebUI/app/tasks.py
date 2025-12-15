@@ -105,7 +105,7 @@ def fetch_listing_price(self, listing_id: str):
 async def _fetch_listing_price_async(task_self, listing_id: str):
     """Async implementation of fetch_listing_price."""
     from django.conf import settings
-    from src.celery_api import fetch_listing_price_direct
+    from PriceFetcher.src.celery_api import fetch_listing_price_direct
 
     try:
         logger.info(f"Fetching price for listing {listing_id}")
@@ -248,7 +248,7 @@ def fetch_missing_images():
 async def _fetch_missing_images_async():
     """Async implementation of fetch_missing_images."""
     from django.conf import settings
-    from src.celery_api import backfill_images_direct
+    from PriceFetcher.src.celery_api import backfill_images_direct
 
     try:
         logger.info("Starting fetch_missing_images task")

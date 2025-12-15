@@ -45,14 +45,14 @@ services:
     volumes:
       - ./db.sqlite3:/app/db.sqlite3
       - ./WebUI:/app
-      - ./ExtractorPatternAgent:/extractor
-      - ./PriceFetcher:/fetcher
+      - ./ExtractorPatternAgent:/ExtractorPatternAgent
+      - ./PriceFetcher:/PriceFetcher
     environment:
       - REDIS_URL=redis://redis:6379/0
       - DATABASE_PATH=/app/db.sqlite3
-      - EXTRACTOR_PATH=/extractor
-      - FETCHER_PATH=/fetcher
-      - PYTHONPATH=/app:/extractor:/fetcher
+      - EXTRACTOR_PATH=/ExtractorPatternAgent
+      - FETCHER_PATH=/PriceFetcher
+      - PYTHONPATH=/app:/
     restart: unless-stopped
 
   # Celery Beat - Scheduler for periodic tasks
