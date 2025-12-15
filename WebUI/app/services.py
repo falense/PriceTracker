@@ -8,7 +8,7 @@ from .models import (
     Product, Store, ProductListing, UserSubscription,
     Pattern, Notification, PriceHistory, AdminFlag, normalize_name
 )
-from .utils.currency import format_price, get_currency_from_domain
+from .utils.currency import format_price
 from django.utils import timezone
 from django.contrib.auth.models import User
 from django.db.models import Max, Q
@@ -20,12 +20,18 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+PLACEHOLDER_PRODUCT_PREFIX = "Product from "
+
 
 def find_matching_product(name, brand=None):
     """
     Find existing product by normalized name.
     Returns None if no match found.
     """
+    # Guard: placeholder names are not meaningful identifiers and should never be used for matching.
+    if name and name.startswith(PLACEHOLDER_PRODUCT_PREFIX):
+        return None
+
     canonical = normalize_name(name)
 
     # Exact canonical name match
@@ -92,21 +98,19 @@ class ProductService:
             logger.info(f"Found existing listing for {product.name} at {store.name}")
         else:
             # Step 3: Extract product name (placeholder, will be updated after first fetch)
-            product_name = f"Product from {domain}"
+            # Important: do not attempt to match/merge based on placeholder naming.
+            # Make the placeholder unique per listing so multiple products from the same store
+            # don't collapse into a single Product before the first fetch updates the title.
+            placeholder_suffix = uuid.uuid4().hex[:8]
+            product_name = f"{PLACEHOLDER_PRODUCT_PREFIX}{domain} ({placeholder_suffix})"
             canonical = normalize_name(product_name)
 
-            # Step 4: Try to find matching product
-            product = find_matching_product(product_name)
-
-            if not product:
-                # Create new product
-                currency_code, _ = get_currency_from_domain(domain)
-                product = Product.objects.create(
-                    name=product_name,
-                    canonical_name=canonical,
-                    subscriber_count=0,
-                )
-                logger.info(f"Created new product: {product.name}")
+            product = Product.objects.create(
+                name=product_name,
+                canonical_name=canonical,
+                subscriber_count=0,
+            )
+            logger.info(f"Created new product: {product.name}")
 
             # Create listing
             listing = ProductListing.objects.create(

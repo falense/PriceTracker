@@ -10,7 +10,7 @@ from django.contrib import messages
 from datetime import datetime
 from .models import (
     Product, Store, ProductListing, UserSubscription,
-    PriceHistory, Pattern, Notification, FetchLog, UserView, AdminFlag
+    PriceHistory, Pattern, Notification, FetchLog, UserView, AdminFlag, OperationLog
 )
 
 
@@ -464,3 +464,52 @@ class AdminFlagAdmin(admin.ModelAdmin):
             'fields': ('created_at', 'updated_at')
         }),
     )
+
+
+@admin.register(OperationLog)
+class OperationLogAdmin(admin.ModelAdmin):
+    list_display = ['timestamp', 'service', 'level', 'event', 'task_id_short', 'listing_info', 'filename']
+    list_filter = ['service', 'level', 'event', 'timestamp']
+    search_fields = ['event', 'message', 'task_id', 'filename', 'listing__product__name']
+    readonly_fields = ['timestamp', 'service', 'task_id', 'listing', 'product', 'level', 'event', 'message', 'context', 'filename', 'duration_ms']
+    date_hierarchy = 'timestamp'
+    ordering = ['-timestamp']
+
+    fieldsets = (
+        ('Source', {
+            'fields': ('service', 'task_id', 'filename')
+        }),
+        ('Context', {
+            'fields': ('listing', 'product')
+        }),
+        ('Log Entry', {
+            'fields': ('level', 'event', 'message', 'context')
+        }),
+        ('Timing', {
+            'fields': ('timestamp', 'duration_ms')
+        }),
+    )
+
+    def task_id_short(self, obj):
+        """Show shortened task ID for list display."""
+        if obj.task_id:
+            return obj.task_id[:8] + '...' if len(obj.task_id) > 8 else obj.task_id
+        return '-'
+    task_id_short.short_description = 'Task ID'
+
+    def listing_info(self, obj):
+        """Show listing information if available."""
+        if obj.listing:
+            return f"{obj.listing.product.name} @ {obj.listing.store.name}"
+        elif obj.product:
+            return f"{obj.product.name}"
+        return '-'
+    listing_info.short_description = 'Context'
+
+    def has_add_permission(self, request):
+        """Prevent manual creation of log entries."""
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        """Prevent editing of log entries."""
+        return False

@@ -171,6 +171,54 @@ def subscription_detail(request, subscription_id):
         'listings': listings,
         'best_listing': best_listing,
     }
+
+    # Admin-only: Add operation logs
+    if request.user.is_staff:
+        from django.utils import timezone
+        from datetime import timedelta
+
+        # Get time range (last 24 hours)
+        time_since = timezone.now() - timedelta(hours=24)
+
+        # Get service filter from query params
+        service_filter = request.GET.get('service', 'all')
+
+        # Base query: logs for this product in last 24 hours
+        logs_query = subscription.product.operation_logs.filter(
+            timestamp__gte=time_since
+        ).select_related('listing', 'listing__store')
+
+        # Apply service filter if specified
+        if service_filter != 'all':
+            logs_query = logs_query.filter(service=service_filter)
+
+        # Calculate statistics on the full queryset (before slicing)
+        total_logs = logs_query.count()
+        error_count = logs_query.filter(level='ERROR').count()
+        warning_count = logs_query.filter(level='WARNING').count()
+
+        # Count by service
+        service_counts = {
+            'fetcher': logs_query.filter(service='fetcher').count(),
+            'extractor': logs_query.filter(service='extractor').count(),
+            'celery': logs_query.filter(service='celery').count(),
+        }
+
+        # Order by most recent first, limit to 100 entries
+        logs = logs_query.order_by('-timestamp')[:100]
+
+        # Add to context
+        context.update({
+            'operation_logs': logs,
+            'log_stats': {
+                'total': total_logs,
+                'errors': error_count,
+                'warnings': warning_count,
+                'service_counts': service_counts,
+            },
+            'service_filter': service_filter,
+        })
+
     return render(request, 'product/subscription_detail.html', context)
 
 

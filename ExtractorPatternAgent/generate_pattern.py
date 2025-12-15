@@ -21,6 +21,8 @@ import asyncio
 import json
 import sys
 import re
+import logging
+import argparse
 from pathlib import Path
 from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
@@ -28,17 +30,60 @@ from rich.console import Console
 from rich.panel import Panel
 from rich import print as rprint
 from urllib.parse import urlparse
+import structlog
 
 # Add src to path for stealth utilities
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 from utils.stealth import STEALTH_ARGS, apply_stealth, get_stealth_context_options
 
 console = Console()
+logger = None  # Will be initialized based on log format
+
+
+def setup_logging(log_format='console'):
+    """Configure structured logging based on format."""
+    global logger
+
+    if log_format == 'json':
+        # JSON output for parsing
+        structlog.configure(
+            processors=[
+                structlog.processors.TimeStamper(fmt="iso"),
+                structlog.processors.add_log_level,
+                structlog.processors.CallsiteParameterAdder(
+                    [structlog.processors.CallsiteParameter.FILENAME]
+                ),
+                structlog.processors.JSONRenderer(),
+            ],
+            wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
+            context_class=dict,
+            logger_factory=structlog.PrintLoggerFactory(),
+            cache_logger_on_first_use=False,
+        )
+    else:
+        # Console output for human readability
+        structlog.configure(
+            processors=[
+                structlog.processors.TimeStamper(fmt="iso"),
+                structlog.processors.add_log_level,
+                structlog.dev.ConsoleRenderer(),
+            ],
+            wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
+            context_class=dict,
+            logger_factory=structlog.PrintLoggerFactory(),
+            cache_logger_on_first_use=False,
+        )
+
+    logger = structlog.get_logger()
+    return logger
 
 
 async def fetch_page(url):
     """Fetch page with comprehensive stealth to avoid bot detection."""
-    console.print(f"[cyan]Fetching page:[/cyan] {url}")
+    if logger:
+        logger.info("fetch_page_started", url=url)
+    else:
+        console.print(f"[cyan]Fetching page:[/cyan] {url}")
 
     async with async_playwright() as p:
         # Launch with stealth arguments
@@ -64,7 +109,10 @@ async def fetch_page(url):
             await page.wait_for_timeout(2000)
 
             html = await page.content()
-            console.print(f"[green]✓[/green] Page fetched ({len(html)} bytes)")
+            if logger:
+                logger.info("fetch_page_completed", url=url, html_length=len(html))
+            else:
+                console.print(f"[green]✓[/green] Page fetched ({len(html)} bytes)")
             return html
         finally:
             await browser.close()
@@ -72,7 +120,10 @@ async def fetch_page(url):
 
 def analyze_html(html, url):
     """Analyze HTML and generate extraction patterns."""
-    console.print("\n[cyan]Analyzing HTML structure...[/cyan]")
+    if logger:
+        logger.info("analyze_html_started", url=url)
+    else:
+        console.print("\n[cyan]Analyzing HTML structure...[/cyan]")
 
     soup = BeautifulSoup(html, 'html.parser')
     # Normalize domain by removing www prefix for consistency
@@ -84,7 +135,10 @@ def analyze_html(html, url):
     }
 
     # Extract Price
-    console.print("  [yellow]→[/yellow] Finding price patterns...")
+    if logger:
+        logger.info("extracting_field", field="price")
+    else:
+        console.print("  [yellow]→[/yellow] Finding price patterns...")
     price_pattern = None
 
     # Try data-price attribute
@@ -102,7 +156,10 @@ def analyze_html(html, url):
             },
             "fallbacks": []
         }
-        console.print(f"    [green]✓[/green] Found: {selector} → {price_value}")
+        if logger:
+            logger.info("pattern_found", field="price", selector=selector, sample_value=price_value)
+        else:
+            console.print(f"    [green]✓[/green] Found: {selector} → {price_value}")
 
     # Try price class names
     if not price_pattern:
@@ -127,10 +184,16 @@ def analyze_html(html, url):
     if price_pattern:
         patterns["patterns"]["price"] = price_pattern
     else:
-        console.print("    [red]✗[/red] No price pattern found")
+        if logger:
+            logger.warning("pattern_not_found", field="price")
+        else:
+            console.print("    [red]✗[/red] No price pattern found")
 
     # Extract Title
-    console.print("  [yellow]→[/yellow] Finding title patterns...")
+    if logger:
+        logger.info("extracting_field", field="title")
+    else:
+        console.print("  [yellow]→[/yellow] Finding title patterns...")
     title_pattern = None
 
     # Try Open Graph
@@ -146,7 +209,10 @@ def analyze_html(html, url):
             },
             "fallbacks": []
         }
-        console.print(f"    [green]✓[/green] Found: og:title → {og_title.get('content')[:50]}...")
+        if logger:
+            logger.info("pattern_found", field="title", selector='og:title', sample_value=og_title.get('content')[:50])
+        else:
+            console.print(f"    [green]✓[/green] Found: og:title → {og_title.get('content')[:50]}...")
 
     # Try h1 as fallback
     if not title_pattern:
@@ -162,7 +228,10 @@ def analyze_html(html, url):
                 },
                 "fallbacks": []
             }
-            console.print(f"    [green]✓[/green] Found: h1 → {text[:50]}...")
+            if logger:
+                logger.info("pattern_found", field="title", selector='h1', sample_value=text[:50])
+            else:
+                console.print(f"    [green]✓[/green] Found: h1 → {text[:50]}...")
 
     if title_pattern:
         # Add h1 as fallback if og:title was primary
@@ -176,10 +245,16 @@ def analyze_html(html, url):
                 })
         patterns["patterns"]["title"] = title_pattern
     else:
-        console.print("    [red]✗[/red] No title pattern found")
+        if logger:
+            logger.warning("pattern_not_found", field="title")
+        else:
+            console.print("    [red]✗[/red] No title pattern found")
 
     # Extract Image
-    console.print("  [yellow]→[/yellow] Finding image patterns...")
+    if logger:
+        logger.info("extracting_field", field="image")
+    else:
+        console.print("  [yellow]→[/yellow] Finding image patterns...")
     image_pattern = None
 
     # Try Open Graph
@@ -200,15 +275,24 @@ def analyze_html(html, url):
                 "confidence": 0.95
             }]
         }
-        console.print(f"    [green]✓[/green] Found: og:image → {og_image.get('content')[:60]}...")
+        if logger:
+            logger.info("pattern_found", field="image", selector='og:image', sample_value=og_image.get('content')[:60])
+        else:
+            console.print(f"    [green]✓[/green] Found: og:image → {og_image.get('content')[:60]}...")
 
     if image_pattern:
         patterns["patterns"]["image"] = image_pattern
     else:
-        console.print("    [red]✗[/red] No image pattern found")
+        if logger:
+            logger.warning("pattern_not_found", field="image")
+        else:
+            console.print("    [red]✗[/red] No image pattern found")
 
     # Extract Availability/Stock
-    console.print("  [yellow]→[/yellow] Finding availability patterns...")
+    if logger:
+        logger.info("extracting_field", field="availability")
+    else:
+        console.print("  [yellow]→[/yellow] Finding availability patterns...")
     avail_pattern = None
 
     # Look for stock-related elements
@@ -239,7 +323,10 @@ def analyze_html(html, url):
                         "confidence": 0.85
                     }]
                 }
-                console.print(f"    [green]✓[/green] Found: {selector} → {title}")
+                if logger:
+                    logger.info("pattern_found", field="availability", selector=selector, sample_value=title)
+                else:
+                    console.print(f"    [green]✓[/green] Found: {selector} → {title}")
                 break
             else:
                 avail_pattern = {
@@ -257,10 +344,16 @@ def analyze_html(html, url):
     if avail_pattern:
         patterns["patterns"]["availability"] = avail_pattern
     else:
-        console.print("    [red]✗[/red] No availability pattern found")
+        if logger:
+            logger.warning("pattern_not_found", field="availability")
+        else:
+            console.print("    [red]✗[/red] No availability pattern found")
 
     # Extract Article Number (Varenummer/SKU)
-    console.print("  [yellow]→[/yellow] Finding article number patterns...")
+    if logger:
+        logger.info("extracting_field", field="article_number")
+    else:
+        console.print("  [yellow]→[/yellow] Finding article number patterns...")
     article_pattern = None
 
     # Try itemprop="sku"
@@ -276,7 +369,10 @@ def analyze_html(html, url):
             },
             "fallbacks": []
         }
-        console.print(f"    [green]✓[/green] Found: [itemprop='sku'] → {sku_value}")
+        if logger:
+            logger.info("pattern_found", field="article_number", selector='[itemprop="sku"]', sample_value=sku_value)
+        else:
+            console.print(f"    [green]✓[/green] Found: [itemprop='sku'] → {sku_value}")
 
     # Try searching for "Varenummer" or "Article" labels
     if not article_pattern:
@@ -303,10 +399,16 @@ def analyze_html(html, url):
     if article_pattern:
         patterns["patterns"]["article_number"] = article_pattern
     else:
-        console.print("    [red]✗[/red] No article number pattern found")
+        if logger:
+            logger.warning("pattern_not_found", field="article_number")
+        else:
+            console.print("    [red]✗[/red] No article number pattern found")
 
     # Extract Model Number (Manufacturer number)
-    console.print("  [yellow]→[/yellow] Finding model number patterns...")
+    if logger:
+        logger.info("extracting_field", field="model_number")
+    else:
+        console.print("  [yellow]→[/yellow] Finding model number patterns...")
     model_pattern = None
 
     # Try searching in JSON data attributes (common in e-commerce sites)
@@ -354,7 +456,10 @@ def analyze_html(html, url):
                     },
                     "fallbacks": []
                 }
-                console.print(f"    [green]✓[/green] Found: JSON data → {model_num}")
+                if logger:
+                    logger.info("pattern_found", field="model_number", selector=selector, sample_value=model_num)
+                else:
+                    console.print(f"    [green]✓[/green] Found: JSON data → {model_num}")
                 break
         except Exception as e:
             # Silently continue to next element
@@ -379,13 +484,19 @@ def analyze_html(html, url):
                             },
                             "fallbacks": []
                         }
-                        console.print(f"    [green]✓[/green] Found: {label_text} → {value}")
+                        if logger:
+                            logger.info("pattern_found", field="model_number", selector=f"{label.name}:contains('{label_text[:10]}') + {value_elem.name}", sample_value=value)
+                        else:
+                            console.print(f"    [green]✓[/green] Found: {label_text} → {value}")
                         break
 
     if model_pattern:
         patterns["patterns"]["model_number"] = model_pattern
     else:
-        console.print("    [red]✗[/red] No model number pattern found")
+        if logger:
+            logger.warning("pattern_not_found", field="model_number")
+        else:
+            console.print("    [red]✗[/red] No model number pattern found")
 
     # Calculate overall confidence
     confidences = []
@@ -398,16 +509,24 @@ def analyze_html(html, url):
         "overall_confidence": sum(confidences) / len(confidences) if confidences else 0.0
     }
 
+    if logger:
+        logger.info("analyze_html_completed",
+                   fields_found=patterns["metadata"]["fields_found"],
+                   overall_confidence=patterns["metadata"]["overall_confidence"])
+
     return patterns
 
 
-async def generate_patterns(url):
+async def generate_patterns(url, log_format='console'):
     """Main function to generate patterns from URL."""
 
-    console.print(Panel.fit(
-        f"[bold cyan]Pattern Generator[/bold cyan]\n\nURL: {url}",
-        border_style="cyan"
-    ))
+    if log_format == 'console':
+        console.print(Panel.fit(
+            f"[bold cyan]Pattern Generator[/bold cyan]\n\nURL: {url}",
+            border_style="cyan"
+        ))
+    elif logger:
+        logger.info("pattern_generation_started", url=url)
 
     # Fetch page
     html = await fetch_page(url)
@@ -416,49 +535,71 @@ async def generate_patterns(url):
     patterns = analyze_html(html, url)
 
     # Display summary
-    console.print(f"\n[bold green]✓ Pattern Generation Complete[/bold green]\n")
-    console.print(f"Store Domain: {patterns['store_domain']}")
-    console.print(f"Fields Found: {patterns['metadata']['fields_found']}/6")
-    console.print(f"Confidence: {patterns['metadata']['overall_confidence']:.2%}\n")
+    if log_format == 'console':
+        console.print(f"\n[bold green]✓ Pattern Generation Complete[/bold green]\n")
+        console.print(f"Store Domain: {patterns['store_domain']}")
+        console.print(f"Fields Found: {patterns['metadata']['fields_found']}/6")
+        console.print(f"Confidence: {patterns['metadata']['overall_confidence']:.2%}\n")
 
     # Save to file
     output_file = f"{patterns['store_domain'].replace('.', '_')}_patterns.json"
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(patterns, f, indent=2, ensure_ascii=False)
 
-    console.print(f"[green]✓[/green] Patterns saved to: [cyan]{output_file}[/cyan]\n")
-
-    # Pretty print patterns
-    console.print("[bold]Generated Patterns:[/bold]")
-    console.print(json.dumps(patterns, indent=2, ensure_ascii=False))
+    if log_format == 'console':
+        console.print(f"[green]✓[/green] Patterns saved to: [cyan]{output_file}[/cyan]\n")
+        # Pretty print patterns
+        console.print("[bold]Generated Patterns:[/bold]")
+        console.print(json.dumps(patterns, indent=2, ensure_ascii=False))
+    elif logger:
+        logger.info("pattern_generation_completed",
+                   output_file=output_file,
+                   store_domain=patterns['store_domain'],
+                   fields_found=patterns['metadata']['fields_found'],
+                   confidence=patterns['metadata']['overall_confidence'])
 
     return patterns
 
 
 def main():
-    if len(sys.argv) < 2:
-        console.print("[red]Error:[/red] Please provide a URL")
-        console.print("\nUsage: python generate_pattern.py <url>")
-        console.print("\nExample:")
-        console.print("  python generate_pattern.py https://www.komplett.no/product/1310167/...")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="Generate extraction patterns for a product URL")
+    parser.add_argument('url', help='Product URL to analyze')
+    parser.add_argument('--domain', help='Domain name override (optional)')
+    parser.add_argument('--log-format', choices=['console', 'json'], default='console',
+                       help='Log output format (default: console)')
 
-    url = sys.argv[1]
+    args = parser.parse_args()
+
+    url = args.url
+    log_format = args.log_format
 
     if not url.startswith('http'):
         console.print("[red]Error:[/red] URL must start with http:// or https://")
         sys.exit(1)
 
+    # Setup logging based on format
+    global logger
+    logger = setup_logging(log_format)
+
     try:
-        patterns = asyncio.run(generate_patterns(url))
-        console.print("\n[bold green]✓ SUCCESS[/bold green]")
+        patterns = asyncio.run(generate_patterns(url, log_format))
+        if log_format == 'console':
+            console.print("\n[bold green]✓ SUCCESS[/bold green]")
+        else:
+            logger.info("pattern_generation_success")
     except KeyboardInterrupt:
-        console.print("\n\n[yellow]Interrupted by user[/yellow]")
+        if log_format == 'console':
+            console.print("\n\n[yellow]Interrupted by user[/yellow]")
+        else:
+            logger.warning("pattern_generation_interrupted")
         sys.exit(130)
     except Exception as e:
-        console.print(f"\n[bold red]✗ Error:[/bold red] {e}")
-        import traceback
-        traceback.print_exc()
+        if log_format == 'console':
+            console.print(f"\n[bold red]✗ Error:[/bold red] {e}")
+            import traceback
+            traceback.print_exc()
+        else:
+            logger.error("pattern_generation_failed", error=str(e), exc_info=True)
         sys.exit(1)
 
 

@@ -188,6 +188,9 @@ STEALTH_ARGS = [
     # Disable automation flags
     '--disable-blink-features=AutomationControlled',
 
+    # HTTP/2 can cause issues with some sites (e.g., komplett.no)
+    '--disable-http2',
+
     # Memory and performance
     '--disable-dev-shm-usage',
 

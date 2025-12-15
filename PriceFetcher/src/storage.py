@@ -29,6 +29,17 @@ class PriceStorage:
         self.db_path = Path(db_path)
         logger.info("storage_initialized", db_path=str(self.db_path))
 
+    @staticmethod
+    def _normalize_product_name(name: str) -> str:
+        """
+        Normalize product name for matching (mirrors WebUI/app/models.py:normalize_name).
+        """
+        if not name:
+            return ""
+        normalized = re.sub(r"[^\w\s]", "", name.lower())
+        normalized = re.sub(r"\s+", " ", normalized).strip()
+        return normalized
+
     def _get_connection(self) -> sqlite3.Connection:
         """Get database connection."""
         if not self.db_path.exists():
@@ -438,6 +449,20 @@ class PriceStorage:
                             END
                         """)
                         update_values.append(title)
+
+                        # Keep canonical_name in sync for placeholder products.
+                        # Existing data may have a real name but still a placeholder canonical_name
+                        # if it was updated outside Django (direct SQL from the fetcher).
+                        canonical_title = self._normalize_product_name(title)
+                        update_fields.append("""
+                            canonical_name = CASE
+                                WHEN canonical_name LIKE 'product from %'
+                                  OR canonical_name IS NULL
+                                  OR canonical_name = '' THEN ?
+                                ELSE canonical_name
+                            END
+                        """)
+                        update_values.append(canonical_title)
 
                     if image_url:
                         # Update image_url only if currently empty

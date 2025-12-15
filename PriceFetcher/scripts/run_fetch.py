@@ -39,19 +39,33 @@ from src.fetcher import PriceFetcher
 from src.models import FetchSummary
 
 
-def setup_logging(verbose: bool = False):
+def setup_logging(verbose: bool = False, log_format: str = 'console'):
     """Configure structured logging."""
     log_level = "DEBUG" if verbose else "INFO"
 
-    structlog.configure(
-        processors=[
+    if log_format == 'json':
+        # JSON output for parsing and storage
+        processors = [
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.processors.add_log_level,
+            structlog.processors.CallsiteParameterAdder(
+                [structlog.processors.CallsiteParameter.FILENAME]
+            ),
+            structlog.processors.JSONRenderer(),
+        ]
+    else:
+        # Console output for human readability
+        processors = [
             structlog.processors.TimeStamper(fmt="iso"),
             structlog.processors.add_log_level,
             structlog.processors.CallsiteParameterAdder(
                 [structlog.processors.CallsiteParameter.FILENAME]
             ),
             structlog.dev.ConsoleRenderer(),
-        ],
+        ]
+
+    structlog.configure(
+        processors=processors,
         wrapper_class=structlog.make_filtering_bound_logger(
             getattr(logging, log_level)
         ),
@@ -101,11 +115,17 @@ async def main():
         action="store_true",
         help="Output results as JSON",
     )
+    parser.add_argument(
+        "--log-format",
+        choices=["console", "json"],
+        default="console",
+        help="Log output format (default: console)",
+    )
 
     args = parser.parse_args()
 
     # Setup logging
-    setup_logging(args.verbose)
+    setup_logging(args.verbose, args.log_format)
     logger = structlog.get_logger()
 
     # Load configuration

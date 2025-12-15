@@ -1,15 +1,14 @@
 # ExtractorPatternAgent
 
-AI-powered web scraping pattern generator built with Claude Agent SDK. Automatically analyzes e-commerce websites and generates reliable extraction patterns for product pricing and metadata.
+Web scraping pattern generator that analyzes e-commerce websites and generates reliable extraction patterns for product pricing and metadata.
 
 ## Features
 
-- **Intelligent Pattern Generation**: Uses Claude AI to analyze HTML and generate optimal selectors
+- **Heuristic Pattern Generation**: Analyzes HTML structure to find price, title, image, and availability data
 - **Multiple Extraction Strategies**: Prioritizes JSON-LD, meta tags, semantic CSS, and XPath
-- **Automatic Validation**: Tests patterns and validates extracted data quality
+- **Stealth Browser**: Uses Playwright with anti-detection measures
 - **Pattern Storage**: SQLite database for persistent pattern management
 - **Rich CLI Interface**: User-friendly command-line tool with colored output
-- **Flexible Architecture**: Modular design with custom MCP tools
 
 ## Installation
 
@@ -39,102 +38,48 @@ playwright install chromium
 
 ## Usage
 
-### CLI Commands
-
-#### Generate Patterns
+### Generate Patterns
 
 Generate extraction patterns for a product URL:
 
 ```bash
-uv run extractor-cli.py generate https://www.example.com/product/123
+# Basic usage
+python generate_pattern.py https://www.example.com/product/123
 
-# Save to file
-uv run extractor-cli.py generate https://www.example.com/product/123 -o patterns.json
-
-# Use custom config
-uv run extractor-cli.py generate https://www.example.com/product/123 -c config/settings.yaml
+# With domain override
+python generate_pattern.py https://www.example.com/product/123 --domain example.com
 ```
 
-#### Validate Patterns
+The script will:
+1. Fetch the page using Playwright with stealth mode
+2. Analyze HTML structure for price, title, image, and availability
+3. Generate CSS/XPath selectors with fallbacks
+4. Save patterns to a JSON file (e.g., `example_com_patterns.json`)
 
-Test patterns against a URL:
+### Integration with Celery
 
-```bash
-# Validate patterns from database
-uv run extractor-cli.py validate https://www.example.com/product/456 -d example.com
+The WebUI Celery tasks call this script via subprocess:
 
-# Validate patterns from file
-uv run extractor-cli.py validate https://www.example.com/product/456 -p patterns.json
+```python
+# From WebUI/app/tasks.py
+result = subprocess.run([
+    'python',
+    '/extractor/generate_pattern.py',
+    url,
+    '--domain', domain
+], ...)
 ```
 
-#### List Stored Patterns
+### CLI Tool (Alternative)
 
-View all patterns in the database:
+The `extractor-cli.py` provides additional commands:
 
 ```bash
+# List stored patterns
 uv run extractor-cli.py list
-```
 
-#### Export Patterns
-
-Export patterns to JSON:
-
-```bash
+# Export patterns
 uv run extractor-cli.py export example.com -o exported_patterns.json
-```
-
-#### Custom Queries
-
-Send custom queries to the agent:
-
-```bash
-uv run extractor-cli.py query "What tools are available?"
-```
-
-### Python API
-
-#### Basic Usage
-
-```python
-import asyncio
-from src.agent import ExtractorPatternAgent
-
-async def main():
-    url = "https://www.example.com/product/123"
-
-    async with ExtractorPatternAgent() as agent:
-        # Generate patterns
-        patterns = await agent.generate_patterns(url)
-        print(patterns)
-
-        # Validate patterns
-        validation = await agent.validate_patterns(url, patterns)
-        print(validation)
-
-asyncio.run(main())
-```
-
-#### Advanced Usage with Validation Loop
-
-```python
-async def generate_with_validation(url: str, max_retries: int = 3):
-    async with ExtractorPatternAgent() as agent:
-        for attempt in range(max_retries):
-            # Generate patterns
-            patterns = await agent.generate_patterns(url, save_to_db=False)
-
-            # Validate
-            validation = await agent.validate_patterns(url, patterns)
-
-            if validation["success"] and validation["overall_confidence"] >= 0.7:
-                # Save successful patterns
-                return patterns
-            elif attempt < max_retries - 1:
-                # Refine based on feedback
-                feedback = f"Confidence too low: {validation['overall_confidence']}"
-                patterns = await agent.refine_patterns(feedback)
-
-        raise Exception("Failed to generate valid patterns")
 ```
 
 ## Architecture
@@ -143,28 +88,24 @@ async def generate_with_validation(url: str, max_retries: int = 3):
 
 ```
 ExtractorPatternAgent/
+├── generate_pattern.py       # Main pattern generator (used in production)
+├── extractor-cli.py          # CLI interface
 ├── src/
-│   ├── agent.py              # Main agent implementation
-│   ├── tools/                # Custom MCP tools
-│   │   ├── browser.py        # Playwright browser tools
-│   │   ├── parser.py         # HTML analysis tools
-│   │   ├── validator.py      # Pattern validation tools
-│   │   └── storage.py        # SQLite storage tools
+│   ├── utils/
+│   │   ├── stealth.py        # Anti-detection utilities
+│   │   ├── html_utils.py     # HTML processing
+│   │   └── selector_utils.py # Selector generation
 │   ├── models/               # Data models
 │   │   ├── pattern.py        # Pattern data structures
 │   │   └── validation.py     # Validation result models
-│   └── utils/                # Utility functions
-│       ├── html_utils.py     # HTML processing
-│       └── selector_utils.py # Selector generation
+│   └── tools/                # Tool implementations
+│       ├── parser.py         # HTML analysis
+│       └── validator.py      # Pattern validation
 ├── config/
 │   └── settings.yaml         # Configuration
 ├── examples/
-│   ├── basic_usage.py        # Basic example
-│   └── advanced_usage.py     # Advanced example with validation
-├── tests/
-│   ├── test_agent.py         # Agent tests
-│   └── test_tools.py         # Tool tests
-└── extractor-cli.py          # CLI interface (UV compatible)
+│   └── basic_usage.py        # Usage example
+└── tests/                    # Test files
 ```
 
 ### Pattern Structure
@@ -237,30 +178,15 @@ The agent prioritizes extraction methods in this order:
    - Last resort with text matching
    - Example: `//span[contains(@class, 'price')]`
 
-## Tools Available
+## Extraction Methods
 
-The agent has access to these custom MCP tools:
+The pattern generator tries these methods in order:
 
-### Browser Tools
-- `fetch_page`: Fetch HTML from URL
-- `render_js`: Render JavaScript-heavy pages
-- `screenshot_page`: Take page screenshots
-
-### Parser Tools
-- `extract_structured_data`: Extract JSON-LD and meta tags
-- `analyze_selectors`: Analyze HTML for selector candidates
-- `extract_with_selector`: Test extraction with specific selector
-
-### Validator Tools
-- `test_pattern`: Test selector against HTML
-- `validate_extraction`: Validate extracted data format
-- `validate_pattern_result`: Validate complete pattern result
-
-### Storage Tools
-- `save_pattern`: Save patterns to database
-- `load_pattern`: Load patterns from database
-- `list_patterns`: List all stored patterns
-- `delete_pattern`: Delete patterns
+1. **data-price attribute**: `[data-price]` elements
+2. **JSON-LD**: `<script type="application/ld+json">` structured data
+3. **Meta tags**: Open Graph (`og:price:amount`) and product meta tags
+4. **CSS selectors**: Common patterns like `.price`, `.product-price`, `#price`
+5. **Class-based**: Elements with "price" in class name
 
 ## Testing
 
@@ -319,33 +245,24 @@ python examples/advanced_usage.py https://www.example.com/product/123
 
 ### Project Structure
 
-- `src/agent.py`: Core agent implementation using Claude SDK
-- `src/tools/`: Custom MCP tools for web scraping
-- `src/models/`: Pydantic models for data validation
-- `src/utils/`: Helper functions for HTML and selector processing
-
-### Adding New Tools
-
-1. Create tool in `src/tools/`
-2. Add to `src/tools/__init__.py`
-3. Update agent's allowed_tools list in `src/agent.py`
+- `generate_pattern.py`: Main pattern generator script
+- `src/utils/stealth.py`: Browser anti-detection utilities
+- `src/models/`: Data models for patterns and validation
+- `src/tools/`: Parser and validator utilities
 
 ### Adding New Field Types
 
-1. Update extraction strategy in agent system prompt
+1. Add extraction logic in `generate_pattern.py` `analyze_html()` function
 2. Add validation logic in `src/tools/validator.py`
 3. Update pattern schema in `src/models/pattern.py`
 
 ## Dependencies
 
 Core dependencies:
-- `claude-agent-sdk`: Claude Agent SDK
-- `playwright`: Browser automation
+- `playwright`: Browser automation with stealth capabilities
 - `beautifulsoup4`: HTML parsing
 - `lxml`: XPath support
-- `click`: CLI framework
 - `rich`: Terminal formatting
-- `pyyaml`: Configuration management
 
 ## License
 
@@ -362,6 +279,5 @@ Contributions welcome! Please:
 ## Support
 
 For issues and questions:
-- Check the [Architecture documentation](ARCHITECTURE.md)
 - Review the examples in `examples/`
-- Open an issue on GitHub
+- Check the main project [README](../README.md)

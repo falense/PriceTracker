@@ -83,15 +83,19 @@ The theme switcher is located in the top navigation bar (moon/sun icon).
 
 ## Database Models
 
-Seven core models implemented:
+Multi-store data model with user subscriptions:
 
-1. **Product** - Tracked products with pricing and alerts
-2. **PriceHistory** - Historical price records
-3. **Pattern** - Extraction patterns per domain
-4. **Notification** - User notifications
-5. **FetchLog** - Fetch attempt logs
-6. **UserView** - User engagement analytics
-7. **AdminFlag** - Admin attention flags
+1. **Product** - Normalized product entity (no URL, shared across stores)
+2. **Store** - Merchant/retailer entity with domain and rate limits
+3. **ProductListing** - Product at a specific store (URL, price, availability)
+4. **UserSubscription** - User subscription to a product with priority settings
+5. **PriceHistory** - Historical price records per listing
+6. **Pattern** - Extraction patterns per store domain
+7. **PatternHistory** - Version history for patterns with rollback support
+8. **Notification** - User notifications linked to subscriptions
+9. **FetchLog** - Fetch attempt logs per listing
+10. **UserView** - User engagement analytics
+11. **AdminFlag** - Admin attention flags
 
 ## Development
 
@@ -122,15 +126,6 @@ python manage.py check
 - **Task Queue**: Celery + Redis
 - **Charts**: Chart.js
 - **Icons**: Heroicons
-
-## Next Steps
-
-- [ ] Implement product adding functionality
-- [ ] Integrate with ExtractorPatternAgent
-- [ ] Implement price fetching service
-- [ ] Add HTMX dynamic interactions
-- [ ] Build notification system
-- [ ] Create admin dashboard
 
 ## License
 

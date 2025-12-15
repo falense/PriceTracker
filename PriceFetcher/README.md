@@ -165,26 +165,28 @@ Environment variables (override config):
 ### Data Flow
 
 ```
-1. Load products from app_product WHERE last_checked + check_interval <= NOW
-2. For each domain:
-   a. Load pattern from app_pattern
-   b. For each product:
-      - Fetch HTML (with rate limiting)
-      - Apply pattern (CSS → XPath → JSON-LD → meta)
-      - Validate extraction
-      - Store in app_pricehistory
-      - Log in app_fetchlog
-      - Update app_product.last_checked
+1. Celery Beat triggers fetch_prices_by_aggregated_priority every 5 minutes
+2. PriorityAggregationService determines which products are due for checking
+3. For each product listing:
+   a. Load pattern from app_pattern for the store domain
+   b. Fetch HTML (with rate limiting)
+   c. Apply pattern (CSS → XPath → JSON-LD → meta)
+   d. Validate extraction
+   e. Store in app_pricehistory
+   f. Log in app_fetchlog
+   g. Update app_productlisting.last_checked
 ```
 
 ## Database Schema
 
 Uses Django-created tables (see WebUI/app/models.py):
 
-- **`app_product`**: Tracked products
-- **`app_pricehistory`**: Historical prices
+- **`app_product`**: Normalized product entities
+- **`app_store`**: Store/retailer information
+- **`app_productlisting`**: Product listings per store (URLs, prices)
+- **`app_pricehistory`**: Historical prices per listing
 - **`app_pattern`**: Extraction patterns per domain
-- **`app_fetchlog`**: Fetch success/failure logs
+- **`app_fetchlog`**: Fetch success/failure logs per listing
 
 ## Logging
 
@@ -299,13 +301,14 @@ mypy src/
 
 ## Deployment
 
-See `../DEPLOYMENT.md` for Docker Compose setup.
+Run with Docker Compose from the project root:
 
-Quick start:
 ```bash
 cd ..
-docker-compose up -d pricefetcher
+docker-compose up -d
 ```
+
+The PriceFetcher runs as part of the Celery worker service. See `docker-compose.yml` for configuration.
 
 ## Troubleshooting
 

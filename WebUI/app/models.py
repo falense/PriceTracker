@@ -848,6 +848,99 @@ class AdminFlag(models.Model):
         self.save(update_fields=['status', 'resolved_at', 'resolved_by', 'updated_at'])
 
 
+class OperationLog(models.Model):
+    """
+    Unified operation logs from all services (Celery, PriceFetcher, ExtractorPatternAgent).
+    Stores structured log entries for debugging and monitoring.
+    """
+    SERVICE_CHOICES = [
+        ('celery', 'Celery Task'),
+        ('fetcher', 'Price Fetcher'),
+        ('extractor', 'Pattern Extractor'),
+    ]
+
+    LEVEL_CHOICES = [
+        ('DEBUG', 'Debug'),
+        ('INFO', 'Info'),
+        ('WARNING', 'Warning'),
+        ('ERROR', 'Error'),
+        ('CRITICAL', 'Critical'),
+    ]
+
+    id = models.BigAutoField(primary_key=True)
+
+    # Source tracking
+    service = models.CharField(max_length=50, choices=SERVICE_CHOICES, db_index=True)
+    task_id = models.CharField(
+        max_length=100,
+        db_index=True,
+        null=True,
+        blank=True,
+        help_text='Celery task ID for correlation'
+    )
+
+    # Context (nullable to support logs not tied to specific products/listings)
+    listing = models.ForeignKey(
+        ProductListing,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='operation_logs'
+    )
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='operation_logs'
+    )
+
+    # Log entry
+    level = models.CharField(max_length=10, choices=LEVEL_CHOICES, db_index=True)
+    event = models.CharField(
+        max_length=100,
+        db_index=True,
+        help_text='Structured event name (e.g., fetch_page_started, pattern_found)'
+    )
+    message = models.TextField(blank=True, help_text='Human-readable message')
+    context = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Structured context data (all log fields as JSON)'
+    )
+
+    # Module info
+    filename = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text='Source file (e.g., fetcher.py, storage.py)'
+    )
+
+    # Timing
+    timestamp = models.DateTimeField(db_index=True)
+    duration_ms = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text='Operation duration in milliseconds'
+    )
+
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['service', '-timestamp']),
+            models.Index(fields=['task_id', '-timestamp']),
+            models.Index(fields=['level', '-timestamp']),
+            models.Index(fields=['listing', '-timestamp']),
+            models.Index(fields=['product', '-timestamp']),
+            models.Index(fields=['event', '-timestamp']),
+        ]
+        verbose_name = 'Operation Log'
+        verbose_name_plural = 'Operation Logs'
+
+    def __str__(self):
+        return f"[{self.level}] {self.service}: {self.event} at {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
+
+
 # ========== Signals ==========
 
 from django.db.models.signals import pre_save, post_save

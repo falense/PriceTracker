@@ -11,7 +11,7 @@ Track product prices across multiple online stores, get alerts on price drops, a
 - **Automatic Price Tracking**: Monitor product prices with configurable check intervals
 - **AI-Powered Pattern Generation**: Automatically learns how to extract prices from any website
 - **Smart Notifications**: Get alerts for price drops, target prices, and restocks
-- **Priority Levels**: High, normal, and low priority tracking (15min, 1hr, 24hr intervals)
+- **Priority Levels**: Normal and low priority tracking (1hr, 24hr intervals)
 - **Multi-User Support**: Each user can track their own products
 - **Price History**: View historical price data with charts
 - **Django Admin**: Manage products, patterns, and view system health
@@ -138,17 +138,13 @@ REDIS_URL=redis://redis:6379/0
 CELERY_BROKER_URL=redis://redis:6379/0
 ```
 
-### Priority Levels
+### Priority System
 
-Configure in `WebUI/config/celery.py`:
+The system uses aggregated priority scheduling. Celery Beat runs a single task every 5 minutes that checks all products and queues fetches based on the highest priority set by any subscriber.
 
-```python
-CELERY_BEAT_SCHEDULE = {
-    'high-priority': {'schedule': 900.0},   # 15 minutes
-    'normal-priority': {'schedule': 3600.0},  # 1 hour
-    'low-priority': {'schedule': 86400.0},   # 24 hours
-}
-```
+Priority intervals:
+- **Normal**: Check every hour (3600 seconds)
+- **Low**: Check daily (86400 seconds)
 
 ## 🛠️ Development
 
@@ -202,52 +198,35 @@ celery -A config beat -l info
 
 ## 📚 Documentation
 
-- **[ARCHITECTURE.md](ARCHITECTURE.md)**: Detailed system architecture and design decisions
-- **[DEPLOYMENT.md](DEPLOYMENT.md)**: Production deployment guide
+- **[IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)**: Current implementation status and data model
+- **[ADMIN_ACCESS.md](ADMIN_ACCESS.md)**: Admin user management guide
 - **Component READMEs**:
   - [WebUI/README.md](WebUI/README.md)
   - [ExtractorPatternAgent/README.md](ExtractorPatternAgent/README.md)
   - [PriceFetcher/README.md](PriceFetcher/README.md)
 
-## 🐛 Known Issues
-
-### Minor Issues (Non-blocking)
-
-1. **PriceFetcher Logging Bug** (5 min fix)
-   - Location: `PriceFetcher/scripts/run_fetch.py:53`
-   - Issue: `structlog.stdlib` doesn't have `INFO` attribute
-   - Fix: Use `logging.INFO` instead
-
-2. **Pattern Database Integration** (10 min)
-   - ExtractorPatternAgent saves to JSON instead of database
-   - Workaround: Parse JSON in Celery task and save manually
-
 ## 🔮 Roadmap
 
 ### Completed ✅
 - [x] Django WebUI with user authentication
-- [x] Product tracking with priority levels
+- [x] Multi-store product tracking with user subscriptions
+- [x] Aggregated priority scheduling
 - [x] Celery task queue with periodic scheduling
 - [x] ExtractorPatternAgent with headless browser
 - [x] PriceFetcher with retry logic
 - [x] Docker deployment
 - [x] Notification system
 - [x] Django admin interface
+- [x] Pattern version history with rollback
 
-### Remaining (5% to 100%)
-- [ ] Fix PriceFetcher logging (5 minutes)
-- [ ] Pattern database integration (10 minutes)
+### Future Enhancements
 - [ ] Add health check endpoints
 - [ ] Implement email notifications
 - [ ] Add price history charts
 - [ ] PostgreSQL migration guide
-
-### Future Enhancements
 - [ ] Support for more e-commerce platforms
-- [ ] Mobile app (React Native)
 - [ ] Browser extension
 - [ ] Advanced analytics dashboard
-- [ ] Machine learning for price prediction
 - [ ] Multi-currency support
 - [ ] Webhook integrations
 
@@ -275,8 +254,7 @@ Contributions welcome! Please read our contributing guidelines (TODO: add CONTRI
 
 For issues and questions:
 - **GitHub Issues**: [Repository Issues](link-to-issues)
-- **Email**: support@pricetracker.com (TODO: add email)
-- **Documentation**: See [ARCHITECTURE.md](ARCHITECTURE.md)
+- **Documentation**: See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)
 
 ---
 
