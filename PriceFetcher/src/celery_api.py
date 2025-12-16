@@ -30,7 +30,7 @@ load_config = _fetcher_config.load_config
 from src.fetcher import PriceFetcher
 from src.models import FetchSummary
 
-logger = structlog.get_logger()
+logger = structlog.get_logger(__name__).bind(service='fetcher')
 
 
 async def fetch_listing_price_direct(

@@ -9,10 +9,11 @@ These tasks handle async operations:
 
 from celery import shared_task
 from django.utils import timezone
-import logging
+import structlog
 import asyncio
 
-logger = logging.getLogger(__name__)
+# Use structlog with service='celery' for all task logging
+logger = structlog.get_logger(__name__).bind(service='celery')
 
 
 @shared_task(bind=True, max_retries=3)
@@ -106,9 +107,27 @@ async def _fetch_listing_price_async(task_self, listing_id: str):
     """Async implementation of fetch_listing_price."""
     from django.conf import settings
     from PriceFetcher.src.celery_api import fetch_listing_price_direct
+    from app.models import ProductListing
+    from asgiref.sync import sync_to_async
 
     try:
-        logger.info(f"Fetching price for listing {listing_id}")
+        # Get listing using sync_to_async to avoid async context errors
+        listing = await sync_to_async(
+            lambda: ProductListing.objects.select_related('product', 'store').get(id=listing_id)
+        )()
+
+        # Create task-specific logger with context
+        task_logger = logger.bind(
+            task_id=task_self.request.id,
+            listing_id=str(listing.id),
+            product_id=str(listing.product.id),
+        )
+
+        task_logger.info(
+            "fetch_listing_started",
+            url=listing.url,
+            store=listing.store.domain,
+        )
 
         # Get database path from Django settings
         db_path = str(settings.DATABASES['default']['NAME'])
@@ -119,11 +138,32 @@ async def _fetch_listing_price_async(task_self, listing_id: str):
             db_path=db_path
         )
 
-        logger.info(f"Price fetch completed for listing {listing_id}: {result['status']}")
+        task_logger.info(
+            "fetch_listing_completed",
+            status=result['status'],
+            price=result.get('price'),
+        )
         return result
 
+    except ProductListing.DoesNotExist:
+        logger.error(
+            "fetch_listing_not_found",
+            task_id=task_self.request.id,
+            listing_id=listing_id,
+        )
+        return {
+            'status': 'error',
+            'listing_id': listing_id,
+            'error': 'Listing not found'
+        }
     except Exception as e:
-        logger.exception(f"Price fetch error for listing {listing_id}")
+        logger.error(
+            "fetch_listing_error",
+            task_id=task_self.request.id,
+            listing_id=listing_id,
+            error=str(e),
+            exc_info=True,
+        )
         return {
             'status': 'error',
             'listing_id': listing_id,

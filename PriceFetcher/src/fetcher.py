@@ -22,7 +22,8 @@ from .stealth import (
     wait_for_stable_load,
 )
 
-logger = structlog.get_logger()
+# Bind service='fetcher' to all logs from this module
+logger = structlog.get_logger(__name__).bind(service='fetcher')
 
 
 class PriceFetcher:

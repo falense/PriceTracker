@@ -13,7 +13,7 @@ import structlog
 
 from .models import ExtractionResult, Product, ValidationResult
 
-logger = structlog.get_logger()
+logger = structlog.get_logger(__name__).bind(service='fetcher')
 
 
 class PriceStorage:

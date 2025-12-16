@@ -9,7 +9,7 @@ import structlog
 
 from .models import ExtractionPattern, FieldPattern, PatternSelector
 
-logger = structlog.get_logger()
+logger = structlog.get_logger(__name__).bind(service='fetcher')
 
 
 class PatternLoader:

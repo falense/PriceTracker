@@ -183,37 +183,40 @@ def subscription_detail(request, subscription_id):
         # Get service filter from query params
         service_filter = request.GET.get('service', 'all')
 
-        # Base query: logs for this product in last 24 hours
-        logs_query = subscription.product.operation_logs.filter(
+        # Base query: logs for this product in last 24 hours (unfiltered)
+        base_logs_query = subscription.product.operation_logs.filter(
             timestamp__gte=time_since
         ).select_related('listing', 'listing__store')
 
-        # Apply service filter if specified
-        if service_filter != 'all':
-            logs_query = logs_query.filter(service=service_filter)
+        # Calculate statistics on the FULL queryset (before applying service filter)
+        # This ensures accurate counts even when a service filter is active
+        total_logs_all_services = base_logs_query.count()
+        error_count_all_services = base_logs_query.filter(level='ERROR').count()
+        warning_count_all_services = base_logs_query.filter(level='WARNING').count()
 
-        # Calculate statistics on the full queryset (before slicing)
-        total_logs = logs_query.count()
-        error_count = logs_query.filter(level='ERROR').count()
-        warning_count = logs_query.filter(level='WARNING').count()
-
-        # Count by service
+        # Count by service (always from unfiltered query for accurate breakdown)
         service_counts = {
-            'fetcher': logs_query.filter(service='fetcher').count(),
-            'extractor': logs_query.filter(service='extractor').count(),
-            'celery': logs_query.filter(service='celery').count(),
+            'fetcher': base_logs_query.filter(service='fetcher').count(),
+            'extractor': base_logs_query.filter(service='extractor').count(),
+            'celery': base_logs_query.filter(service='celery').count(),
         }
 
+        # Apply service filter for display (after stats calculation)
+        if service_filter != 'all':
+            filtered_logs_query = base_logs_query.filter(service=service_filter)
+        else:
+            filtered_logs_query = base_logs_query
+
         # Order by most recent first, limit to 100 entries
-        logs = logs_query.order_by('-timestamp')[:100]
+        logs = filtered_logs_query.order_by('-timestamp')[:100]
 
         # Add to context
         context.update({
             'operation_logs': logs,
             'log_stats': {
-                'total': total_logs,
-                'errors': error_count,
-                'warnings': warning_count,
+                'total': total_logs_all_services,  # Always show total across all services
+                'errors': error_count_all_services,
+                'warnings': warning_count_all_services,
                 'service_counts': service_counts,
             },
             'service_filter': service_filter,

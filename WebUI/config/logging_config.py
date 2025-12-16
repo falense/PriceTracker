@@ -102,6 +102,20 @@ def configure_structlog(environment: str = None) -> None:
     ))
     logging.getLogger().addHandler(handler)
 
+    # Add DatabaseLogHandler for persistent log storage
+    # Enable in all environments (development, production, celery) for debugging and monitoring
+    try:
+        from app.logging_handlers import DatabaseLogHandler
+        db_handler = DatabaseLogHandler(level=logging.INFO)
+        logging.getLogger().addHandler(db_handler)
+
+        # Log that database logging is enabled
+        logger = structlog.get_logger(__name__)
+        logger.debug("database_log_handler_enabled", environment=environment)
+    except ImportError:
+        # Handler not available yet (e.g., during migrations)
+        pass
+
     # Set log levels
     if environment == 'development':
         logging.getLogger().setLevel(logging.DEBUG)

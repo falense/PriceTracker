@@ -9,7 +9,7 @@ from lxml import html as lxml_html
 
 from .models import ExtractionPattern, ExtractionResult, ExtractedField, PatternSelector
 
-logger = structlog.get_logger()
+logger = structlog.get_logger(__name__).bind(service='fetcher')
 
 
 class Extractor:
