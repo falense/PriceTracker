@@ -52,6 +52,62 @@ def celery_monitor_refresh(request):
         return render(request, 'admin/partials/celery_stats.html', {'stats': {}, 'recent_tasks': []})
 
 
+# ========== Inline Classes ==========
+
+class OperationLogInline(admin.TabularInline):
+    """Display OperationLog entries inline on related admin pages."""
+    model = OperationLog
+    extra = 0
+    can_delete = False
+    max_num = 20
+    fields = ['timestamp', 'level', 'service', 'event', 'message_short', 'task_id_short']
+    readonly_fields = ['timestamp', 'level', 'service', 'event', 'message_short', 'task_id_short']
+    ordering = ['-timestamp']
+    
+    def message_short(self, obj):
+        """Truncate long messages for inline display."""
+        if len(obj.message) > 80:
+            return obj.message[:77] + '...'
+        return obj.message
+    message_short.short_description = 'Message'
+    
+    def task_id_short(self, obj):
+        """Show shortened task ID."""
+        if obj.task_id:
+            return obj.task_id[:8] + '...' if len(obj.task_id) > 8 else obj.task_id
+        return '-'
+    task_id_short.short_description = 'Task'
+    
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+class FetchLogInline(admin.TabularInline):
+    """Display FetchLog entries inline on ProductListing admin pages."""
+    model = FetchLog
+    extra = 0
+    can_delete = False
+    max_num = 15
+    fields = ['fetched_at', 'success', 'extraction_method', 'duration_ms', 'errors_summary']
+    readonly_fields = ['fetched_at', 'success', 'extraction_method', 'duration_ms', 'errors_summary']
+    ordering = ['-fetched_at']
+    
+    def errors_summary(self, obj):
+        """Show error count or first error."""
+        if obj.errors:
+            error_count = len(obj.errors)
+            if error_count > 0:
+                first_error = str(obj.errors[0])[:50]
+                return f"{error_count} error(s): {first_error}..."
+        return '-'
+    errors_summary.short_description = 'Errors'
+    
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+# ========== Admin Classes ==========
+
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
     list_display = ['name', 'brand', 'subscriber_count', 'created_at']
@@ -59,6 +115,7 @@ class ProductAdmin(admin.ModelAdmin):
     search_fields = ['name', 'canonical_name', 'brand', 'model_number', 'ean', 'upc', 'isbn']
     readonly_fields = ['id', 'canonical_name', 'subscriber_count', 'created_at', 'updated_at']
     actions = ['merge_products']
+    inlines = [OperationLogInline]
     fieldsets = (
         ('Product Information', {
             'fields': ('id', 'name', 'canonical_name', 'brand', 'model_number', 'category', 'image_url')
@@ -155,6 +212,7 @@ class ProductListingAdmin(admin.ModelAdmin):
     search_fields = ['product__name', 'url', 'store__name', 'store_product_id']
     readonly_fields = ['id', 'created_at', 'updated_at', 'total_price']
     actions = ['refresh_prices']
+    inlines = [FetchLogInline, OperationLogInline]
     fieldsets = (
         ('Listing Information', {
             'fields': ('id', 'product', 'store', 'url', 'store_product_id')

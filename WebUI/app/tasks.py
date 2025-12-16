@@ -10,13 +10,25 @@ These tasks handle async operations:
 from celery import shared_task
 from django.utils import timezone
 import structlog
+from structlog.contextvars import bind_contextvars, clear_contextvars
 import asyncio
 
 # Use structlog with service='celery' for all task logging
 logger = structlog.get_logger(__name__).bind(service='celery')
 
+# Task timeout settings (in seconds)
+FETCH_TASK_SOFT_LIMIT = 180  # 3 minutes - sends SoftTimeLimitExceeded
+FETCH_TASK_HARD_LIMIT = 210  # 3.5 minutes - kills task
+PATTERN_TASK_SOFT_LIMIT = 300  # 5 minutes
+PATTERN_TASK_HARD_LIMIT = 330  # 5.5 minutes
 
-@shared_task(bind=True, max_retries=3)
+
+@shared_task(
+    bind=True,
+    max_retries=3,
+    soft_time_limit=PATTERN_TASK_SOFT_LIMIT,
+    time_limit=PATTERN_TASK_HARD_LIMIT,
+)
 def generate_pattern(self, url: str, domain: str, listing_id: str = None):
     """
     Trigger ExtractorPatternAgent to generate extraction patterns.
@@ -29,7 +41,21 @@ def generate_pattern(self, url: str, domain: str, listing_id: str = None):
     Returns:
         dict: Status and pattern data
     """
-    return asyncio.run(_generate_pattern_async(self, url, domain, listing_id))
+    # Bind context for all downstream loggers (PriceFetcher, etc.)
+    clear_contextvars()
+    bind_contextvars(
+        task_id=self.request.id,
+        task_name='generate_pattern',
+        domain=domain,
+        service='celery',
+    )
+    if listing_id:
+        bind_contextvars(listing_id=listing_id)
+
+    try:
+        return asyncio.run(_generate_pattern_async(self, url, domain, listing_id))
+    finally:
+        clear_contextvars()
 
 
 async def _generate_pattern_async(task_self, url: str, domain: str, listing_id: str = None):
@@ -89,7 +115,12 @@ async def _generate_pattern_async(task_self, url: str, domain: str, listing_id: 
         }
 
 
-@shared_task(bind=True, max_retries=3)
+@shared_task(
+    bind=True,
+    max_retries=3,
+    soft_time_limit=FETCH_TASK_SOFT_LIMIT,
+    time_limit=FETCH_TASK_HARD_LIMIT,
+)
 def fetch_listing_price(self, listing_id: str):
     """
     Trigger PriceFetcher to get current price for a product listing.
@@ -100,7 +131,19 @@ def fetch_listing_price(self, listing_id: str):
     Returns:
         dict: Price data and metadata
     """
-    return asyncio.run(_fetch_listing_price_async(self, listing_id))
+    # Bind context for all downstream loggers (PriceFetcher, etc.)
+    clear_contextvars()
+    bind_contextvars(
+        task_id=self.request.id,
+        task_name='fetch_listing_price',
+        listing_id=listing_id,
+        service='celery',
+    )
+
+    try:
+        return asyncio.run(_fetch_listing_price_async(self, listing_id))
+    finally:
+        clear_contextvars()
 
 
 async def _fetch_listing_price_async(task_self, listing_id: str):
@@ -116,14 +159,14 @@ async def _fetch_listing_price_async(task_self, listing_id: str):
             lambda: ProductListing.objects.select_related('product', 'store').get(id=listing_id)
         )()
 
-        # Create task-specific logger with context
-        task_logger = logger.bind(
-            task_id=task_self.request.id,
-            listing_id=str(listing.id),
+        # Add product_id to shared context for downstream loggers
+        bind_contextvars(
             product_id=str(listing.product.id),
+            url=listing.url,
+            store=listing.store.domain,
         )
 
-        task_logger.info(
+        logger.info(
             "fetch_listing_started",
             url=listing.url,
             store=listing.store.domain,
@@ -138,7 +181,7 @@ async def _fetch_listing_price_async(task_self, listing_id: str):
             db_path=db_path
         )
 
-        task_logger.info(
+        logger.info(
             "fetch_listing_completed",
             status=result['status'],
             price=result.get('price'),
@@ -148,7 +191,6 @@ async def _fetch_listing_price_async(task_self, listing_id: str):
     except ProductListing.DoesNotExist:
         logger.error(
             "fetch_listing_not_found",
-            task_id=task_self.request.id,
             listing_id=listing_id,
         )
         return {
@@ -159,7 +201,6 @@ async def _fetch_listing_price_async(task_self, listing_id: str):
     except Exception as e:
         logger.error(
             "fetch_listing_error",
-            task_id=task_self.request.id,
             listing_id=listing_id,
             error=str(e),
             exc_info=True,
@@ -274,7 +315,10 @@ def cleanup_old_logs():
     return {'deleted': deleted_count}
 
 
-@shared_task
+@shared_task(
+    soft_time_limit=FETCH_TASK_SOFT_LIMIT,
+    time_limit=FETCH_TASK_HARD_LIMIT,
+)
 def fetch_missing_images():
     """
     Daily task to fetch images for products that don't have them.
@@ -282,7 +326,16 @@ def fetch_missing_images():
     Processes up to 50 products per run to avoid overload.
     This catches new products and retries for products where image extraction failed.
     """
-    return asyncio.run(_fetch_missing_images_async())
+    clear_contextvars()
+    bind_contextvars(
+        task_name='fetch_missing_images',
+        service='celery',
+    )
+
+    try:
+        return asyncio.run(_fetch_missing_images_async())
+    finally:
+        clear_contextvars()
 
 
 async def _fetch_missing_images_async():

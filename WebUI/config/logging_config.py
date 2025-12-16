@@ -6,6 +6,7 @@ use consistent logging configuration. This eliminates the need for per-task
 logging setup.
 """
 
+import contextvars
 import logging
 import os
 import sys
@@ -30,6 +31,38 @@ def add_request_id(logger: logging.Logger, method_name: str, event_dict: EventDi
     """
     # TODO: Extract request_id from Django request context when middleware is added
     return event_dict
+
+
+# Context variable to store event_dict for DatabaseLogHandler
+_current_event_dict: contextvars.ContextVar[Dict[str, Any]] = contextvars.ContextVar(
+    'current_event_dict', default={}
+)
+
+
+def save_event_dict_to_record(
+    logger: logging.Logger, method_name: str, event_dict: EventDict
+) -> EventDict:
+    """
+    Save event_dict to the LogRecord and context variable for DatabaseLogHandler.
+
+    This processor is called twice:
+    1. From structlog's processor chain (has bound context like product_id, service)
+    2. From ProcessorFormatter's foreign_pre_chain (does NOT have bound context)
+
+    We only save from the first call (when _from_structlog is NOT present)
+    because that's when we have the full bound context.
+    """
+    # Only save if this is NOT from foreign_pre_chain (indicated by _from_structlog)
+    # The first call (from structlog) won't have _from_structlog
+    if '_from_structlog' not in event_dict:
+        _current_event_dict.set(dict(event_dict))
+
+    return event_dict
+
+
+def get_current_event_dict() -> Dict[str, Any]:
+    """Get the current event_dict from context variable storage."""
+    return _current_event_dict.get()
 
 
 def configure_structlog(environment: str = None) -> None:
@@ -59,21 +92,23 @@ def configure_structlog(environment: str = None) -> None:
         structlog.processors.TimeStamper(fmt="iso", utc=True),
         structlog.stdlib.PositionalArgumentsFormatter(),
         structlog.processors.StackInfoRenderer(),
+        save_event_dict_to_record,  # Save context for DatabaseLogHandler
     ]
 
     # Environment-specific configuration
     if environment == 'development':
-        # Development: colorful console output with key-value pairs
+        # Development: use render_to_log_kwargs to pass event_dict to stdlib
+        # Then ProcessorFormatter renders to console
         processors = shared_processors + [
             structlog.processors.ExceptionRenderer(),
-            structlog.dev.ConsoleRenderer(colors=True)
+            structlog.stdlib.render_to_log_kwargs,  # Pass event_dict to LogRecord
         ]
         renderer = structlog.dev.ConsoleRenderer(colors=True)
     else:
         # Production/Celery: JSON output for log aggregation
         processors = shared_processors + [
             structlog.processors.format_exc_info,
-            structlog.processors.JSONRenderer()
+            structlog.stdlib.render_to_log_kwargs,  # Pass event_dict to LogRecord
         ]
         renderer = structlog.processors.JSONRenderer()
 

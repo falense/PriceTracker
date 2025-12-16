@@ -35,35 +35,55 @@ Track product prices across multiple online stores, get alerts on price drops, a
 └────────┬────────┘
          │ HTTP/HTMX
          ↓
-┌─────────────────────────────────┐
-│  WebUI (Django + Celery)        │
-│  - Product Management           │
-│  - User Authentication          │
-│  - Notifications                │
-└───────┬──────────────┬──────────┘
-        │              │
-        │              │ Celery Tasks
-        ↓              ↓
-┌──────────────┐  ┌──────────────────┐
-│ ExtractorAI  │  │  PriceFetcher    │
-│ (Pattern Gen)│  │  (Fetch Prices)  │
-└───────┬──────┘  └────────┬─────────┘
-        │                   │
-        └───────┬───────────┘
-                ↓
-        ┌───────────────┐
-        │ SQLite / DB   │
-        └───────────────┘
+┌─────────────────────────────────────────────────┐
+│  WebUI (Django + Celery)                        │
+│  - Product Management                           │
+│  - User Authentication                          │
+│  - Notifications                                │
+│                                                  │
+│  Celery Tasks (tasks.py):                       │
+│    ├─ generate_pattern()                        │
+│    │   └─> PatternGenerator.generate()          │
+│    │                                             │
+│    ├─ fetch_listing_price()                     │
+│    │   └─> fetch_listing_price_direct()         │
+│    │                                             │
+│    └─ fetch_missing_images()                    │
+│        └─> backfill_images_direct()             │
+└────────┬────────────────────┬───────────────────┘
+         │                    │
+         │ Direct Imports     │ Direct Imports
+         ↓                    ↓
+┌────────────────────┐  ┌─────────────────────┐
+│ PatternGenerator   │  │ PriceFetcher API    │
+│ (Python Class)     │  │ (celery_api.py)     │
+│  - fetch_page()    │  │  - fetch_listing_   │
+│  - analyze_html()  │  │    price_direct()   │
+│  - generate()      │  │  - backfill_images_ │
+└─────────┬──────────┘  │    direct()         │
+          │             └──────────┬──────────┘
+          └───────────┬────────────┘
+                      ↓
+              ┌───────────────┐
+              │ SQLite / DB   │
+              └───────────────┘
 ```
 
 ### Components
 
 1. **WebUI**: Django web application with HTMX for dynamic UI
-2. **ExtractorPatternAgent**: Claude-powered agent that analyzes websites and generates extraction patterns
-3. **PriceFetcher**: Async worker that fetches prices using generated patterns
-4. **Celery**: Distributed task queue for background jobs
+2. **PatternGenerator**: Python class that analyzes websites and generates extraction patterns using AI
+3. **PriceFetcher API**: Async Python functions for fetching prices using generated patterns
+4. **Celery**: Distributed task queue for background jobs (direct Python imports, no subprocesses)
 5. **Redis**: Message broker and result backend
 6. **Flower**: Real-time Celery monitoring
+
+### Architecture Highlights
+
+- **Direct Import Architecture**: Celery tasks import `PatternGenerator` and `PriceFetcher` APIs directly as Python modules
+- **No Subprocess Overhead**: All components run within the same Python process for better performance
+- **Async Support**: Both PatternGenerator and PriceFetcher support async/await for efficient I/O
+- **Shared Database**: All components access a shared SQLite database for consistency
 
 ## 🚀 Quick Start
 

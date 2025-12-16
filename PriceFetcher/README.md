@@ -59,7 +59,51 @@ pip install -r requirements.txt
 
 ## Usage
 
-### Manual Execution
+### Python API (Recommended for Celery Integration)
+
+The `celery_api.py` module provides async functions for direct integration with Django Celery tasks:
+
+```python
+from PriceFetcher.src.celery_api import fetch_listing_price_direct, backfill_images_direct
+
+# Fetch a single listing
+result = await fetch_listing_price_direct(
+    listing_id="123e4567-e89b-12d3-a456-426614174000",
+    db_path="/path/to/db.sqlite3"
+)
+
+# Backfill missing images
+stats = await backfill_images_direct(
+    db_path="/path/to/db.sqlite3",
+    limit=50,
+    request_delay=2.0
+)
+```
+
+**Celery Integration Example:**
+
+```python
+from celery import shared_task
+from PriceFetcher.src.celery_api import fetch_listing_price_direct
+from django.conf import settings
+import asyncio
+
+@shared_task
+def fetch_listing_price(listing_id: str):
+    return asyncio.run(_fetch_async(listing_id))
+
+async def _fetch_async(listing_id: str):
+    db_path = str(settings.DATABASES['default']['NAME'])
+    result = await fetch_listing_price_direct(
+        listing_id=listing_id,
+        db_path=db_path
+    )
+    return result
+```
+
+### CLI Scripts (For Manual Testing)
+
+#### Manual Execution
 
 ```bash
 # Fetch all products due for checking
@@ -77,6 +121,8 @@ uv run scripts/run_fetch.py --db-path /path/to/db.sqlite3
 # Use custom config
 uv run scripts/run_fetch.py --config /path/to/config.yaml
 ```
+
+**Note:** For production use with Celery, prefer the Python API over CLI scripts.
 
 ### Automated Execution (Cron)
 
@@ -106,6 +152,105 @@ docker run --rm -v $(pwd)/../db.sqlite3:/app/db.sqlite3 pricefetcher
 
 # Run as cron job (use docker-compose)
 docker-compose up -d
+```
+
+## API Reference
+
+### Celery API Functions
+
+The `celery_api.py` module provides async functions designed for Celery task integration.
+
+#### `async fetch_listing_price_direct(listing_id: str, db_path: str, config_path: Optional[str] = None) -> Dict`
+
+Fetch price for a specific product listing.
+
+**Parameters:**
+- `listing_id` (str): ProductListing UUID (with or without hyphens)
+- `db_path` (str): Path to shared SQLite database
+- `config_path` (Optional[str]): Path to config file (uses default if not provided)
+
+**Returns:**
+- `Dict`: Result dictionary containing:
+  - `status` (str): 'success', 'failed', or 'error'
+  - `listing_id` (str): Listing UUID
+  - `product_id` (str): Product UUID (if found)
+  - `url` (str): Product URL (if found)
+  - `extraction` (dict): Extracted data (if successful)
+  - `validation` (dict): Validation results (if successful)
+  - `duration_ms` (int): Fetch duration in milliseconds
+  - `error` (str): Error message (if failed)
+
+**Example:**
+```python
+from PriceFetcher.src.celery_api import fetch_listing_price_direct
+
+result = await fetch_listing_price_direct(
+    listing_id="123e4567-e89b-12d3-a456-426614174000",
+    db_path="/app/db.sqlite3"
+)
+
+if result['status'] == 'success':
+    print(f"Price: {result['extraction']['price']}")
+    print(f"Confidence: {result['validation']['confidence']}")
+```
+
+#### `async fetch_all_due_prices(db_path: str, config_path: Optional[str] = None) -> Dict`
+
+Fetch prices for all products due for checking.
+
+**Parameters:**
+- `db_path` (str): Path to shared SQLite database
+- `config_path` (Optional[str]): Path to config file (uses default if not provided)
+
+**Returns:**
+- `Dict`: Summary dictionary containing:
+  - `status` (str): 'success' or 'error'
+  - `total` (int): Total products processed
+  - `success` (int): Successful fetches
+  - `failed` (int): Failed fetches
+  - `duration_seconds` (float): Total duration
+  - `products` (list): List of product results
+  - `error` (str): Error message (if failed)
+
+**Example:**
+```python
+from PriceFetcher.src.celery_api import fetch_all_due_prices
+
+summary = await fetch_all_due_prices(db_path="/app/db.sqlite3")
+print(f"Processed {summary['total']} products")
+print(f"Success rate: {summary['success']}/{summary['total']}")
+```
+
+#### `async backfill_images_direct(db_path: str, limit: int = 50, request_delay: float = 2.0) -> Dict`
+
+Backfill images for products that don't have them.
+
+**Parameters:**
+- `db_path` (str): Path to shared SQLite database
+- `limit` (int): Maximum number of products to process (default: 50)
+- `request_delay` (float): Delay between requests in seconds (default: 2.0)
+
+**Returns:**
+- `Dict`: Statistics dictionary containing:
+  - `status` (str): 'success' or 'error'
+  - `total` (int): Total products processed
+  - `success` (int): Successfully fetched images
+  - `failed` (int): Failed fetches
+  - `skipped` (int): Products already with images
+  - `no_pattern` (int): Products without patterns
+  - `duration_seconds` (float): Total duration
+  - `error` (str): Error message (if failed)
+
+**Example:**
+```python
+from PriceFetcher.src.celery_api import backfill_images_direct
+
+stats = await backfill_images_direct(
+    db_path="/app/db.sqlite3",
+    limit=100,
+    request_delay=1.5
+)
+print(f"Backfilled {stats['success']}/{stats['total']} images")
 ```
 
 ## Configuration

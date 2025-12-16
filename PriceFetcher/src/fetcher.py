@@ -319,7 +319,11 @@ class PriceFetcher:
         use_enhanced_stealth = any(site in domain for site in difficult_sites)
 
         for attempt in range(self.max_retries):
+            playwright = None
             browser = None
+            context = None
+            page = None
+
             try:
                 logger.debug(
                     "browser_fetch_starting",
@@ -328,9 +332,12 @@ class PriceFetcher:
                     enhanced_stealth=use_enhanced_stealth,
                 )
 
-                async with async_playwright() as p:
+                # Start Playwright - managed manually for proper cleanup
+                playwright = await async_playwright().start()
+
+                try:
                     # Launch browser with stealth args
-                    browser = await p.chromium.launch(
+                    browser = await playwright.chromium.launch(
                         headless=True,
                         args=STEALTH_ARGS
                     )
@@ -372,19 +379,35 @@ class PriceFetcher:
                         html_length=len(html),
                     )
 
-                    await browser.close()
                     return html
+
+                finally:
+                    # Cleanup in reverse order: page -> context -> browser -> playwright
+                    # Use timeouts to prevent hanging on cleanup
+                    if page:
+                        try:
+                            await asyncio.wait_for(page.close(), timeout=5.0)
+                        except Exception:
+                            pass
+                    if context:
+                        try:
+                            await asyncio.wait_for(context.close(), timeout=5.0)
+                        except Exception:
+                            pass
+                    if browser:
+                        try:
+                            await asyncio.wait_for(browser.close(), timeout=5.0)
+                        except Exception:
+                            pass
+                    if playwright:
+                        try:
+                            await asyncio.wait_for(playwright.stop(), timeout=5.0)
+                        except Exception:
+                            pass
 
             except Exception as e:
                 last_error = e
                 error_msg = str(e)
-
-                # Close browser on error
-                if browser:
-                    try:
-                        await browser.close()
-                    except Exception:
-                        pass
 
                 # Categorize errors for retry logic
                 should_retry = True

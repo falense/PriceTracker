@@ -38,7 +38,56 @@ playwright install chromium
 
 ## Usage
 
-### Generate Patterns
+### Python API (Recommended for Integration)
+
+The `PatternGenerator` class provides a clean async API for integration with Django, Celery, and other Python applications:
+
+```python
+from ExtractorPatternAgent import PatternGenerator
+
+# Initialize the generator
+generator = PatternGenerator()
+
+# Generate patterns (async)
+pattern_data = await generator.generate(url="https://example.com/product", domain="example.com")
+
+# Pattern data contains:
+# {
+#   "store_domain": "example.com",
+#   "url": "https://example.com/product",
+#   "patterns": {
+#     "price": {"primary": {...}, "fallbacks": [...]},
+#     "title": {...},
+#     "image": {...},
+#     "availability": {...}
+#   },
+#   "metadata": {
+#     "fields_found": 4,
+#     "overall_confidence": 0.85,
+#     ...
+#   }
+# }
+```
+
+**Celery Integration Example:**
+
+```python
+from celery import shared_task
+from ExtractorPatternAgent import PatternGenerator
+
+@shared_task
+async def generate_pattern(url: str, domain: str):
+    generator = PatternGenerator()
+    pattern_data = await generator.generate(url, domain)
+    # Save to database...
+    return pattern_data
+```
+
+### CLI Scripts (Legacy)
+
+For manual testing and debugging, use the standalone scripts:
+
+#### Generate Patterns (generate_pattern.py)
 
 Generate extraction patterns for a product URL:
 
@@ -56,21 +105,11 @@ The script will:
 3. Generate CSS/XPath selectors with fallbacks
 4. Save patterns to a JSON file (e.g., `example_com_patterns.json`)
 
-### Integration with Celery
+**Note:** For production use, prefer the Python API over subprocess calls.
 
-The WebUI Celery tasks call this script via subprocess:
+#### CLI Tool (Alternative)
 
-```python
-# From WebUI/app/tasks.py
-result = subprocess.run([
-    'python',
-    '/extractor/generate_pattern.py',
-    url,
-    '--domain', domain
-], ...)
-```
-
-### CLI Tool (Alternative)
+The `extractor-cli.py` provides additional commands:
 
 The `extractor-cli.py` provides additional commands:
 
@@ -80,6 +119,80 @@ uv run extractor-cli.py list
 
 # Export patterns
 uv run extractor-cli.py export example.com -o exported_patterns.json
+```
+
+## API Reference
+
+### PatternGenerator Class
+
+The main class for pattern generation, designed for integration with Python applications.
+
+**Constructor:**
+```python
+PatternGenerator(logger: Optional[structlog.BoundLogger] = None)
+```
+
+**Methods:**
+
+#### `async generate(url: str, domain: str) -> Dict[str, Any]`
+
+Generate extraction patterns for a product page.
+
+**Parameters:**
+- `url` (str): Product URL to analyze
+- `domain` (str): Store domain (e.g., "amazon.com", "ebay.com")
+
+**Returns:**
+- `Dict[str, Any]`: Pattern data containing:
+  - `store_domain`: Normalized domain
+  - `url`: Original URL
+  - `patterns`: Extraction patterns for each field (price, title, image, availability)
+  - `metadata`: Generation metadata (fields_found, confidence, etc.)
+
+**Example:**
+```python
+generator = PatternGenerator()
+patterns = await generator.generate(
+    url="https://www.amazon.com/dp/B08N5WRWNW",
+    domain="amazon.com"
+)
+print(f"Found {patterns['metadata']['fields_found']} fields")
+print(f"Confidence: {patterns['metadata']['overall_confidence']}")
+```
+
+#### `async fetch_page(url: str) -> str`
+
+Fetch a page using Playwright with stealth capabilities.
+
+**Parameters:**
+- `url` (str): URL to fetch
+
+**Returns:**
+- `str`: HTML content
+
+**Example:**
+```python
+generator = PatternGenerator()
+html = await generator.fetch_page("https://example.com/product")
+```
+
+#### `analyze_html(html: str, url: str) -> Dict[str, Any]`
+
+Analyze HTML and generate extraction patterns without fetching.
+
+**Parameters:**
+- `html` (str): HTML content to analyze
+- `url` (str): Original URL (for domain extraction)
+
+**Returns:**
+- `Dict[str, Any]`: Pattern data (same structure as `generate()`)
+
+**Example:**
+```python
+generator = PatternGenerator()
+with open("product_page.html") as f:
+    html = f.read()
+patterns = generator.analyze_html(html, "https://example.com/product")
 ```
 
 ## Architecture

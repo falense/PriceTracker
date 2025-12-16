@@ -9,6 +9,16 @@ docker compose up -d
 
 Services: `web` (8000), `celery`, `celery-beat`, `redis` (6379), `flower` (5555)
 
+## Testing
+
+All automated tests must run inside the already running Docker Compose stack so they use the exact deployment containers. Make sure `docker compose up -d` is active, then exec into the `web` service:
+
+```bash
+# Example invocations
+docker compose exec web pytest
+docker compose exec web python manage.py test
+```
+
 ## Technology Stack
 
 | Component | Technology |
@@ -29,16 +39,17 @@ Services: `web` (8000), `celery`, `celery-beat`, `redis` (6379), `flower` (5555)
 │                                                              │
 │  ┌──────────┐      ┌─────────────────────────────────────┐  │
 │  │  Redis   │◄────►│  Celery Worker                      │  │
-│  │  :6379   │      │  - Runs ExtractorPatternAgent       │  │
-│  └────┬─────┘      │  - Runs PriceFetcher                │  │
+│  │  :6379   │      │  - Imports PatternGenerator         │  │
+│  └────┬─────┘      │  - Imports celery_api               │  │
 │       │            │  - Processes async tasks            │  │
 │       │            └─────────────────────────────────────┘  │
 │       │                         │                            │
-│       │                         │ subprocess calls           │
+│       │                         │ direct function calls      │
 │       │                         ▼                            │
 │       │            ┌─────────────────────────────────────┐  │
-│       │            │  /extractor/generate_pattern.py     │  │
-│       │            │  /fetcher/scripts/run_fetch.py      │  │
+│       │            │  PatternGenerator.generate()        │  │
+│       │            │  fetch_listing_price_direct()       │  │
+│       │            │  backfill_images_direct()           │  │
 │       │            └─────────────────────────────────────┘  │
 │       │                         │                            │
 │       ▼                         ▼                            │
@@ -67,14 +78,78 @@ Product (normalized)
 |------|---------|
 | `docker-compose.yml` | Service orchestration |
 | `WebUI/app/models.py` | Database models |
-| `WebUI/app/tasks.py` | Celery task definitions |
+| `WebUI/app/tasks.py` | Celery task definitions (uses direct imports) |
 | `WebUI/config/celery.py` | Beat schedule (5-min aggregated priority) |
-| `ExtractorPatternAgent/generate_pattern.py` | Pattern generation |
-| `PriceFetcher/scripts/run_fetch.py` | Price fetching |
+| `ExtractorPatternAgent/src/pattern_generator.py` | PatternGenerator class API |
+| `PriceFetcher/src/celery_api.py` | Direct Celery integration functions |
 
 ## Task Flow
 
 1. **User adds product URL** → WebUI creates Product + Listing + Subscription
-2. **Pattern needed?** → Celery triggers `generate_pattern.py` via subprocess
+2. **Pattern needed?** → Celery task imports `PatternGenerator` and calls `generate()` method directly
 3. **Every 5 minutes** → `fetch_prices_by_aggregated_priority` queues due products
-4. **Price fetched** → Updates Listing, creates PriceHistory, triggers Notifications
+4. **Price fetched** → Celery task imports `fetch_listing_price_direct()` and calls it directly
+5. **Result stored** → Updates Listing, creates PriceHistory, triggers Notifications
+
+## Architecture Details
+
+### Direct Import Pattern
+
+The system uses **direct Python imports** instead of subprocess calls:
+
+**Old (subprocess-based):**
+```python
+# ❌ Legacy approach
+subprocess.run(['python', '/extractor/generate_pattern.py', url])
+```
+
+**New (direct import):**
+```python
+# ✅ Current approach
+from ExtractorPatternAgent import PatternGenerator
+generator = PatternGenerator()
+pattern_data = await generator.generate(url, domain)
+```
+
+**Benefits:**
+- Better performance (no subprocess overhead)
+- Proper async/await support
+- Easier debugging and error handling
+- Type safety and IDE support
+- Shared logging context
+
+### Celery Task Examples
+
+**Pattern Generation:**
+```python
+from celery import shared_task
+from ExtractorPatternAgent import PatternGenerator
+
+@shared_task
+def generate_pattern(url: str, domain: str):
+    return asyncio.run(_generate_async(url, domain))
+
+async def _generate_async(url: str, domain: str):
+    generator = PatternGenerator()
+    pattern_data = await generator.generate(url, domain)
+    # Save to database...
+    return pattern_data
+```
+
+**Price Fetching:**
+```python
+from celery import shared_task
+from PriceFetcher.src.celery_api import fetch_listing_price_direct
+
+@shared_task
+def fetch_listing_price(listing_id: str):
+    return asyncio.run(_fetch_async(listing_id))
+
+async def _fetch_async(listing_id: str):
+    db_path = str(settings.DATABASES['default']['NAME'])
+    result = await fetch_listing_price_direct(
+        listing_id=listing_id,
+        db_path=db_path
+    )
+    return result
+```
