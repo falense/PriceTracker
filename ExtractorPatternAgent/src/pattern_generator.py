@@ -4,6 +4,7 @@ import re
 import structlog
 from pathlib import Path
 from typing import Optional, Dict, Any
+from datetime import datetime
 from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
@@ -417,6 +418,202 @@ class PatternGenerator:
                             "fallbacks": []
                         }
         return None
+
+    def _generate_selector_code(self, selector_config: Dict, indent: str = "    ") -> str:
+        """
+        Generate Python code for a selector configuration.
+
+        Args:
+            selector_config: Selector dict from JSON pattern
+            indent: Indentation string
+
+        Returns:
+            Python code as string
+        """
+        selector_type = selector_config.get('type')
+        selector = selector_config.get('selector')
+        attribute = selector_config.get('attribute')
+        json_path = selector_config.get('json_path')
+
+        # Escape double quotes in selector for Python string
+        if selector:
+            selector = selector.replace('"', '\\"')
+        if attribute:
+            attribute = attribute.replace('"', '\\"')
+        if json_path:
+            json_path = json_path.replace('"', '\\"')
+
+        if selector_type == 'css':
+            if json_path:
+                # CSS + JSON path (e.g., data-initobject)
+                return f"""{indent}# Extract from JSON in {attribute}
+{indent}elem = soup.select_one("{selector}")
+{indent}if elem and elem.get("{attribute}"):
+{indent}    try:
+{indent}        import json
+{indent}        from html import unescape
+{indent}        data_str = unescape(elem.get("{attribute}"))
+{indent}        data = json.loads(data_str)
+{indent}        value = BaseExtractor.extract_json_field(data, "{json_path}")
+{indent}        if value:
+{indent}            return str(value)
+{indent}    except:
+{indent}        pass
+"""
+            elif attribute:
+                # CSS + attribute
+                return f"""{indent}elem = soup.select_one("{selector}")
+{indent}if elem:
+{indent}    value = elem.get("{attribute}")
+{indent}    if value:
+{indent}        return value
+"""
+            else:
+                # CSS text content
+                return f"""{indent}elem = soup.select_one("{selector}")
+{indent}if elem:
+{indent}    return BaseExtractor.clean_text(elem.get_text())
+"""
+
+        elif selector_type == 'meta' or selector_type == 'json':
+            # Meta tag or JSON data
+            return f"""{indent}elem = soup.select_one("{selector}")
+{indent}if elem:
+{indent}    value = elem.get("{attribute or "content"}")
+{indent}    if value:
+{indent}        return value
+"""
+
+        elif selector_type == 'xpath':
+            # XPath (less common)
+            return f"""{indent}# XPath selector: {selector}
+{indent}from lxml import html as lxml_html
+{indent}try:
+{indent}    tree = lxml_html.fromstring(str(soup))
+{indent}    elements = tree.xpath("{selector}")
+{indent}    if elements:
+{indent}        return elements[0].text_content().strip()
+{indent}except:
+{indent}    pass
+"""
+
+        return f"{indent}# TODO: Unsupported selector type: {selector_type}\n{indent}pass\n"
+
+    def _generate_extract_function(self, field_name: str, field_pattern: Dict, confidence: float) -> str:
+        """Generate extract_* function for a field."""
+        primary = field_pattern.get('primary', {})
+        fallbacks = field_pattern.get('fallbacks', [])
+
+        # Determine return type
+        if field_name == 'price':
+            return_type = 'Optional[Decimal]'
+            clean_method = 'BaseExtractor.clean_price'
+        else:
+            return_type = 'Optional[str]'
+            clean_method = 'BaseExtractor.clean_text'
+
+        # Start function
+        func_code = f'''def extract_{field_name}(soup: BeautifulSoup) -> {return_type}:
+    """
+    Extract {field_name}.
+
+    Primary: {primary.get('description', primary.get('selector', 'N/A'))}
+    Confidence: {confidence:.2f}
+    """
+'''
+
+        # Primary selector
+        if primary:
+            func_code += "    # Primary selector\n"
+            func_code += self._generate_selector_code(primary)
+
+            # For price, add cleaning
+            if field_name == 'price' and primary.get('type') == 'css' and not primary.get('json_path'):
+                func_code += f"    if elem:\n"
+                func_code += f"        return {clean_method}(elem.get_text(strip=True))\n"
+
+        # Fallback selectors
+        for i, fallback in enumerate(fallbacks):
+            func_code += f"\n    # Fallback {i+1}: {fallback.get('description', fallback.get('selector', 'N/A'))}\n"
+            func_code += self._generate_selector_code(fallback)
+
+            # For price, add cleaning
+            if field_name == 'price' and fallback.get('type') == 'css' and not fallback.get('json_path'):
+                func_code += f"    if elem:\n"
+                func_code += f"        return {clean_method}(elem.get_text(strip=True))\n"
+
+        func_code += "\n    return None\n"
+
+        return func_code
+
+    def generate_python_module(self, patterns: Dict[str, Any], output_path: Optional[Path] = None) -> str:
+        """
+        Generate Python extractor module from JSON patterns.
+
+        Args:
+            patterns: Pattern dictionary (from analyze_html or generate)
+            output_path: Optional path to save the module
+
+        Returns:
+            Generated Python code as string
+        """
+        domain = patterns.get('store_domain', 'unknown')
+        patterns_data = patterns.get('patterns', {})
+        metadata = patterns.get('metadata', {})
+
+        # Start building Python code
+        code = f'''"""
+Auto-generated extractor for {domain}
+
+Generated on {datetime.now().isoformat()}
+Confidence: {metadata.get('overall_confidence', 0.0):.2f}
+"""
+import re
+from decimal import Decimal
+from typing import Optional
+from bs4 import BeautifulSoup
+from ExtractorPatternAgent.generated_extractors._base import BaseExtractor
+
+
+# Metadata (required for discovery)
+PATTERN_METADATA = {{
+    'domain': '{domain}',
+    'generated_at': '{datetime.now().isoformat()}',
+    'generator': 'PatternGenerator',
+    'version': '1.0',
+    'confidence': {metadata.get('overall_confidence', 0.0):.2f},
+    'fields': {list(patterns_data.keys())},
+    'notes': 'Auto-generated by PatternGenerator'
+}}
+
+
+'''
+
+        # Generate each extract function
+        field_order = ['price', 'title', 'image', 'availability', 'article_number', 'model_number']
+
+        for field_name in field_order:
+            if field_name in patterns_data:
+                field_pattern = patterns_data[field_name]
+                primary_confidence = field_pattern.get('primary', {}).get('confidence', 0.0)
+                code += self._generate_extract_function(field_name, field_pattern, primary_confidence)
+                code += "\n\n"
+            else:
+                # Generate stub for missing fields
+                return_type = 'Optional[Decimal]' if field_name == 'price' else 'Optional[str]'
+                code += f'''def extract_{field_name}(soup: BeautifulSoup) -> {return_type}:
+    """Extract {field_name} (not available in source pattern)."""
+    return None
+
+
+'''
+
+        # Save to file if path provided
+        if output_path:
+            output_path.write_text(code)
+            self.logger.info("python_module_saved", path=str(output_path), domain=domain)
+
+        return code
 
     async def generate(self, url: str, domain: Optional[str] = None) -> Dict[str, Any]:
         """
