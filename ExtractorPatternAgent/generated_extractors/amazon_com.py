@@ -1,7 +1,7 @@
 """
-Auto-generated extractor for www.example.com
+Auto-generated extractor for amazon.com
 
-Converted from JSON pattern on 2025-12-17T15:55:12.744092
+Converted from JSON pattern on 2025-12-17T16:02:31.859862
 Original confidence: 0.00
 """
 import re
@@ -13,12 +13,12 @@ from ._base import BaseExtractor
 
 # Metadata (required for discovery)
 PATTERN_METADATA = {
-    'domain': 'www.example.com',
-    'generated_at': '2025-12-17T15:55:12.744096',
+    'domain': 'amazon.com',
+    'generated_at': '2025-12-17T16:02:31.859866',
     'generator': 'JSON to Python converter',
     'version': '1.0',
     'confidence': 0.00,
-    'fields': ['title'],
+    'fields': [],
     'notes': 'Converted from JSON pattern'
 }
 
@@ -29,17 +29,7 @@ def extract_price(soup: BeautifulSoup) -> Optional[Decimal]:
 
 
 def extract_title(soup: BeautifulSoup) -> Optional[str]:
-    """
-    Extract title.
-
-    Primary: h1
-    Confidence: 0.85
-    """
-    # Primary selector
-    elem = soup.select_one('h1')
-    if elem:
-        return BaseExtractor.clean_text(elem.get_text())
-
+    """Extract title (not available in source pattern)."""
     return None
 
 

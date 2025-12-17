@@ -1,7 +1,7 @@
 """
-Auto-generated extractor for www.example.com
+Auto-generated extractor for power.no
 
-Converted from JSON pattern on 2025-12-17T15:55:12.744092
+Converted from JSON pattern on 2025-12-17T16:02:31.859741
 Original confidence: 0.00
 """
 import re
@@ -13,18 +13,30 @@ from ._base import BaseExtractor
 
 # Metadata (required for discovery)
 PATTERN_METADATA = {
-    'domain': 'www.example.com',
-    'generated_at': '2025-12-17T15:55:12.744096',
+    'domain': 'power.no',
+    'generated_at': '2025-12-17T16:02:31.859745',
     'generator': 'JSON to Python converter',
     'version': '1.0',
     'confidence': 0.00,
-    'fields': ['title'],
+    'fields': ['price', 'title', 'availability'],
     'notes': 'Converted from JSON pattern'
 }
 
 
 def extract_price(soup: BeautifulSoup) -> Optional[Decimal]:
-    """Extract price (not available in source pattern)."""
+    """
+    Extract price.
+
+    Primary: .price
+    Confidence: 0.85
+    """
+    # Primary selector
+    elem = soup.select_one(".price")
+    if elem:
+        return BaseExtractor.clean_text(elem.get_text())
+    if elem:
+        return BaseExtractor.clean_price(elem.get_text(strip=True))
+
     return None
 
 
@@ -36,7 +48,7 @@ def extract_title(soup: BeautifulSoup) -> Optional[str]:
     Confidence: 0.85
     """
     # Primary selector
-    elem = soup.select_one('h1')
+    elem = soup.select_one("h1")
     if elem:
         return BaseExtractor.clean_text(elem.get_text())
 
@@ -49,7 +61,17 @@ def extract_image(soup: BeautifulSoup) -> Optional[str]:
 
 
 def extract_availability(soup: BeautifulSoup) -> Optional[str]:
-    """Extract availability (not available in source pattern)."""
+    """
+    Extract availability.
+
+    Primary: .stocks
+    Confidence: 0.80
+    """
+    # Primary selector
+    elem = soup.select_one(".stocks")
+    if elem:
+        return BaseExtractor.clean_text(elem.get_text())
+
     return None
 
 
