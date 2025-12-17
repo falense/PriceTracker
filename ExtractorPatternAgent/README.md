@@ -2,13 +2,28 @@
 
 Web scraping pattern generator that analyzes e-commerce websites and generates reliable extraction patterns for product pricing and metadata.
 
+## Overview
+
+The ExtractorPatternAgent is a **production component** of the PriceTracker system, fully integrated with Django, PostgreSQL, and Celery. It automatically analyzes product pages and generates CSS/XPath selectors for extracting 6 key fields.
+
+**Key Integration Points:**
+- 🗄️ **PostgreSQL Storage** - Patterns stored in Django ORM (`Pattern` & `PatternHistory` models)
+- ⚙️ **Celery Tasks** - Async pattern generation via `generate_pattern` task
+- 📊 **Success Tracking** - Automatic reliability metrics per pattern
+- 🔄 **Version Control** - Full audit trail of pattern changes with rollback
+- 🧪 **Testing Service** - Built-in pattern validation and testing
+- 🎛️ **Admin UI** - Django Admin interface for pattern management
+
 ## Features
 
-- **Heuristic Pattern Generation**: Analyzes HTML structure to find price, title, image, and availability data
+- **Heuristic Pattern Generation**: Analyzes HTML structure to find 6 product fields
 - **Multiple Extraction Strategies**: Prioritizes JSON-LD, meta tags, semantic CSS, and XPath
-- **Stealth Browser**: Uses Playwright with anti-detection measures
-- **Pattern Storage**: SQLite database for persistent pattern management
-- **Rich CLI Interface**: User-friendly command-line tool with colored output
+- **Stealth Browser**: Uses Playwright with comprehensive anti-detection measures
+- **Pattern Versioning**: Automatic version control with full change history
+- **Success Metrics**: Tracks extraction success rate per pattern
+- **PostgreSQL Storage**: Production patterns stored via Django ORM
+- **Celery Integration**: Async task queue for pattern generation
+- **Testing & Validation**: Built-in services for pattern testing and validation
 
 ## Installation
 
@@ -69,19 +84,33 @@ pattern_data = await generator.generate(url="https://example.com/product", domai
 # }
 ```
 
-**Celery Integration Example:**
+**Production Celery Integration:**
+
+The ExtractorPatternAgent is integrated via the `generate_pattern` Celery task in `WebUI/app/tasks.py`:
 
 ```python
-from celery import shared_task
-from ExtractorPatternAgent import PatternGenerator
+from app.tasks import generate_pattern
 
-@shared_task
-async def generate_pattern(url: str, domain: str):
-    generator = PatternGenerator()
-    pattern_data = await generator.generate(url, domain)
-    # Save to database...
-    return pattern_data
+# Queue pattern generation (async, non-blocking)
+task = generate_pattern.delay(
+    url="https://example.com/product/123",
+    domain="example.com",
+    listing_id="uuid-optional"  # If provided, auto-triggers price fetch
+)
+
+# Check task status
+result = AsyncResult(task.id)
+if result.ready():
+    pattern_data = result.get()
 ```
+
+**What the task does:**
+1. Creates `PatternGenerator` instance
+2. Fetches and analyzes the URL
+3. Saves pattern to `Pattern` model (PostgreSQL)
+4. Creates initial `PatternHistory` entry
+5. Optionally queues price fetch task
+6. Returns pattern data with status
 
 ### CLI Scripts (Legacy)
 
@@ -121,6 +150,187 @@ uv run extractor-cli.py list
 uv run extractor-cli.py export example.com -o exported_patterns.json
 ```
 
+## Integration with PriceTracker
+
+The ExtractorPatternAgent is fully integrated with the PriceTracker Django application:
+
+### Database Integration
+
+Patterns are stored in **PostgreSQL** (not SQLite) via Django ORM:
+
+- **`Pattern` model** - Stores current patterns per store domain
+- **`PatternHistory` model** - Tracks all version changes with audit trail
+
+### Celery Task Integration
+
+Patterns are generated via the Celery task `generate_pattern`:
+
+```python
+from app.tasks import generate_pattern
+
+# Queue pattern generation task
+task = generate_pattern.delay(
+    url="https://example.com/product/123",
+    domain="example.com",
+    listing_id="uuid-here"  # Optional: auto-triggers price fetch after
+)
+```
+
+**What happens:**
+1. PatternGenerator fetches and analyzes the page
+2. Pattern is saved to `Pattern` model in PostgreSQL
+3. Initial `PatternHistory` entry created (version 1)
+4. If `listing_id` provided, price fetch task auto-queued
+5. Task returns pattern data and status
+
+### Pattern Versioning
+
+**Every pattern change is versioned automatically:**
+
+```python
+from app.pattern_services import PatternManagementService
+
+# Update pattern (auto-creates history entry)
+pattern = PatternManagementService.update_pattern(
+    domain="example.com",
+    pattern_json=new_pattern_data,
+    user=request.user,
+    change_reason="Fixed broken price selector"
+)
+
+# Rollback to previous version
+pattern = PatternManagementService.rollback_pattern(
+    domain="example.com",
+    version_number=5,
+    user=request.user
+)
+
+# View version history
+history = PatternHistoryService.get_pattern_history("example.com", limit=20)
+```
+
+**PatternHistory tracks:**
+- Version number (sequential)
+- Pattern JSON snapshot
+- Changed by (User FK)
+- Change reason and type (manual_edit, auto_generated, rollback, etc.)
+- Success rate at time of change
+- Timestamp
+
+### Success Rate Tracking
+
+Patterns track their reliability automatically:
+
+```python
+pattern = Pattern.objects.get(domain="example.com")
+
+# Record extraction attempt
+pattern.record_attempt(success=True)  # Auto-updates success_rate
+
+# Check health
+if pattern.is_healthy:  # success_rate >= 60%
+    print("Pattern is working well!")
+```
+
+**Metrics tracked:**
+- `success_rate` - Percentage of successful extractions
+- `total_attempts` - Number of extraction attempts
+- `successful_attempts` - Number of successful extractions
+- `last_validated` - Last test/validation timestamp
+
+### Pattern Testing & Validation
+
+Built-in services for testing patterns:
+
+```python
+from app.pattern_services import PatternTestService
+
+# Test pattern against URL
+result = PatternTestService.test_pattern_against_url(
+    url="https://example.com/product",
+    pattern_json=pattern.pattern_json,
+    use_cache=True
+)
+
+# Returns:
+# {
+#   'success': True/False,
+#   'extraction': {'price': {'value': '199.99', ...}, ...},
+#   'selector_results': [...],  # Details on each selector
+#   'errors': [],
+#   'warnings': []
+# }
+
+# Validate pattern syntax
+validation = PatternTestService.validate_pattern_syntax(pattern_json)
+if not validation['valid']:
+    print(validation['errors'])
+```
+
+### Admin Interface
+
+Patterns are managed via Django Admin:
+
+- `/admin/app/pattern/` - List all patterns with success rates
+- Pattern detail view - Test, edit, view history
+- Visual field testing - See which selectors match
+- Version comparison - Diff between versions
+- Rollback UI - One-click version rollback
+
+### Data Flow
+
+**Pattern Generation Flow:**
+```
+User adds product URL
+       ↓
+ProductListing created (no pattern exists for domain)
+       ↓
+generate_pattern.delay(url, domain, listing_id)
+       ↓
+PatternGenerator.generate(url, domain)
+  ├─ fetch_page(url) → HTML
+  ├─ analyze_html(html) → pattern_data
+  └─ Return pattern_data
+       ↓
+Pattern.objects.update_or_create(domain, pattern_json)
+       ↓
+PatternHistory.objects.create(version=1, ...)
+       ↓
+[Optional] fetch_listing_price.delay(listing_id)
+```
+
+**Pattern Usage Flow:**
+```
+Celery scheduler triggers fetch_listing_price
+       ↓
+Get ProductListing and related Pattern
+       ↓
+PriceFetcher.fetch_price(url, pattern_json)
+  ├─ Fetch HTML with Playwright
+  ├─ Extract fields using pattern selectors
+  └─ Return extracted data
+       ↓
+Pattern.record_attempt(success=True/False)
+  ├─ Update success_rate
+  └─ Increment total_attempts
+       ↓
+PriceHistory.objects.create(price, ...)
+```
+
+**Pattern Update Flow:**
+```
+Admin edits pattern via Django Admin
+       ↓
+PatternManagementService.update_pattern(...)
+  ├─ Create PatternHistory entry (old version)
+  ├─ Update Pattern.pattern_json (new version)
+  └─ Increment version_number
+       ↓
+[Optional] Test pattern against URL
+       ↓
+Pattern.success_rate reset to 0.0
+```
+
 ## API Reference
 
 ### PatternGenerator Class
@@ -146,7 +356,7 @@ Generate extraction patterns for a product page.
 - `Dict[str, Any]`: Pattern data containing:
   - `store_domain`: Normalized domain
   - `url`: Original URL
-  - `patterns`: Extraction patterns for each field (price, title, image, availability)
+  - `patterns`: Extraction patterns for each field (price, title, image, availability, article_number, model_number)
   - `metadata`: Generation metadata (fields_found, confidence, etc.)
 
 **Example:**
@@ -158,6 +368,21 @@ patterns = await generator.generate(
 )
 print(f"Found {patterns['metadata']['fields_found']} fields")
 print(f"Confidence: {patterns['metadata']['overall_confidence']}")
+```
+
+**Integration Example:**
+```python
+from app.tasks import generate_pattern
+
+# Production usage via Celery (recommended)
+task = generate_pattern.delay(url, domain, listing_id)
+
+# Direct usage (for testing/scripts)
+from ExtractorPatternAgent import PatternGenerator
+import asyncio
+
+generator = PatternGenerator()
+patterns = asyncio.run(generator.generate(url, domain))
 ```
 
 #### `async fetch_page(url: str) -> str`
@@ -202,8 +427,10 @@ patterns = generator.analyze_html(html, "https://example.com/product")
 ```
 ExtractorPatternAgent/
 ├── generate_pattern.py       # Main pattern generator (used in production)
-├── extractor-cli.py          # CLI interface
+├── extractor-cli.py          # CLI interface (legacy)
 ├── src/
+│   ├── pattern_generator.py  # Heuristic pattern generator (production)
+│   ├── agent.py              # Claude SDK agent (advanced use cases)
 │   ├── utils/
 │   │   ├── stealth.py        # Anti-detection utilities
 │   │   ├── html_utils.py     # HTML processing
@@ -213,12 +440,20 @@ ExtractorPatternAgent/
 │   │   └── validation.py     # Validation result models
 │   └── tools/                # Tool implementations
 │       ├── parser.py         # HTML analysis
-│       └── validator.py      # Pattern validation
+│       ├── validator.py      # Pattern validation
+│       ├── storage.py        # SQLite storage (legacy)
+│       └── browser.py        # Playwright utilities
 ├── config/
 │   └── settings.yaml         # Configuration
 ├── examples/
 │   └── basic_usage.py        # Usage example
 └── tests/                    # Test files
+
+WebUI/app/                     # PriceTracker integration
+├── models.py                  # Pattern & PatternHistory models (PostgreSQL)
+├── pattern_services.py        # Pattern management services
+├── pattern_validators.py      # Pattern validation logic
+└── tasks.py                   # Celery tasks (generate_pattern)
 ```
 
 ### Pattern Structure
@@ -273,23 +508,37 @@ validation:
 
 ## Extraction Strategy
 
-The agent prioritizes extraction methods in this order:
+The PatternGenerator prioritizes extraction methods in this order for all 6 fields:
+
+**Fields Extracted:**
+1. **price** 💰 - Current selling price
+2. **title** 📝 - Product name
+3. **image** 🖼️ - Primary product image URL
+4. **availability** ✅ - Stock status
+5. **article_number** 🔢 - Store SKU/item number
+6. **model_number** 🏷️ - Manufacturer part number
+
+**Extraction Priority (by confidence):**
 
 1. **JSON-LD** (confidence: 0.95+)
    - Most reliable, structured schema.org data
    - Example: `script[type="application/ld+json"]`
+   - Fields: price, title, image, model_number
 
-2. **Meta Tags** (confidence: 0.85+)
+2. **Meta Tags** (confidence: 0.85-0.95)
    - Open Graph and product-specific tags
    - Example: `<meta property="og:price" content="29.99">`
+   - Fields: price, title, image
 
-3. **Semantic CSS** (confidence: 0.80+)
+3. **Semantic CSS** (confidence: 0.80-0.90)
    - IDs, data attributes, semantic classes
-   - Example: `.product-price`, `[data-price]`, `#price`
+   - Example: `.product-price`, `[data-price]`, `[itemprop="sku"]`
+   - Fields: price, title, availability, article_number, model_number
 
-4. **XPath** (confidence: 0.70+)
+4. **XPath** (confidence: 0.70-0.75)
    - Last resort with text matching
    - Example: `//span[contains(@class, 'price')]`
+   - Fields: All (fallback only)
 
 ## Extraction Methods
 
@@ -369,13 +618,52 @@ python examples/advanced_usage.py https://www.example.com/product/123
 2. Add validation logic in `src/tools/validator.py`
 3. Update pattern schema in `src/models/pattern.py`
 
+## Storage
+
+### Production (PriceTracker Integration)
+
+Patterns are stored in **PostgreSQL** via Django ORM:
+
+- **`Pattern` model** - Current patterns per domain
+  - `pattern_json` (JSONField) - Full pattern structure
+  - `success_rate`, `total_attempts`, `successful_attempts` - Performance metrics
+  - `last_validated` - Last test timestamp
+  - Foreign key to `Store` model
+
+- **`PatternHistory` model** - Version history
+  - `version_number` - Sequential version per pattern
+  - `pattern_json` - Pattern snapshot at this version
+  - `changed_by` (User FK) - Who made the change
+  - `change_reason`, `change_type` - Audit trail
+  - `success_rate_at_time` - Performance snapshot
+
+### Standalone Mode (Development/Testing)
+
+The `src/tools/storage.py` module provides SQLite storage for standalone usage:
+
+```python
+from ExtractorPatternAgent.src.tools.storage import PatternStorage
+
+storage = PatternStorage()
+await storage.save_pattern(pattern_data)
+patterns = await storage.list_patterns()
+```
+
+**Note:** Production deployments use PostgreSQL via Django ORM, not SQLite.
+
 ## Dependencies
 
 Core dependencies:
 - `playwright`: Browser automation with stealth capabilities
 - `beautifulsoup4`: HTML parsing
 - `lxml`: XPath support
-- `rich`: Terminal formatting
+- `rich`: Terminal formatting (CLI only)
+- `structlog`: Structured logging
+
+**Integration dependencies (PriceTracker):**
+- Django ORM (PostgreSQL)
+- Celery (async task queue)
+- Redis (caching)
 
 ## License
 
@@ -394,3 +682,4 @@ Contributions welcome! Please:
 For issues and questions:
 - Review the examples in `examples/`
 - Check the main project [README](../README.md)
+- See pattern management in Django Admin: `/admin/app/pattern/`
