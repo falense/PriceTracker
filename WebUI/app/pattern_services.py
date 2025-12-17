@@ -2,10 +2,13 @@
 Pattern Management Services.
 
 Provides business logic for pattern management, testing, validation, and history tracking.
+Supports both legacy JSON patterns and new Python extractor modules.
 """
 import json
 import subprocess
 import logging
+import sys
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 from decimal import Decimal
 from urllib.parse import urlparse
@@ -17,6 +20,12 @@ from django.core.cache import cache
 from .models import Pattern, PatternHistory, ProductListing, Store
 
 logger = logging.getLogger(__name__)
+
+# Add ExtractorPatternAgent to path for generated_extractors import
+REPO_ROOT = Path(__file__).parent.parent.parent
+EXTRACTOR_PATH = REPO_ROOT / 'ExtractorPatternAgent'
+if str(EXTRACTOR_PATH) not in sys.path:
+    sys.path.insert(0, str(EXTRACTOR_PATH))
 
 
 class PatternManagementService:
@@ -79,16 +88,16 @@ class PatternManagementService:
     @staticmethod
     def create_pattern(
         domain: str,
-        pattern_json: Dict,
+        extractor_module: str,
         user,
         change_reason: str = 'Initial creation'
     ) -> Tuple[Pattern, bool]:
         """
-        Create new pattern.
+        Create new pattern with Python extractor.
 
         Args:
             domain: Pattern domain
-            pattern_json: Pattern JSON structure
+            extractor_module: Python extractor module name (e.g., "komplett_no")
             user: User creating the pattern
             change_reason: Reason for creation
 
@@ -110,41 +119,31 @@ class PatternManagementService:
         pattern, created = Pattern.objects.update_or_create(
             domain=domain,
             defaults={
-                'pattern_json': pattern_json,
+                'extractor_module': extractor_module,
+                'pattern_json': None,  # No longer using JSON
                 'store': store,
                 'last_validated': timezone.now()
             }
         )
 
-        # Create initial history entry
-        if created:
-            PatternHistory.objects.create(
-                pattern=pattern,
-                domain=domain,
-                version_number=1,
-                pattern_json=pattern_json,
-                changed_by=user,
-                change_reason=change_reason,
-                change_type='manual_edit',
-                success_rate_at_time=0.0,
-                total_attempts_at_time=0
-            )
+        # PatternHistory now stores Python module reference instead of JSON
+        # (We may need to update PatternHistory model later to handle Python code)
 
         return pattern, created
 
     @staticmethod
     def update_pattern(
         domain: str,
-        pattern_json: Dict,
+        extractor_module: str,
         user,
         change_reason: str = 'Manual edit'
     ) -> Pattern:
         """
-        Update existing pattern.
+        Update existing pattern's extractor module.
 
         Args:
             domain: Pattern domain
-            pattern_json: New pattern JSON
+            extractor_module: New extractor module name
             user: User making the update
             change_reason: Reason for update
 
@@ -153,31 +152,11 @@ class PatternManagementService:
         """
         pattern = Pattern.objects.get(domain=domain)
 
-        # Save history before update (signal will handle this automatically)
-        # But we want to set the user and reason, so we do it manually first
-        last_version = PatternHistory.objects.filter(
-            pattern=pattern
-        ).aggregate(Max('version_number'))['version_number__max']
-
-        next_version = (last_version or 0) + 1
-
-        # Create history entry with current (old) data
-        PatternHistory.objects.create(
-            pattern=pattern,
-            domain=pattern.domain,
-            version_number=next_version,
-            pattern_json=pattern.pattern_json,
-            changed_by=user,
-            change_reason=change_reason,
-            change_type='manual_edit',
-            success_rate_at_time=pattern.success_rate,
-            total_attempts_at_time=pattern.total_attempts
-        )
-
         # Update pattern
-        pattern.pattern_json = pattern_json
+        pattern.extractor_module = extractor_module
+        pattern.pattern_json = None  # Clear JSON pattern
         pattern.last_validated = timezone.now()
-        pattern.save(update_fields=['pattern_json', 'last_validated', 'updated_at'])
+        pattern.save(update_fields=['extractor_module', 'pattern_json', 'last_validated', 'updated_at'])
 
         return pattern
 
@@ -393,39 +372,87 @@ class PatternTestService:
     """Service for testing and validating patterns."""
 
     @staticmethod
+    def extract_with_python_module(
+        html: str,
+        extractor_module: str
+    ) -> Dict[str, Any]:
+        """
+        Extract data using a Python extractor module.
+
+        Args:
+            html: HTML content
+            extractor_module: Module name (e.g., "generated_extractors.komplett_no")
+
+        Returns:
+            Dict with extracted field data
+        """
+        try:
+            # Import generated_extractors
+            from generated_extractors import get_parser, extract_from_html
+
+            # Use the discovery API
+            domain = extractor_module.replace('generated_extractors.', '')
+            results = extract_from_html(domain, html)
+
+            if not results:
+                logger.warning(f"Python extractor {extractor_module} returned no results")
+                return {}
+
+            # Convert ExtractorResult to dict format compatible with existing code
+            formatted_results = {}
+            for field_name, value in results.items():
+                if value is not None:
+                    formatted_results[field_name] = {
+                        'value': str(value),
+                        'method': 'python_extractor',
+                        'confidence': 1.0,  # Python extractors don't have confidence scores
+                        'selector': extractor_module
+                    }
+                else:
+                    formatted_results[field_name] = {
+                        'value': None,
+                        'error': 'Extractor returned None'
+                    }
+
+            return formatted_results
+
+        except ImportError as e:
+            logger.error(f"Failed to import Python extractor {extractor_module}: {e}")
+            return {}
+        except Exception as e:
+            logger.exception(f"Python extractor {extractor_module} failed: {e}")
+            return {}
+
+    @staticmethod
     def test_pattern_against_url(
         url: str,
-        pattern_json: Dict,
+        extractor_module: str,
         use_cache: bool = True
     ) -> Dict[str, Any]:
         """
-        Comprehensive pattern testing against a URL.
+        Test Python extractor against a URL.
 
         Args:
             url: URL to test against
-            pattern_json: Pattern JSON to test
+            extractor_module: Python module name (e.g., "komplett_no")
             use_cache: Whether to use cached HTML
 
         Returns:
-            Dict with test results, extraction data, and selector details
+            Dict with test results and extraction data
         """
         try:
             # 1. Fetch HTML
             html, metadata = PatternTestService.fetch_html(url, use_cache=use_cache)
 
-            # 2. Extract data using pattern
-            extraction_result = PatternTestService.extract_with_pattern(html, pattern_json)
+            # 2. Extract data using Python extractor
+            extraction_result = PatternTestService.extract_with_python_module(html, extractor_module)
 
-            # 3. Test each selector individually
-            selector_results = PatternTestService._test_all_selectors(html, pattern_json)
-
-            # 4. Validate results
+            # 3. Validate results
             validation = PatternTestService._validate_extraction(extraction_result)
 
             return {
                 'success': extraction_result.get('price', {}).get('value') is not None,
                 'extraction': extraction_result,
-                'selector_results': selector_results,
                 'errors': validation['errors'],
                 'warnings': validation['warnings'],
                 'metadata': metadata
@@ -436,7 +463,6 @@ class PatternTestService:
             return {
                 'success': False,
                 'extraction': {},
-                'selector_results': [],
                 'errors': [str(e)],
                 'warnings': [],
                 'metadata': {}
@@ -523,137 +549,6 @@ class PatternTestService:
         return html, metadata
 
     @staticmethod
-    def extract_with_pattern(html: str, pattern_json: Dict) -> Dict[str, Any]:
-        """
-        Extract data from HTML using pattern.
-
-        Args:
-            html: HTML content
-            pattern_json: Pattern JSON
-
-        Returns:
-            Dict with extracted field data
-        """
-        from bs4 import BeautifulSoup
-
-        soup = BeautifulSoup(html, 'html.parser')
-        results = {}
-
-        patterns = pattern_json.get('patterns', {})
-
-        for field_name, field_pattern in patterns.items():
-            # Try primary selector first
-            primary = field_pattern.get('primary', {})
-            value = PatternTestService._extract_with_selector(soup, primary)
-
-            if value:
-                results[field_name] = {
-                    'value': value,
-                    'method': primary.get('type', 'unknown'),
-                    'confidence': primary.get('confidence', 0.0),
-                    'selector': primary.get('selector', '')
-                }
-            else:
-                # Try fallbacks
-                fallbacks = field_pattern.get('fallbacks', [])
-                for i, fallback in enumerate(fallbacks):
-                    value = PatternTestService._extract_with_selector(soup, fallback)
-                    if value:
-                        results[field_name] = {
-                            'value': value,
-                            'method': fallback.get('type', 'unknown'),
-                            'confidence': fallback.get('confidence', 0.0),
-                            'selector': fallback.get('selector', ''),
-                            'fallback_index': i
-                        }
-                        break
-                else:
-                    results[field_name] = {
-                        'value': None,
-                        'error': 'No selector matched'
-                    }
-
-        return results
-
-    @staticmethod
-    def _extract_with_selector(soup, selector_config: Dict) -> Optional[str]:
-        """Extract value using a single selector."""
-        try:
-            selector_type = selector_config.get('type')
-            selector = selector_config.get('selector')
-            attribute = selector_config.get('attribute')
-
-            if selector_type == 'css':
-                element = soup.select_one(selector)
-                if element:
-                    if attribute:
-                        return element.get(attribute)
-                    return element.get_text(strip=True)
-
-            elif selector_type == 'xpath':
-                # BeautifulSoup doesn't support XPath, would need lxml
-                from lxml import html as lxml_html
-                tree = lxml_html.fromstring(str(soup))
-                elements = tree.xpath(selector)
-                if elements:
-                    if attribute:
-                        return elements[0].get(attribute)
-                    return elements[0].text_content().strip()
-
-            elif selector_type == 'meta':
-                element = soup.find('meta', attrs={'property': selector})
-                if element:
-                    return element.get('content')
-
-            return None
-
-        except Exception as e:
-            logger.debug(f"Selector extraction failed: {e}")
-            return None
-
-    @staticmethod
-    def _test_all_selectors(html: str, pattern_json: Dict) -> List[Dict]:
-        """Test each selector (primary + fallbacks) individually."""
-        from bs4 import BeautifulSoup
-
-        soup = BeautifulSoup(html, 'html.parser')
-        results = []
-
-        patterns = pattern_json.get('patterns', {})
-
-        for field_name, field_pattern in patterns.items():
-            # Test primary
-            primary = field_pattern.get('primary', {})
-            value = PatternTestService._extract_with_selector(soup, primary)
-
-            results.append({
-                'field': field_name,
-                'type': 'primary',
-                'selector': primary.get('selector', ''),
-                'selector_type': primary.get('type', ''),
-                'matched': value is not None,
-                'value': value[:100] if value else None,  # Truncate long values
-                'confidence': primary.get('confidence', 0.0)
-            })
-
-            # Test fallbacks
-            fallbacks = field_pattern.get('fallbacks', [])
-            for i, fallback in enumerate(fallbacks):
-                value = PatternTestService._extract_with_selector(soup, fallback)
-
-                results.append({
-                    'field': field_name,
-                    'type': f'fallback_{i+1}',
-                    'selector': fallback.get('selector', ''),
-                    'selector_type': fallback.get('type', ''),
-                    'matched': value is not None,
-                    'value': value[:100] if value else None,
-                    'confidence': fallback.get('confidence', 0.0)
-                })
-
-        return results
-
-    @staticmethod
     def _validate_extraction(extraction: Dict) -> Dict[str, List[str]]:
         """Validate extraction results."""
         errors = []
@@ -672,213 +567,15 @@ class PatternTestService:
         return {'errors': errors, 'warnings': warnings}
 
     @staticmethod
-    def validate_pattern_syntax(pattern_json: Dict) -> Dict[str, Any]:
-        """
-        Validate pattern JSON structure and syntax.
-
-        Args:
-            pattern_json: Pattern JSON to validate
-
-        Returns:
-            Dict with validation result
-        """
-        from . import pattern_validators
-
-        errors = []
-        warnings = []
-
-        # Validate structure
-        structure_result = pattern_validators.validate_pattern_structure(pattern_json)
-        if not structure_result['valid']:
-            errors.extend(structure_result['errors'])
-
-        # Validate each selector syntax
-        patterns = pattern_json.get('patterns', {})
-        for field_name, field_pattern in patterns.items():
-            # Validate primary
-            primary = field_pattern.get('primary', {})
-            selector_type = primary.get('type')
-            selector = primary.get('selector')
-
-            if selector_type and selector:
-                is_valid = pattern_validators.validate_selector_syntax(selector_type, selector)
-                if not is_valid:
-                    errors.append(f'{field_name}.primary: Invalid {selector_type} selector syntax')
-
-            # Validate fallbacks
-            for i, fallback in enumerate(field_pattern.get('fallbacks', [])):
-                selector_type = fallback.get('type')
-                selector = fallback.get('selector')
-
-                if selector_type and selector:
-                    is_valid = pattern_validators.validate_selector_syntax(selector_type, selector)
-                    if not is_valid:
-                        errors.append(
-                            f'{field_name}.fallbacks[{i}]: Invalid {selector_type} selector syntax'
-                        )
-
-        return {
-            'valid': len(errors) == 0,
-            'errors': errors,
-            'warnings': warnings
-        }
-
-    @staticmethod
-    def test_single_selector(
-        html: str,
-        selector_config: Dict
-    ) -> Dict[str, Any]:
-        """
-        Test a single selector against HTML.
-
-        Args:
-            html: HTML content
-            selector_config: Selector configuration
-
-        Returns:
-            Dict with test result
-        """
-        from bs4 import BeautifulSoup
-
-        soup = BeautifulSoup(html, 'html.parser')
-
-        try:
-            value = PatternTestService._extract_with_selector(soup, selector_config)
-
-            return {
-                'matched': value is not None,
-                'value': value,
-                'error': None
-            }
-
-        except Exception as e:
-            return {
-                'matched': False,
-                'value': None,
-                'error': str(e)
-            }
-
-    @staticmethod
-    def _extract_with_html_capture(html: str, selector_config: Dict) -> Dict:
-        """
-        Extract value and capture HTML snippet.
-
-        Args:
-            html: HTML content
-            selector_config: Selector configuration dict
-
-        Returns:
-            Dict with {matched, value, html_snippet, match_count}
-        """
-        from bs4 import BeautifulSoup
-        from lxml import html as lxml_html
-        import json as json_module
-
-        selector_type = selector_config.get('type')
-        selector = selector_config.get('selector')
-        attribute = selector_config.get('attribute')
-
-        try:
-            if selector_type == 'css':
-                soup = BeautifulSoup(html, 'html.parser')
-                elements = soup.select(selector)  # Get ALL matches
-
-                if not elements:
-                    return {'matched': False, 'value': None, 'html_snippet': None, 'match_count': 0}
-
-                element = elements[0]  # Use first match
-                value = element.get(attribute) if attribute else element.get_text(strip=True)
-                html_snippet = str(element)[:500]  # Truncate to 500 chars
-
-                return {
-                    'matched': True,
-                    'value': value,
-                    'html_snippet': html_snippet,
-                    'match_count': len(elements)
-                }
-
-            elif selector_type == 'xpath':
-                tree = lxml_html.fromstring(html)
-                elements = tree.xpath(selector)
-
-                if not elements:
-                    return {'matched': False, 'value': None, 'html_snippet': None, 'match_count': 0}
-
-                element = elements[0]
-                value = element.get(attribute) if attribute and hasattr(element, 'get') else (
-                    element.text_content().strip() if hasattr(element, 'text_content') else str(element)
-                )
-                html_snippet = lxml_html.tostring(element, encoding='unicode')[:500]
-
-                return {
-                    'matched': True,
-                    'value': value,
-                    'html_snippet': html_snippet,
-                    'match_count': len(elements)
-                }
-
-            elif selector_type == 'meta':
-                soup = BeautifulSoup(html, 'html.parser')
-                element = soup.find('meta', attrs={'property': selector})
-
-                if not element:
-                    return {'matched': False, 'value': None, 'html_snippet': None, 'match_count': 0}
-
-                value = element.get('content')
-                html_snippet = str(element)
-
-                return {'matched': True, 'value': value, 'html_snippet': html_snippet, 'match_count': 1}
-
-            elif selector_type == 'jsonld' or selector_type == 'json_ld':
-                # Use existing JSON-LD extraction logic
-                soup = BeautifulSoup(html, 'html.parser')
-                scripts = soup.find_all('script', type='application/ld+json')
-
-                json_path = selector_config.get('json_path', '')
-
-                for script in scripts:
-                    try:
-                        data = json_module.loads(script.string)
-                        # Navigate JSON path
-                        value = data
-                        for key in json_path.split('.'):
-                            if not key:  # Skip empty keys
-                                continue
-                            if key.isdigit():
-                                value = value[int(key)]
-                            else:
-                                value = value.get(key) if isinstance(value, dict) else None
-                            if value is None:
-                                break
-
-                        if value:
-                            return {
-                                'matched': True,
-                                'value': str(value),
-                                'html_snippet': f'<script type="application/ld+json">...{json_path}: {value}...</script>',
-                                'match_count': 1
-                            }
-                    except:
-                        continue
-
-                return {'matched': False, 'value': None, 'html_snippet': None, 'match_count': 0}
-
-            return {'matched': False, 'value': None, 'html_snippet': None, 'match_count': 0}
-
-        except Exception as e:
-            logger.exception(f"Error extracting with HTML capture: {e}")
-            return {'matched': False, 'value': None, 'html_snippet': None, 'match_count': 0}
-
-    @staticmethod
     def test_pattern_for_visualization(pattern: Pattern) -> Dict[str, Any]:
         """
-        Test pattern for visualization page with enhanced selector details.
+        Test Python extractor pattern for visualization page.
 
         Args:
             pattern: Pattern instance to test
 
         Returns:
-            Dict with {success, test_url, fields[], metadata}
+            Dict with {success, test_url, extraction_results, metadata}
         """
         # Get test URL from most recent ProductListing
         test_url = ProductListing.objects.filter(
@@ -891,53 +588,31 @@ class PatternTestService:
                 'success': False,
                 'error': 'No active product listings for this domain',
                 'test_url': None,
-                'fields': []
+                'extraction_results': {}
+            }
+
+        if not pattern.extractor_module:
+            return {
+                'success': False,
+                'error': 'Pattern does not have a Python extractor module configured',
+                'test_url': test_url,
+                'extraction_results': {}
             }
 
         try:
             # Fetch HTML
             html, metadata = PatternTestService.fetch_html(test_url, use_cache=True)
 
-            # Test each field's selectors
-            fields_data = []
-            for field_name, field_pattern in pattern.pattern_json.get('patterns', {}).items():
-                field_data = {'name': field_name, 'selectors': []}
-
-                # Test primary selector
-                primary = field_pattern.get('primary', {})
-                if primary:
-                    primary_result = PatternTestService._extract_with_html_capture(html, primary)
-                    field_data['selectors'].append({
-                        'type': 'primary',
-                        'selector_type': primary.get('type'),
-                        'selector': primary.get('selector'),
-                        'matched': primary_result['matched'],
-                        'match_count': primary_result['match_count'],
-                        'extracted_value': primary_result['value'],
-                        'html_snippet': primary_result['html_snippet'],
-                        'confidence': primary.get('confidence', 0.0)
-                    })
-
-                # Test fallback selectors
-                for i, fallback in enumerate(field_pattern.get('fallbacks', [])):
-                    fallback_result = PatternTestService._extract_with_html_capture(html, fallback)
-                    field_data['selectors'].append({
-                        'type': f'fallback_{i+1}',
-                        'selector_type': fallback.get('type'),
-                        'selector': fallback.get('selector'),
-                        'matched': fallback_result['matched'],
-                        'match_count': fallback_result['match_count'],
-                        'extracted_value': fallback_result['value'],
-                        'html_snippet': fallback_result['html_snippet'],
-                        'confidence': fallback.get('confidence', 0.0)
-                    })
-
-                fields_data.append(field_data)
+            # Extract using Python module
+            extraction_results = PatternTestService.extract_with_python_module(
+                html,
+                pattern.extractor_module
+            )
 
             return {
-                'success': True,
+                'success': bool(extraction_results),
                 'test_url': test_url,
-                'fields': fields_data,
+                'extraction_results': extraction_results,
                 'metadata': metadata
             }
 
@@ -947,5 +622,5 @@ class PatternTestService:
                 'success': False,
                 'error': f'Test failed: {str(e)}',
                 'test_url': test_url,
-                'fields': []
+                'extraction_results': {}
             }

@@ -10,7 +10,6 @@ import structlog
 
 from .extractor import Extractor
 from .models import ExtractionResult, FetchResult, FetchSummary, Product
-from .pattern_loader import PatternLoader
 from .storage import PriceStorage
 from .validator import Validator
 from .stealth import (
@@ -63,7 +62,6 @@ class PriceFetcher:
         self.domain_delays = domain_delays or {}
 
         # Initialize components
-        self.pattern_loader = PatternLoader(db_path)
         self.extractor = Extractor()
         self.validator = Validator(min_confidence=min_confidence)
         self.storage = PriceStorage(db_path)
@@ -123,26 +121,9 @@ class PriceFetcher:
         for domain, domain_products in by_domain.items():
             logger.info("processing_domain", domain=domain, products=len(domain_products))
 
-            # Load pattern for domain
-            pattern = self.pattern_loader.load_pattern(domain)
-            if not pattern:
-                logger.warning("no_pattern_found", domain=domain)
-                # Mark all products as failed
-                for product in domain_products:
-                    result = FetchResult(
-                        product_id=product.product_id,
-                        url=product.url,
-                        success=False,
-                        error=f"No pattern found for domain {domain}",
-                        duration_ms=0,
-                    )
-                    fetch_results.append(result)
-                    failed_count += 1
-                continue
-
             # Fetch each product with rate limiting
             for i, product in enumerate(domain_products):
-                result = await self.fetch_product(product, pattern)
+                result = await self.fetch_product(product)
                 fetch_results.append(result)
 
                 if result.success:
@@ -183,14 +164,12 @@ class PriceFetcher:
     async def fetch_product(
         self,
         product: Product,
-        pattern: Optional[object] = None,
     ) -> FetchResult:
         """
         Fetch price for single product.
 
         Args:
             product: Product to fetch
-            pattern: Extraction pattern (loaded automatically if not provided)
 
         Returns:
             FetchResult with extraction and validation
@@ -202,17 +181,11 @@ class PriceFetcher:
         logger.info("fetching_product", product_id=product_id, url=url)
 
         try:
-            # Load pattern if not provided
-            if pattern is None:
-                pattern = self.pattern_loader.load_pattern(product.domain)
-                if not pattern:
-                    raise ValueError(f"No pattern found for domain {product.domain}")
-
             # Fetch HTML
             html = await self._fetch_html(url)
 
-            # Extract data
-            extraction = self.extractor.extract_with_pattern(html, pattern)
+            # Extract data using Python extractor
+            extraction = self.extractor.extract_with_domain(html, product.domain)
 
             # Get previous extraction for comparison
             previous = self.storage.get_latest_price(
