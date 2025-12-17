@@ -13,7 +13,7 @@ from ._base import BaseExtractor
 
 # Metadata (required for discovery)
 PATTERN_METADATA = {
-    'domain': 'www.example.com',
+    'domain': 'example.com',
     'generated_at': '2025-12-17T15:55:12.744096',
     'generator': 'JSON to Python converter',
     'version': '1.0',

@@ -16,6 +16,10 @@ extraction_results.json
 patterns.db
 patterns.db-journal
 
+# Test data samples (large files, environment-specific)
+test_data/*/
+!test_data/README.md
+
 # IDE
 .vscode/
 .idea/
