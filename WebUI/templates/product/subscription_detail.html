@@ -375,80 +375,405 @@
                 </button>
             </div>
 
-            <!-- Logs Table -->
-            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-                {% if operation_logs %}
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                        <thead class="bg-gray-50 dark:bg-gray-900">
-                            <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Timestamp</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Service</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Level</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Event</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Message</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Details</th>
-                            </tr>
-                        </thead>
-                        <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                            {% for log in operation_logs %}
-                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                                    {{ log.timestamp|date:"Y-m-d H:i:s" }}
-                                </td>
-                                <td class="px-4 py-3 whitespace-nowrap">
-                                    {% if log.service == 'fetcher' %}
-                                    <span class="px-2 py-1 text-xs font-medium rounded-full bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
-                                        Fetcher
-                                    </span>
-                                    {% elif log.service == 'extractor' %}
-                                    <span class="px-2 py-1 text-xs font-medium rounded-full bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200">
-                                        Extractor
-                                    </span>
+            <!-- Logs Display -->
+            <div class="space-y-4">
+                <!-- Job Groups -->
+                {% if job_groups %}
+                <div class="space-y-3">
+                    <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                        Job Executions ({{ job_groups|length }})
+                    </h3>
+
+                    {% for job in job_groups %}
+                    <div class="bg-white dark:bg-gray-800 rounded-lg border-2 border-gray-200 dark:border-gray-700 overflow-hidden">
+                        <!-- Job Header (always visible) -->
+                        <button onclick="toggleJob('{{ job.task_id }}')" type="button"
+                                class="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                            <div class="flex items-center gap-3 flex-1">
+                                <!-- Status Indicator -->
+                                <div class="flex-shrink-0">
+                                    {% if job.status == 'error' %}
+                                    <div class="w-3 h-3 rounded-full bg-red-500 dark:bg-red-400 ring-4 ring-red-100 dark:ring-red-900"></div>
+                                    {% elif job.status == 'warning' %}
+                                    <div class="w-3 h-3 rounded-full bg-yellow-500 dark:bg-yellow-400 ring-4 ring-yellow-100 dark:ring-yellow-900"></div>
                                     {% else %}
-                                    <span class="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
-                                        Celery
-                                    </span>
+                                    <div class="w-3 h-3 rounded-full bg-green-500 dark:bg-green-400 ring-4 ring-green-100 dark:ring-green-900"></div>
                                     {% endif %}
-                                </td>
-                                <td class="px-4 py-3 whitespace-nowrap">
-                                    {% if log.level == 'ERROR' or log.level == 'CRITICAL' %}
-                                    <span class="px-2 py-1 text-xs font-medium rounded-full bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200">
-                                        {{ log.level }}
-                                    </span>
-                                    {% elif log.level == 'WARNING' %}
-                                    <span class="px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200">
-                                        {{ log.level }}
-                                    </span>
-                                    {% else %}
-                                    <span class="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
-                                        {{ log.level }}
-                                    </span>
+                                </div>
+
+                                <!-- Job Info -->
+                                <div class="flex-1 text-left">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <!-- Task ID -->
+                                        <span class="text-sm font-mono text-gray-700 dark:text-gray-300" title="{{ job.task_id }}">
+                                            {{ job.task_id_short }}
+                                        </span>
+
+                                        <!-- Service Badges -->
+                                        <div class="flex gap-1">
+                                            {% if 'fetcher' in job.services %}
+                                            <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
+                                                Fetcher
+                                            </span>
+                                            {% endif %}
+                                            {% if 'extractor' in job.services %}
+                                            <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200">
+                                                Extractor
+                                            </span>
+                                            {% endif %}
+                                            {% if 'celery' in job.services %}
+                                            <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                                                Celery
+                                            </span>
+                                            {% endif %}
+                                        </div>
+
+                                        <!-- Log Count -->
+                                        <span class="text-xs text-gray-500 dark:text-gray-400">
+                                            {{ job.log_count }} log{{ job.log_count|pluralize }}
+                                        </span>
+                                    </div>
+
+                                    <!-- Job-Level Context -->
+                                    {% if job.store_domain or job.listing_id or job.product_id or job.url %}
+                                    <div class="flex items-center gap-3 mt-1.5 text-xs text-gray-600 dark:text-gray-400 flex-wrap">
+                                        <!-- Store/Domain -->
+                                        {% if job.store_domain %}
+                                        <span class="flex items-center gap-1">
+                                            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M3 1a1 1 0 000 2h1.22l.305 1.222a.997.997 0 00.01.042l1.358 5.43-.893.892C3.74 11.846 4.632 14 6.414 14H15a1 1 0 000-2H6.414l1-1H14a1 1 0 00.894-.553l3-6A1 1 0 0017 3H6.28l-.31-1.243A1 1 0 005 1H3zM16 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM6.5 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg>
+                                            <span>{{ job.store_domain }}</span>
+                                        </span>
+                                        {% endif %}
+
+                                        <!-- Listing ID (clickable) -->
+                                        {% if job.listing_id %}
+                                        <span class="flex items-center gap-1">
+                                            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/><path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/></svg>
+                                            <a href="{% url 'admin:app_productlisting_change' job.listing_id %}"
+                                               class="text-blue-600 dark:text-blue-400 hover:underline font-mono">
+                                                L:{{ job.listing_id|slice:":8" }}
+                                            </a>
+                                        </span>
+                                        {% endif %}
+
+                                        <!-- Product ID (clickable) -->
+                                        {% if job.product_id %}
+                                        <span class="flex items-center gap-1">
+                                            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 2a4 4 0 00-4 4v1H5a1 1 0 00-.994.89l-1 9A1 1 0 004 18h12a1 1 0 00.994-1.11l-1-9A1 1 0 0015 7h-1V6a4 4 0 00-4-4zm2 5V6a2 2 0 10-4 0v1h4zm-6 3a1 1 0 112 0 1 1 0 01-2 0zm7-1a1 1 0 100 2 1 1 0 000-2z" clip-rule="evenodd"/></svg>
+                                            <a href="{% url 'admin:app_product_change' job.product_id %}"
+                                               class="text-blue-600 dark:text-blue-400 hover:underline font-mono">
+                                                P:{{ job.product_id|slice:":8" }}
+                                            </a>
+                                        </span>
+                                        {% endif %}
+
+                                        <!-- URL (truncated, clickable) -->
+                                        {% if job.url %}
+                                        <span class="flex items-center gap-1">
+                                            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clip-rule="evenodd"/></svg>
+                                            <a href="{{ job.url }}" target="_blank" rel="noopener"
+                                               class="text-blue-600 dark:text-blue-400 hover:underline font-mono"
+                                               title="{{ job.url }}">
+                                                {{ job.url|truncate_path:50 }}
+                                            </a>
+                                        </span>
+                                        {% endif %}
+                                    </div>
                                     {% endif %}
-                                </td>
-                                <td class="px-4 py-3 text-sm text-gray-900 dark:text-white">
-                                    {{ log.event|default:"—" }}
-                                </td>
-                                <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 max-w-md truncate">
-                                    {{ log.message|default:"—" }}
-                                </td>
-                                <td class="px-4 py-3 text-sm">
-                                    {% if log.context %}
-                                    <details class="cursor-pointer">
-                                        <summary class="text-blue-600 dark:text-blue-400 hover:underline">View JSON</summary>
-                                        <pre class="mt-2 p-2 bg-gray-100 dark:bg-gray-900 rounded text-xs overflow-x-auto max-w-2xl">{{ log.context|safe }}</pre>
-                                    </details>
-                                    {% else %}
-                                    <span class="text-gray-400">—</span>
+
+                                    <!-- Timestamps & Duration -->
+                                    <div class="flex items-center gap-3 mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                        <span>{{ job.start_time|date:"Y-m-d H:i:s" }}</span>
+                                        <span>→</span>
+                                        <span>{{ job.end_time|date:"H:i:s" }}</span>
+                                        <span class="text-gray-400 dark:text-gray-500">•</span>
+                                        <span class="font-medium">{{ job.duration_display }}</span>
+                                    </div>
+                                </div>
+
+                                <!-- Expand Icon -->
+                                <svg id="icon-{{ job.task_id }}" class="w-5 h-5 text-gray-400 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </div>
+                        </button>
+
+                        <!-- Job Details (collapsible) -->
+                        <div id="job-{{ job.task_id }}" class="hidden border-t border-gray-200 dark:border-gray-700">
+                            <div class="divide-y divide-gray-200 dark:divide-gray-700">
+                                {% for log in job.logs %}
+                                <div class="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                    <!-- Line 1: Time, Service, Level, Event -->
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <span class="text-xs text-gray-600 dark:text-gray-400 font-mono">{{ log.timestamp|date:"H:i:s" }}</span>
+
+                                        {% if log.service == 'fetcher' %}
+                                        <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
+                                            Fetcher
+                                        </span>
+                                        {% elif log.service == 'extractor' %}
+                                        <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200">
+                                            Extractor
+                                        </span>
+                                        {% else %}
+                                        <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                                            Celery
+                                        </span>
+                                        {% endif %}
+
+                                        {% if log.level == 'ERROR' or log.level == 'CRITICAL' %}
+                                        <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200">
+                                            {{ log.level }}
+                                        </span>
+                                        {% elif log.level == 'WARNING' %}
+                                        <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200">
+                                            {{ log.level }}
+                                        </span>
+                                        {% else %}
+                                        <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                                            {{ log.level }}
+                                        </span>
+                                        {% endif %}
+
+                                        <span class="text-sm font-medium text-gray-900 dark:text-white">{{ log.event|default:"—" }}</span>
+
+                                        <!-- Logger (always present) -->
+                                        {% with logger=log.context|context_value:"logger" %}
+                                        {% if logger %}
+                                        <span class="text-xs text-gray-500 dark:text-gray-400">
+                                            <span class="text-gray-400 dark:text-gray-500">•</span>
+                                            <span class="font-mono">{{ logger }}</span>
+                                        </span>
+                                        {% endif %}
+                                        {% endwith %}
+
+                                        <!-- Message (if different from event) -->
+                                        {% if log.message and log.message != log.event %}
+                                        <span class="text-xs text-gray-600 dark:text-gray-400 italic">
+                                            — {{ log.message }}
+                                        </span>
+                                        {% endif %}
+                                    </div>
+
+                                    <!-- Line 2: Context Details (ALL inline, no expansion) -->
+                                    {% with fields=log.context|context_value:"fields" status_code=log.context|context_value:"status_code" extraction_method=log.context|context_value:"extraction_method" confidence=log.context|context_value:"confidence" %}
+                                    {% if fields or status_code or extraction_method or confidence or log.duration_ms %}
+                                    <div class="mt-1.5 text-xs text-gray-600 dark:text-gray-400">
+                                        <div class="flex flex-wrap gap-x-3 gap-y-1 items-center">
+                                            <!-- Fields extracted -->
+                                            {% if fields %}
+                                            <span class="flex items-center gap-1">
+                                                <span class="font-medium text-gray-700 dark:text-gray-300">Fields:</span>
+                                                <span class="text-gray-900 dark:text-white">{{ fields|join:", " }}</span>
+                                            </span>
+                                            {% endif %}
+
+                                            <!-- Status Code -->
+                                            {% if status_code %}
+                                            <span class="flex items-center gap-1">
+                                                <span class="font-medium text-gray-700 dark:text-gray-300">Status:</span>
+                                                <span class="font-mono {% if status_code == 200 %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+                                                    {{ status_code }}
+                                                </span>
+                                            </span>
+                                            {% endif %}
+
+                                            <!-- Extraction Method -->
+                                            {% if extraction_method %}
+                                            <span class="flex items-center gap-1">
+                                                <span class="font-medium text-gray-700 dark:text-gray-300">Method:</span>
+                                                <span class="text-gray-900 dark:text-white">{{ extraction_method }}</span>
+                                            </span>
+                                            {% endif %}
+
+                                            <!-- Confidence -->
+                                            {% if confidence %}
+                                            <span class="flex items-center gap-1">
+                                                <span class="font-medium text-gray-700 dark:text-gray-300">Confidence:</span>
+                                                <span class="text-gray-900 dark:text-white">{{ confidence }}</span>
+                                            </span>
+                                            {% endif %}
+
+                                            <!-- Duration -->
+                                            {% if log.duration_ms %}
+                                            <span class="flex items-center gap-1">
+                                                <span class="font-medium text-gray-700 dark:text-gray-300">Duration:</span>
+                                                <span class="font-mono text-gray-900 dark:text-white">{{ log.duration_ms }}ms</span>
+                                            </span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
                                     {% endif %}
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                                    {% endwith %}
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
                 </div>
-                {% else %}
-                <div class="p-8 text-center">
+                {% endif %}
+
+                <!-- Ungrouped Logs Section -->
+                {% if ungrouped_logs %}
+                <div class="{% if job_groups %}mt-6 pt-6 border-t-2 border-gray-300 dark:border-gray-600{% endif %}">
+                    <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                        Ungrouped Logs ({{ ungrouped_logs|length }})
+                    </h3>
+                    <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden divide-y divide-gray-200 dark:divide-gray-700">
+                        {% for log in ungrouped_logs %}
+                        <div class="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                            <!-- Line 1: Time, Service, Level, Event -->
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="text-xs text-gray-600 dark:text-gray-400 font-mono">{{ log.timestamp|date:"Y-m-d H:i:s" }}</span>
+
+                                {% if log.service == 'fetcher' %}
+                                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
+                                    Fetcher
+                                </span>
+                                {% elif log.service == 'extractor' %}
+                                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200">
+                                    Extractor
+                                </span>
+                                {% else %}
+                                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                                    Celery
+                                </span>
+                                {% endif %}
+
+                                {% if log.level == 'ERROR' or log.level == 'CRITICAL' %}
+                                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200">
+                                    {{ log.level }}
+                                </span>
+                                {% elif log.level == 'WARNING' %}
+                                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200">
+                                    {{ log.level }}
+                                </span>
+                                {% else %}
+                                <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                                    {{ log.level }}
+                                </span>
+                                {% endif %}
+
+                                <span class="text-sm font-medium text-gray-900 dark:text-white">{{ log.event|default:"—" }}</span>
+
+                                <!-- Logger (always present) -->
+                                {% with logger=log.context|context_value:"logger" %}
+                                {% if logger %}
+                                <span class="text-xs text-gray-500 dark:text-gray-400">
+                                    <span class="text-gray-400 dark:text-gray-500">•</span>
+                                    <span class="font-mono">{{ logger }}</span>
+                                </span>
+                                {% endif %}
+                                {% endwith %}
+
+                                <!-- Message (if different from event) -->
+                                {% if log.message and log.message != log.event %}
+                                <span class="text-xs text-gray-600 dark:text-gray-400 italic">
+                                    — {{ log.message }}
+                                </span>
+                                {% endif %}
+                            </div>
+
+                            <!-- Line 2: Store, URL, Listing ID -->
+                            <div class="flex items-center gap-3 mt-1.5 text-xs text-gray-600 dark:text-gray-400 flex-wrap">
+                                {% with store=log.context|context_value:"store" domain=log.context|context_value:"domain" %}
+                                {% if store or domain %}
+                                <span class="flex items-center gap-1">
+                                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M3 1a1 1 0 000 2h1.22l.305 1.222a.997.997 0 00.01.042l1.358 5.43-.893.892C3.74 11.846 4.632 14 6.414 14H15a1 1 0 000-2H6.414l1-1H14a1 1 0 00.894-.553l3-6A1 1 0 0017 3H6.28l-.31-1.243A1 1 0 005 1H3zM16 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM6.5 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg>
+                                    <span>{{ store|default:domain }}</span>
+                                </span>
+                                {% endif %}
+                                {% endwith %}
+
+                                {% with url=log.context|context_value:"url" %}
+                                {% if url %}
+                                <span class="flex items-center gap-1">
+                                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clip-rule="evenodd"/></svg>
+                                    <span class="font-mono">{{ url|truncate_path:60 }}</span>
+                                </span>
+                                {% endif %}
+                                {% endwith %}
+
+                                {% with listing_id=log.context|context_value:"listing_id" %}
+                                {% if listing_id %}
+                                <span class="flex items-center gap-1">
+                                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/><path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/></svg>
+                                    <a href="{% url 'admin:app_productlisting_change' listing_id %}"
+                                       class="text-blue-600 dark:text-blue-400 hover:underline font-mono text-xs">
+                                        Listing: {{ listing_id|slice:":8" }}
+                                    </a>
+                                </span>
+                                {% endif %}
+                                {% endwith %}
+
+                                {% with product_id=log.context|context_value:"product_id" %}
+                                {% if product_id %}
+                                <span class="flex items-center gap-1">
+                                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 2a4 4 0 00-4 4v1H5a1 1 0 00-.994.89l-1 9A1 1 0 004 18h12a1 1 0 00.994-1.11l-1-9A1 1 0 0015 7h-1V6a4 4 0 00-4-4zm2 5V6a2 2 0 10-4 0v1h4zm-6 3a1 1 0 112 0 1 1 0 01-2 0zm7-1a1 1 0 100 2 1 1 0 000-2z" clip-rule="evenodd"/></svg>
+                                    <a href="{% url 'admin:app_product_change' product_id %}"
+                                       class="text-blue-600 dark:text-blue-400 hover:underline font-mono text-xs">
+                                        Product: {{ product_id|slice:":8" }}
+                                    </a>
+                                </span>
+                                {% endif %}
+                                {% endwith %}
+                            </div>
+
+                            <!-- Line 3: Additional Context (ALL inline, same as grouped logs) -->
+                            {% with fields=log.context|context_value:"fields" status_code=log.context|context_value:"status_code" extraction_method=log.context|context_value:"extraction_method" confidence=log.context|context_value:"confidence" %}
+                            {% if fields or status_code or extraction_method or confidence or log.duration_ms %}
+                            <div class="mt-1.5 text-xs text-gray-600 dark:text-gray-400">
+                                <div class="flex flex-wrap gap-x-3 gap-y-1 items-center">
+                                    {% if fields %}
+                                    <span class="flex items-center gap-1">
+                                        <span class="font-medium text-gray-700 dark:text-gray-300">Fields:</span>
+                                        <span class="text-gray-900 dark:text-white">{{ fields|join:", " }}</span>
+                                    </span>
+                                    {% endif %}
+
+                                    {% if status_code %}
+                                    <span class="flex items-center gap-1">
+                                        <span class="font-medium text-gray-700 dark:text-gray-300">Status:</span>
+                                        <span class="font-mono {% if status_code == 200 %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+                                            {{ status_code }}
+                                        </span>
+                                    </span>
+                                    {% endif %}
+
+                                    {% if extraction_method %}
+                                    <span class="flex items-center gap-1">
+                                        <span class="font-medium text-gray-700 dark:text-gray-300">Method:</span>
+                                        <span class="text-gray-900 dark:text-white">{{ extraction_method }}</span>
+                                    </span>
+                                    {% endif %}
+
+                                    {% if confidence %}
+                                    <span class="flex items-center gap-1">
+                                        <span class="font-medium text-gray-700 dark:text-gray-300">Confidence:</span>
+                                        <span class="text-gray-900 dark:text-white">{{ confidence }}</span>
+                                    </span>
+                                    {% endif %}
+
+                                    {% if log.duration_ms %}
+                                    <span class="flex items-center gap-1">
+                                        <span class="font-medium text-gray-700 dark:text-gray-300">Duration:</span>
+                                        <span class="font-mono text-gray-900 dark:text-white">{{ log.duration_ms }}ms</span>
+                                    </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endif %}
+                            {% endwith %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Empty State -->
+                {% if not job_groups and not ungrouped_logs %}
+                <div class="p-8 text-center bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
                     <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                     </svg>
@@ -478,15 +803,37 @@ function filterLogs(service) {
     window.location.href = url.toString();
 }
 
-// Pretty-print JSON in details tags
+// Job expand/collapse functionality
+function toggleJob(taskId) {
+    const jobDetails = document.getElementById('job-' + taskId);
+    const icon = document.getElementById('icon-' + taskId);
+
+    if (jobDetails.classList.contains('hidden')) {
+        jobDetails.classList.remove('hidden');
+        icon.classList.add('rotate-180');
+        // Save expanded state to localStorage
+        localStorage.setItem('job-state-' + taskId, 'expanded');
+    } else {
+        jobDetails.classList.add('hidden');
+        icon.classList.remove('rotate-180');
+        // Save collapsed state to localStorage
+        localStorage.setItem('job-state-' + taskId, 'collapsed');
+    }
+}
+
+// Restore job states from localStorage
 document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('details pre').forEach(function(pre) {
-        try {
-            const jsonObj = JSON.parse(pre.textContent);
-            pre.textContent = JSON.stringify(jsonObj, null, 2);
-        } catch (e) {
-            // Not JSON or already formatted
-            console.debug('Not valid JSON or already formatted:', e);
+    // Restore job expand/collapse states from localStorage
+    document.querySelectorAll('[id^="job-"]').forEach(function(jobDetails) {
+        const taskId = jobDetails.id.replace('job-', '');
+        const savedState = localStorage.getItem('job-state-' + taskId);
+
+        if (savedState === 'expanded') {
+            jobDetails.classList.remove('hidden');
+            const icon = document.getElementById('icon-' + taskId);
+            if (icon) {
+                icon.classList.add('rotate-180');
+            }
         }
     });
 });

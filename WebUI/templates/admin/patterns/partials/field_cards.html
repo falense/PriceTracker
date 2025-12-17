@@ -1,0 +1,142 @@
+{% if test_results.error %}
+<div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
+    <div class="flex items-center">
+        <svg class="w-6 h-6 text-red-600 dark:text-red-400 mr-3" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+        </svg>
+        <div>
+            <h3 class="text-lg font-semibold text-red-800 dark:text-red-200">Test Error</h3>
+            <p class="text-sm text-red-700 dark:text-red-300 mt-1">{{ test_results.error }}</p>
+        </div>
+    </div>
+</div>
+{% else %}
+
+<!-- Field Cards Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    {% for field in test_results.fields %}
+    <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <!-- Field Header -->
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white capitalize">
+                {{ field.name }}
+            </h3>
+        </div>
+
+        <!-- Selectors -->
+        <div class="p-6 space-y-4">
+            {% for selector in field.selectors %}
+            <div class="border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
+                <!-- Selector Header -->
+                <div class="px-4 py-3 bg-gray-50 dark:bg-gray-700 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+                            {% if selector.type == 'primary' %}
+                                bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400
+                            {% else %}
+                                bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-400
+                            {% endif %}">
+                            {{ selector.type|upper }}
+                        </span>
+                        <span class="text-xs font-medium text-gray-600 dark:text-gray-400">
+                            {{ selector.selector_type|upper }}
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-500 dark:text-gray-400">
+                            Confidence: {% widthratio selector.confidence 1 100 %}%
+                        </span>
+                        {% if selector.matched %}
+                        <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                        </svg>
+                        {% else %}
+                        <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                        </svg>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Selector Details -->
+                <div class="px-4 py-3 space-y-3">
+                    <!-- Selector String -->
+                    <div>
+                        <label class="text-xs font-medium text-gray-500 dark:text-gray-400">Selector</label>
+                        <pre class="mt-1 text-xs font-mono bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white p-2 rounded overflow-x-auto">{{ selector.selector }}</pre>
+                    </div>
+
+                    {% if selector.matched %}
+                    <!-- Match Count -->
+                    <div>
+                        <label class="text-xs font-medium text-gray-500 dark:text-gray-400">Matches Found</label>
+                        <p class="mt-1 text-sm text-gray-900 dark:text-white">
+                            {{ selector.match_count }} element{{ selector.match_count|pluralize }}
+                        </p>
+                    </div>
+
+                    <!-- Extracted Value -->
+                    <div>
+                        <label class="text-xs font-medium text-gray-500 dark:text-gray-400">Extracted Value</label>
+                        <div class="mt-1 text-sm text-gray-900 dark:text-white bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded p-2 break-words">
+                            {{ selector.extracted_value|default:"(empty)" }}
+                        </div>
+                    </div>
+
+                    <!-- HTML Snippet (Collapsible) -->
+                    {% if selector.html_snippet %}
+                    <div>
+                        <button
+                            type="button"
+                            onclick="toggleSnippet(this)"
+                            class="text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 flex items-center gap-1">
+                            <svg class="w-4 h-4 transform transition-transform snippet-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                            Show HTML Snippet
+                        </button>
+                        <pre class="hidden snippet-content mt-2 text-xs font-mono bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-300 p-3 rounded overflow-x-auto max-h-40 overflow-y-auto">{{ selector.html_snippet }}</pre>
+                    </div>
+                    {% endif %}
+
+                    {% else %}
+                    <!-- No Match Message -->
+                    <div class="text-sm text-red-600 dark:text-red-400">
+                        No matches found for this selector
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if test_results.metadata %}
+<div class="mt-6 text-sm text-gray-500 dark:text-gray-400 text-center">
+    Test completed • Fetch time: {{ test_results.metadata.fetch_time_ms }}ms
+    {% if test_results.metadata.html_size %}
+        • HTML size: {{ test_results.metadata.html_size|filesizeformat }}
+    {% endif %}
+</div>
+{% endif %}
+
+{% endif %}
+
+<script>
+function toggleSnippet(button) {
+    const snippet = button.nextElementSibling;
+    const icon = button.querySelector('.snippet-icon');
+
+    if (snippet.classList.contains('hidden')) {
+        snippet.classList.remove('hidden');
+        icon.style.transform = 'rotate(180deg)';
+        button.innerHTML = button.innerHTML.replace('Show', 'Hide');
+    } else {
+        snippet.classList.add('hidden');
+        icon.style.transform = 'rotate(0deg)';
+        button.innerHTML = button.innerHTML.replace('Hide', 'Show');
+    }
+}
+</script>

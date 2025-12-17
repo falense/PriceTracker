@@ -467,29 +467,52 @@ class PatternTestService:
         if parsed.scheme not in ['http', 'https']:
             raise ValueError('URL must use HTTP or HTTPS')
 
-        # Fetch using PriceFetcher's stealth browser
-        # For now, we'll use a simple requests fallback
-        # TODO: Integrate with PriceFetcher's Playwright browser
-        import requests
+        # Fetch using Playwright browser automation (same as PriceFetcher)
+        import asyncio
         from time import time
+        from playwright.async_api import async_playwright
 
-        start_time = time()
+        async def fetch_with_browser(url: str) -> tuple:
+            """Fetch HTML using Playwright browser."""
+            start_time = time()
 
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
+            async with async_playwright() as p:
+                # Launch browser with stealth mode
+                browser = await p.chromium.launch(
+                    headless=True,
+                    args=[
+                        '--disable-blink-features=AutomationControlled',
+                        '--disable-features=IsolateOrigins,site-per-process',
+                    ]
+                )
 
-        response = requests.get(url, headers=headers, timeout=30)
-        response.raise_for_status()
+                # Create context with realistic options
+                context = await browser.new_context(
+                    viewport={'width': 1920, 'height': 1080},
+                    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                )
 
-        duration_ms = int((time() - start_time) * 1000)
+                page = await context.new_page()
 
-        html = response.text
+                # Navigate and wait for network idle (JavaScript rendering)
+                await page.goto(url, wait_until='networkidle', timeout=30000)
+
+                # Get rendered HTML
+                html = await page.content()
+
+                await browser.close()
+
+                duration_ms = int((time() - start_time) * 1000)
+                return html, duration_ms
+
+        # Run async fetch in sync context
+        html, duration_ms = asyncio.run(fetch_with_browser(url))
+
         metadata = {
             'fetch_time_ms': duration_ms,
             'html_size': len(html),
-            'status_code': response.status_code,
-            'content_type': response.headers.get('Content-Type', ''),
+            'status_code': 200,
+            'content_type': 'text/html',
         }
 
         # Cache for 5 minutes
@@ -733,4 +756,196 @@ class PatternTestService:
                 'matched': False,
                 'value': None,
                 'error': str(e)
+            }
+
+    @staticmethod
+    def _extract_with_html_capture(html: str, selector_config: Dict) -> Dict:
+        """
+        Extract value and capture HTML snippet.
+
+        Args:
+            html: HTML content
+            selector_config: Selector configuration dict
+
+        Returns:
+            Dict with {matched, value, html_snippet, match_count}
+        """
+        from bs4 import BeautifulSoup
+        from lxml import html as lxml_html
+        import json as json_module
+
+        selector_type = selector_config.get('type')
+        selector = selector_config.get('selector')
+        attribute = selector_config.get('attribute')
+
+        try:
+            if selector_type == 'css':
+                soup = BeautifulSoup(html, 'html.parser')
+                elements = soup.select(selector)  # Get ALL matches
+
+                if not elements:
+                    return {'matched': False, 'value': None, 'html_snippet': None, 'match_count': 0}
+
+                element = elements[0]  # Use first match
+                value = element.get(attribute) if attribute else element.get_text(strip=True)
+                html_snippet = str(element)[:500]  # Truncate to 500 chars
+
+                return {
+                    'matched': True,
+                    'value': value,
+                    'html_snippet': html_snippet,
+                    'match_count': len(elements)
+                }
+
+            elif selector_type == 'xpath':
+                tree = lxml_html.fromstring(html)
+                elements = tree.xpath(selector)
+
+                if not elements:
+                    return {'matched': False, 'value': None, 'html_snippet': None, 'match_count': 0}
+
+                element = elements[0]
+                value = element.get(attribute) if attribute and hasattr(element, 'get') else (
+                    element.text_content().strip() if hasattr(element, 'text_content') else str(element)
+                )
+                html_snippet = lxml_html.tostring(element, encoding='unicode')[:500]
+
+                return {
+                    'matched': True,
+                    'value': value,
+                    'html_snippet': html_snippet,
+                    'match_count': len(elements)
+                }
+
+            elif selector_type == 'meta':
+                soup = BeautifulSoup(html, 'html.parser')
+                element = soup.find('meta', attrs={'property': selector})
+
+                if not element:
+                    return {'matched': False, 'value': None, 'html_snippet': None, 'match_count': 0}
+
+                value = element.get('content')
+                html_snippet = str(element)
+
+                return {'matched': True, 'value': value, 'html_snippet': html_snippet, 'match_count': 1}
+
+            elif selector_type == 'jsonld' or selector_type == 'json_ld':
+                # Use existing JSON-LD extraction logic
+                soup = BeautifulSoup(html, 'html.parser')
+                scripts = soup.find_all('script', type='application/ld+json')
+
+                json_path = selector_config.get('json_path', '')
+
+                for script in scripts:
+                    try:
+                        data = json_module.loads(script.string)
+                        # Navigate JSON path
+                        value = data
+                        for key in json_path.split('.'):
+                            if not key:  # Skip empty keys
+                                continue
+                            if key.isdigit():
+                                value = value[int(key)]
+                            else:
+                                value = value.get(key) if isinstance(value, dict) else None
+                            if value is None:
+                                break
+
+                        if value:
+                            return {
+                                'matched': True,
+                                'value': str(value),
+                                'html_snippet': f'<script type="application/ld+json">...{json_path}: {value}...</script>',
+                                'match_count': 1
+                            }
+                    except:
+                        continue
+
+                return {'matched': False, 'value': None, 'html_snippet': None, 'match_count': 0}
+
+            return {'matched': False, 'value': None, 'html_snippet': None, 'match_count': 0}
+
+        except Exception as e:
+            logger.exception(f"Error extracting with HTML capture: {e}")
+            return {'matched': False, 'value': None, 'html_snippet': None, 'match_count': 0}
+
+    @staticmethod
+    def test_pattern_for_visualization(pattern: Pattern) -> Dict[str, Any]:
+        """
+        Test pattern for visualization page with enhanced selector details.
+
+        Args:
+            pattern: Pattern instance to test
+
+        Returns:
+            Dict with {success, test_url, fields[], metadata}
+        """
+        # Get test URL from most recent ProductListing
+        test_url = ProductListing.objects.filter(
+            store__domain=pattern.domain,
+            active=True
+        ).order_by('-last_checked').values_list('url', flat=True).first()
+
+        if not test_url:
+            return {
+                'success': False,
+                'error': 'No active product listings for this domain',
+                'test_url': None,
+                'fields': []
+            }
+
+        try:
+            # Fetch HTML
+            html, metadata = PatternTestService.fetch_html(test_url, use_cache=True)
+
+            # Test each field's selectors
+            fields_data = []
+            for field_name, field_pattern in pattern.pattern_json.get('patterns', {}).items():
+                field_data = {'name': field_name, 'selectors': []}
+
+                # Test primary selector
+                primary = field_pattern.get('primary', {})
+                if primary:
+                    primary_result = PatternTestService._extract_with_html_capture(html, primary)
+                    field_data['selectors'].append({
+                        'type': 'primary',
+                        'selector_type': primary.get('type'),
+                        'selector': primary.get('selector'),
+                        'matched': primary_result['matched'],
+                        'match_count': primary_result['match_count'],
+                        'extracted_value': primary_result['value'],
+                        'html_snippet': primary_result['html_snippet'],
+                        'confidence': primary.get('confidence', 0.0)
+                    })
+
+                # Test fallback selectors
+                for i, fallback in enumerate(field_pattern.get('fallbacks', [])):
+                    fallback_result = PatternTestService._extract_with_html_capture(html, fallback)
+                    field_data['selectors'].append({
+                        'type': f'fallback_{i+1}',
+                        'selector_type': fallback.get('type'),
+                        'selector': fallback.get('selector'),
+                        'matched': fallback_result['matched'],
+                        'match_count': fallback_result['match_count'],
+                        'extracted_value': fallback_result['value'],
+                        'html_snippet': fallback_result['html_snippet'],
+                        'confidence': fallback.get('confidence', 0.0)
+                    })
+
+                fields_data.append(field_data)
+
+            return {
+                'success': True,
+                'test_url': test_url,
+                'fields': fields_data,
+                'metadata': metadata
+            }
+
+        except Exception as e:
+            logger.exception(f"Error testing pattern for visualization: {e}")
+            return {
+                'success': False,
+                'error': f'Test failed: {str(e)}',
+                'test_url': test_url,
+                'fields': []
             }

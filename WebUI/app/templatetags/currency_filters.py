@@ -46,3 +46,45 @@ def to_json(value):
         return mark_safe(json.dumps(value, default=str, ensure_ascii=False))
     except (TypeError, ValueError):
         return '{}'
+
+
+@register.filter(name='truncate_path')
+def truncate_path(url, max_length=50):
+    """
+    Truncate URL to show only path, with intelligent truncation.
+
+    Usage in template:
+        {{ log.context.url|truncate_path }}
+        {{ log.context.url|truncate_path:40 }}
+    """
+    if not url:
+        return ''
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(str(url))
+        path = parsed.path or url
+
+        if len(path) > max_length:
+            # Keep start and end, truncate middle
+            keep_each = (max_length - 3) // 2
+            return path[:keep_each] + '...' + path[-keep_each:]
+        return path
+    except Exception:
+        # Fallback: simple string truncation
+        url_str = str(url)
+        if len(url_str) > max_length:
+            return url_str[:max_length-3] + '...'
+        return url_str
+
+
+@register.filter(name='context_value')
+def context_value(context_dict, key):
+    """
+    Safely get a value from context dict.
+
+    Usage in template:
+        {{ log.context|context_value:"url" }}
+    """
+    if not context_dict or not isinstance(context_dict, dict):
+        return None
+    return context_dict.get(key)

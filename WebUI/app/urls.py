@@ -54,6 +54,7 @@ urlpatterns = [
     path('api/patterns/validate/', views.api_validate_pattern, name='api_validate_pattern'),
     path('api/patterns/fetch-html/', views.api_fetch_html, name='api_fetch_html'),
     path('api/patterns/regenerate/', views.api_regenerate_pattern, name='api_regenerate_pattern'),
+    path('api/patterns/retest-visualization/', views.api_retest_pattern_visualization, name='api_retest_pattern_visualization'),
 
     # Admin Flags
     path('admin-dashboard/flags/', views.admin_flags_list, name='admin_flags_list'),
