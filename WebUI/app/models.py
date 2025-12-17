@@ -564,9 +564,18 @@ class Pattern(models.Model):
         db_index=True
     )
 
-    # Pattern data
+    # Pattern data (transitioning from JSON to Python modules)
     pattern_json = models.JSONField(
-        help_text='Full pattern structure from ExtractorPatternAgent'
+        null=True,
+        blank=True,
+        help_text='Full pattern structure from ExtractorPatternAgent (deprecated, use extractor_module)'
+    )
+    extractor_module = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text='Python extractor module name (e.g., "generated_extractors.komplett_no")'
     )
 
     # Success tracking
@@ -588,7 +597,8 @@ class Pattern(models.Model):
         verbose_name_plural = 'Patterns'
 
     def __str__(self):
-        return f"Pattern for {self.domain} ({self.success_rate:.1%} success)"
+        pattern_type = "Python" if self.extractor_module else "JSON"
+        return f"Pattern for {self.domain} ({pattern_type}, {self.success_rate:.1%} success)"
 
     def record_attempt(self, success: bool):
         """Record pattern usage and update success rate."""
