@@ -10,10 +10,10 @@ Usage:
 
 import sys
 import argparse
+import importlib
 from pathlib import Path
 from typing import Optional, Dict, Any
 from decimal import Decimal
-import importlib.util
 from bs4 import BeautifulSoup
 
 # Add parent directory to path for imports
@@ -39,20 +39,19 @@ def load_extractor_module(domain: str):
     """
     # Convert domain to module name (replace dots with underscores)
     module_name = domain.replace('.', '_').replace('-', '_')
-    module_path = Path(__file__).parent.parent / 'generated_extractors' / f'{module_name}.py'
     
-    if not module_path.exists():
-        print(f"Error: No extractor found at {module_path}")
-        return None
-    
-    # Load the module
-    spec = importlib.util.spec_from_file_location(module_name, module_path)
-    if spec and spec.loader:
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+    # Use importlib to import from generated_extractors package
+    try:
+        # Import the package-relative module
+        from generated_extractors import _base  # Ensure _base is available
+        module = importlib.import_module(f'generated_extractors.{module_name}')
         return module
-    
-    return None
+    except ImportError as e:
+        print(f"Error: Could not import extractor module for {domain}: {e}")
+        return None
+    except Exception as e:
+        print(f"Error loading extractor: {e}")
+        return None
 
 
 def find_samples(domain: str, sample_name: Optional[str] = None) -> list[Path]:

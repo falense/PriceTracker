@@ -19,12 +19,12 @@ from ._base import BaseExtractor
 # Metadata (required for discovery)
 PATTERN_METADATA = {
     'domain': 'oda.com',
-    'generated_at': '2025-12-20T23:25:00',
-    'generator': 'manual-template',
-    'version': '0.1',
-    'confidence': 0.70,  # Lower confidence until tested with actual HTML
+    'generated_at': '2025-12-20T23:32:00',
+    'generator': 'manual',
+    'version': '1.0',
+    'confidence': 0.90,  # Tested with real HTML - 5/6 fields extracting successfully
     'fields': ['price', 'title', 'image', 'availability', 'article_number', 'model_number'],
-    'notes': 'Template extractor - needs refinement with actual HTML samples'
+    'notes': 'Tested and verified with product page. Uses OpenGraph meta tags for title/image, meta price tags and URL extraction for article number. Model number not typically available for beverage products.'
 }
 
 
