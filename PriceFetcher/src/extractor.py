@@ -9,11 +9,11 @@ import structlog
 
 from .models import ExtractionResult, ExtractedField
 
-logger = structlog.get_logger(__name__).bind(service='fetcher')
+logger = structlog.get_logger(__name__).bind(service="fetcher")
 
 # Add ExtractorPatternAgent to path for generated_extractors import
 REPO_ROOT = Path(__file__).parent.parent.parent
-EXTRACTOR_PATH = REPO_ROOT / 'ExtractorPatternAgent'
+EXTRACTOR_PATH = REPO_ROOT / "ExtractorPatternAgent"
 if str(EXTRACTOR_PATH) not in sys.path:
     sys.path.insert(0, str(EXTRACTOR_PATH))
 
@@ -21,9 +21,7 @@ if str(EXTRACTOR_PATH) not in sys.path:
 class Extractor:
     """Apply Python extractors to HTML to extract product data."""
 
-    def extract_with_domain(
-        self, html: str, domain: str
-    ) -> ExtractionResult:
+    def extract_with_domain(self, html: str, domain: str) -> ExtractionResult:
         """
         Extract data using Python extractor module for domain.
 
@@ -38,25 +36,33 @@ class Extractor:
 
         try:
             # Import generated_extractors API
-            from generated_extractors import extract_from_html, has_parser
+            from generated_extractors import extract_from_html
 
             # Normalize domain (remove www.)
-            normalized_domain = domain.lower().replace('www.', '')
-
-            # Check if extractor exists
-            if not has_parser(normalized_domain):
-                logger.error("no_extractor_found", domain=domain, normalized=normalized_domain)
-                return self._empty_result()
+            normalized_domain = domain.lower().replace("www.", "")
 
             # Extract using Python module
-            result_dict = extract_from_html(normalized_domain, html)
+            result = extract_from_html(normalized_domain, html)
 
-            if not result_dict:
+            if result is None:
                 logger.warning("extraction_returned_empty", domain=domain)
-                return self._empty_result()
+                return self._empty_result(errors=["Extractor returned no result"])
 
             # Convert to ExtractionResult format
-            extraction = self._convert_to_extraction_result(result_dict)
+            extraction = self._convert_to_extraction_result(result)
+
+            if extraction.errors:
+                logger.error(
+                    "extraction_reported_errors",
+                    domain=domain,
+                    errors=extraction.errors,
+                )
+            elif extraction.warnings:
+                logger.warning(
+                    "extraction_reported_warnings",
+                    domain=domain,
+                    warnings=extraction.warnings,
+                )
 
             logger.info(
                 "extraction_completed",
@@ -69,56 +75,45 @@ class Extractor:
 
         except ImportError as e:
             logger.error("extractor_import_failed", domain=domain, error=str(e))
-            return self._empty_result()
+            return self._empty_result(errors=[f"Extractor import failed: {e}"])
         except Exception as e:
             logger.exception("extraction_failed", domain=domain, error=str(e))
-            return self._empty_result()
+            return self._empty_result(errors=[str(e)])
 
-    def _convert_to_extraction_result(self, result_dict: dict) -> ExtractionResult:
-        """Convert extracted dict to ExtractionResult model."""
+    def _convert_to_extraction_result(self, result) -> ExtractionResult:
+        """Convert ExtractorResult to ExtractionResult model."""
 
         # Convert each field
-        price_value = result_dict.get('price')
+        price_value = getattr(result, "price", None)
         if price_value and isinstance(price_value, (Decimal, float, int, str)):
             try:
                 price = ExtractedField(
-                    value=str(price_value),
-                    method="python_extractor",
-                    confidence=1.0
+                    value=str(price_value), method="python_extractor", confidence=1.0
                 )
-            except:
+            except Exception:
                 price = ExtractedField(value=None, method=None, confidence=0.0)
         else:
             price = ExtractedField(value=None, method=None, confidence=0.0)
 
+        title_value = getattr(result, "title", None)
         title = ExtractedField(
-            value=result_dict.get('title'),
-            method="python_extractor" if result_dict.get('title') else None,
-            confidence=1.0 if result_dict.get('title') else 0.0
+            value=title_value,
+            method="python_extractor" if title_value else None,
+            confidence=1.0 if title_value else 0.0,
         )
 
+        image_value = getattr(result, "image", None)
         image = ExtractedField(
-            value=result_dict.get('image'),
-            method="python_extractor" if result_dict.get('image') else None,
-            confidence=1.0 if result_dict.get('image') else 0.0
+            value=image_value,
+            method="python_extractor" if image_value else None,
+            confidence=1.0 if image_value else 0.0,
         )
 
+        availability_value = getattr(result, "availability", None)
         availability = ExtractedField(
-            value=result_dict.get('availability'),
-            method="python_extractor" if result_dict.get('availability') else None,
-            confidence=1.0 if result_dict.get('availability') else 0.0
-        )
-
-        article_number = ExtractedField(
-            value=result_dict.get('article_number'),
-            method="python_extractor" if result_dict.get('article_number') else None,
-            confidence=1.0 if result_dict.get('article_number') else 0.0
-        )
-
-        model_number = ExtractedField(
-            value=result_dict.get('model_number'),
-            method="python_extractor" if result_dict.get('model_number') else None,
-            confidence=1.0 if result_dict.get('model_number') else 0.0
+            value=availability_value,
+            method="python_extractor" if availability_value else None,
+            confidence=1.0 if availability_value else 0.0,
         )
 
         return ExtractionResult(
@@ -126,11 +121,15 @@ class Extractor:
             title=title,
             image=image,
             availability=availability,
-            article_number=article_number,
-            model_number=model_number
+            errors=list(getattr(result, "errors", []) or []),
+            warnings=list(getattr(result, "warnings", []) or []),
         )
 
-    def _empty_result(self) -> ExtractionResult:
+    def _empty_result(
+        self,
+        errors: Optional[list[str]] = None,
+        warnings: Optional[list[str]] = None,
+    ) -> ExtractionResult:
         """Return empty extraction result."""
         empty_field = ExtractedField(value=None, method=None, confidence=0.0)
         return ExtractionResult(
@@ -138,6 +137,6 @@ class Extractor:
             title=empty_field,
             image=empty_field,
             availability=empty_field,
-            article_number=empty_field,
-            model_number=empty_field
+            errors=errors or [],
+            warnings=warnings or [],
         )

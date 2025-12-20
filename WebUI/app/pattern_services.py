@@ -4,6 +4,7 @@ Pattern Management Services.
 Provides business logic for pattern management, testing, validation, and history tracking.
 Supports both legacy JSON patterns and new Python extractor modules.
 """
+
 import json
 import subprocess
 import logging
@@ -23,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 # Add ExtractorPatternAgent to path for generated_extractors import
 REPO_ROOT = Path(__file__).parent.parent.parent
-EXTRACTOR_PATH = REPO_ROOT / 'ExtractorPatternAgent'
+EXTRACTOR_PATH = REPO_ROOT / "ExtractorPatternAgent"
 if str(EXTRACTOR_PATH) not in sys.path:
     sys.path.insert(0, str(EXTRACTOR_PATH))
 
@@ -42,30 +43,27 @@ class PatternManagementService:
         Returns:
             Dict with patterns list and stats
         """
-        patterns = Pattern.objects.all().select_related('store').order_by('domain')
+        patterns = Pattern.objects.all().select_related("store").order_by("domain")
 
         if not with_stats:
-            return {'patterns': patterns, 'stats': None}
+            return {"patterns": patterns, "stats": None}
 
         # Calculate statistics
         total = patterns.count()
         healthy = patterns.filter(success_rate__gte=0.8).count()
-        warning = patterns.filter(
-            success_rate__gte=0.6,
-            success_rate__lt=0.8
-        ).count()
+        warning = patterns.filter(success_rate__gte=0.6, success_rate__lt=0.8).count()
         failing = patterns.filter(success_rate__lt=0.6).count()
         pending = patterns.filter(total_attempts=0).count()
 
         stats = {
-            'total': total,
-            'healthy': healthy,
-            'warning': warning,
-            'failing': failing,
-            'pending': pending
+            "total": total,
+            "healthy": healthy,
+            "warning": warning,
+            "failing": failing,
+            "pending": pending,
         }
 
-        return {'patterns': patterns, 'stats': stats}
+        return {"patterns": patterns, "stats": stats}
 
     @staticmethod
     def get_pattern_detail(domain: str) -> Optional[Pattern]:
@@ -79,9 +77,11 @@ class PatternManagementService:
             Pattern instance or None
         """
         try:
-            return Pattern.objects.select_related('store').prefetch_related(
-                'history'
-            ).get(domain=domain)
+            return (
+                Pattern.objects.select_related("store")
+                .prefetch_related("history")
+                .get(domain=domain)
+            )
         except Pattern.DoesNotExist:
             return None
 
@@ -90,7 +90,7 @@ class PatternManagementService:
         domain: str,
         extractor_module: str,
         user,
-        change_reason: str = 'Initial creation'
+        change_reason: str = "Initial creation",
     ) -> Tuple[Pattern, bool]:
         """
         Create new pattern with Python extractor.
@@ -106,24 +106,23 @@ class PatternManagementService:
         """
         # Normalize domain
         domain = domain.lower().strip()
-        if domain.startswith('www.'):
+        if domain.startswith("www."):
             domain = domain[4:]
 
         # Get or create store
         store, _ = Store.objects.get_or_create(
-            domain=domain,
-            defaults={'name': domain.split('.')[0].title()}
+            domain=domain, defaults={"name": domain.split(".")[0].title()}
         )
 
         # Create pattern
         pattern, created = Pattern.objects.update_or_create(
             domain=domain,
             defaults={
-                'extractor_module': extractor_module,
-                'pattern_json': None,  # No longer using JSON
-                'store': store,
-                'last_validated': timezone.now()
-            }
+                "extractor_module": extractor_module,
+                "pattern_json": None,  # No longer using JSON
+                "store": store,
+                "last_validated": timezone.now(),
+            },
         )
 
         # PatternHistory now stores Python module reference instead of JSON
@@ -133,10 +132,7 @@ class PatternManagementService:
 
     @staticmethod
     def update_pattern(
-        domain: str,
-        extractor_module: str,
-        user,
-        change_reason: str = 'Manual edit'
+        domain: str, extractor_module: str, user, change_reason: str = "Manual edit"
     ) -> Pattern:
         """
         Update existing pattern's extractor module.
@@ -156,7 +152,14 @@ class PatternManagementService:
         pattern.extractor_module = extractor_module
         pattern.pattern_json = None  # Clear JSON pattern
         pattern.last_validated = timezone.now()
-        pattern.save(update_fields=['extractor_module', 'pattern_json', 'last_validated', 'updated_at'])
+        pattern.save(
+            update_fields=[
+                "extractor_module",
+                "pattern_json",
+                "last_validated",
+                "updated_at",
+            ]
+        )
 
         return pattern
 
@@ -180,10 +183,7 @@ class PatternManagementService:
 
     @staticmethod
     def rollback_pattern(
-        domain: str,
-        version_number: int,
-        user,
-        change_reason: str = None
+        domain: str, version_number: int, user, change_reason: str = None
     ) -> Pattern:
         """
         Rollback pattern to previous version.
@@ -199,17 +199,16 @@ class PatternManagementService:
         """
         pattern = Pattern.objects.get(domain=domain)
         history_version = PatternHistory.objects.get(
-            pattern=pattern,
-            version_number=version_number
+            pattern=pattern, version_number=version_number
         )
 
         if not change_reason:
-            change_reason = f'Rollback to version {version_number}'
+            change_reason = f"Rollback to version {version_number}"
 
         # Save current state before rollback
-        last_version = PatternHistory.objects.filter(
-            pattern=pattern
-        ).aggregate(Max('version_number'))['version_number__max']
+        last_version = PatternHistory.objects.filter(pattern=pattern).aggregate(
+            Max("version_number")
+        )["version_number__max"]
 
         next_version = (last_version or 0) + 1
 
@@ -219,10 +218,10 @@ class PatternManagementService:
             version_number=next_version,
             pattern_json=pattern.pattern_json,
             changed_by=user,
-            change_reason=f'Before rollback to version {version_number}',
-            change_type='auto_save',
+            change_reason=f"Before rollback to version {version_number}",
+            change_type="auto_save",
             success_rate_at_time=pattern.success_rate,
-            total_attempts_at_time=pattern.total_attempts
+            total_attempts_at_time=pattern.total_attempts,
         )
 
         # Rollback to old version
@@ -243,9 +242,9 @@ class PatternManagementService:
             pattern_json=history_version.pattern_json,
             changed_by=user,
             change_reason=change_reason,
-            change_type='rollback',
+            change_type="rollback",
             success_rate_at_time=0.0,
-            total_attempts_at_time=0
+            total_attempts_at_time=0,
         )
 
         return pattern
@@ -266,12 +265,16 @@ class PatternHistoryService:
         Returns:
             List of PatternHistory instances
         """
-        return PatternHistory.objects.filter(
-            domain=domain
-        ).select_related('pattern', 'changed_by').order_by('-version_number')[:limit]
+        return (
+            PatternHistory.objects.filter(domain=domain)
+            .select_related("pattern", "changed_by")
+            .order_by("-version_number")[:limit]
+        )
 
     @staticmethod
-    def get_pattern_version(domain: str, version_number: int) -> Optional[PatternHistory]:
+    def get_pattern_version(
+        domain: str, version_number: int
+    ) -> Optional[PatternHistory]:
         """
         Get specific pattern version.
 
@@ -284,17 +287,13 @@ class PatternHistoryService:
         """
         try:
             return PatternHistory.objects.get(
-                domain=domain,
-                version_number=version_number
+                domain=domain, version_number=version_number
             )
         except PatternHistory.DoesNotExist:
             return None
 
     @staticmethod
-    def compare_versions(
-        version1_json: Dict,
-        version2_json: Dict
-    ) -> Dict[str, Any]:
+    def compare_versions(version1_json: Dict, version2_json: Dict) -> Dict[str, Any]:
         """
         Generate diff between two pattern versions.
 
@@ -306,44 +305,40 @@ class PatternHistoryService:
             Dict with added/removed/modified fields and details
         """
         diff = {
-            'added_fields': [],
-            'removed_fields': [],
-            'modified_fields': [],
-            'details': {},
-            'metadata_changes': {}
+            "added_fields": [],
+            "removed_fields": [],
+            "modified_fields": [],
+            "details": {},
+            "metadata_changes": {},
         }
 
-        patterns1 = version1_json.get('patterns', {})
-        patterns2 = version2_json.get('patterns', {})
+        patterns1 = version1_json.get("patterns", {})
+        patterns2 = version2_json.get("patterns", {})
 
         # Find added/removed fields
         fields1 = set(patterns1.keys())
         fields2 = set(patterns2.keys())
 
-        diff['added_fields'] = list(fields2 - fields1)
-        diff['removed_fields'] = list(fields1 - fields2)
+        diff["added_fields"] = list(fields2 - fields1)
+        diff["removed_fields"] = list(fields1 - fields2)
 
         # Find modified fields
         for field in fields1 & fields2:
             if patterns1[field] != patterns2[field]:
-                diff['modified_fields'].append(field)
-                diff['details'][field] = {
-                    'old': patterns1[field],
-                    'new': patterns2[field],
-                    'changes': PatternHistoryService._compare_field_pattern(
-                        patterns1[field],
-                        patterns2[field]
-                    )
+                diff["modified_fields"].append(field)
+                diff["details"][field] = {
+                    "old": patterns1[field],
+                    "new": patterns2[field],
+                    "changes": PatternHistoryService._compare_field_pattern(
+                        patterns1[field], patterns2[field]
+                    ),
                 }
 
         # Compare metadata
-        metadata1 = version1_json.get('metadata', {})
-        metadata2 = version2_json.get('metadata', {})
+        metadata1 = version1_json.get("metadata", {})
+        metadata2 = version2_json.get("metadata", {})
         if metadata1 != metadata2:
-            diff['metadata_changes'] = {
-                'old': metadata1,
-                'new': metadata2
-            }
+            diff["metadata_changes"] = {"old": metadata1, "new": metadata2}
 
         return diff
 
@@ -353,17 +348,17 @@ class PatternHistoryService:
         changes = {}
 
         # Compare primary selector
-        if field1.get('primary') != field2.get('primary'):
-            changes['primary'] = 'Modified'
+        if field1.get("primary") != field2.get("primary"):
+            changes["primary"] = "Modified"
 
         # Compare fallbacks
-        fallbacks1 = field1.get('fallbacks', [])
-        fallbacks2 = field2.get('fallbacks', [])
+        fallbacks1 = field1.get("fallbacks", [])
+        fallbacks2 = field2.get("fallbacks", [])
 
         if len(fallbacks1) != len(fallbacks2):
-            changes['fallbacks_count'] = f'{len(fallbacks1)} → {len(fallbacks2)}'
+            changes["fallbacks_count"] = f"{len(fallbacks1)} → {len(fallbacks2)}"
         elif fallbacks1 != fallbacks2:
-            changes['fallbacks'] = 'Modified'
+            changes["fallbacks"] = "Modified"
 
         return changes
 
@@ -372,10 +367,7 @@ class PatternTestService:
     """Service for testing and validating patterns."""
 
     @staticmethod
-    def extract_with_python_module(
-        html: str,
-        extractor_module: str
-    ) -> Dict[str, Any]:
+    def extract_with_python_module(html: str, extractor_module: str) -> Dict[str, Any]:
         """
         Extract data using a Python extractor module.
 
@@ -384,50 +376,75 @@ class PatternTestService:
             extractor_module: Module name (e.g., "generated_extractors.komplett_no")
 
         Returns:
-            Dict with extracted field data
+            Dict with extracted field data and extraction errors/warnings
         """
         try:
             # Import generated_extractors
-            from generated_extractors import get_parser, extract_from_html
+            from generated_extractors import extract_from_html
 
             # Use the discovery API
-            domain = extractor_module.replace('generated_extractors.', '')
+            domain = extractor_module.replace("generated_extractors.", "")
             results = extract_from_html(domain, html)
 
-            if not results:
-                logger.warning(f"Python extractor {extractor_module} returned no results")
-                return {}
+            if results is None:
+                logger.warning(
+                    f"Python extractor {extractor_module} returned no results"
+                )
+                return {
+                    "fields": {},
+                    "errors": ["Extractor returned no results"],
+                    "warnings": [],
+                }
 
             # Convert ExtractorResult to dict format compatible with existing code
+            field_names = [
+                "price",
+                "title",
+                "image",
+                "availability",
+                "article_number",
+                "model_number",
+            ]
             formatted_results = {}
-            for field_name, value in results.items():
+            for field_name in field_names:
+                value = getattr(results, field_name, None)
                 if value is not None:
                     formatted_results[field_name] = {
-                        'value': str(value),
-                        'method': 'python_extractor',
-                        'confidence': 1.0,  # Python extractors don't have confidence scores
-                        'selector': extractor_module
+                        "value": str(value),
+                        "method": "python_extractor",
+                        "confidence": 1.0,  # Python extractors don't have confidence scores
+                        "selector": extractor_module,
                     }
                 else:
                     formatted_results[field_name] = {
-                        'value': None,
-                        'error': 'Extractor returned None'
+                        "value": None,
+                        "error": "Extractor returned None",
                     }
 
-            return formatted_results
+            return {
+                "fields": formatted_results,
+                "errors": list(getattr(results, "errors", []) or []),
+                "warnings": list(getattr(results, "warnings", []) or []),
+            }
 
         except ImportError as e:
             logger.error(f"Failed to import Python extractor {extractor_module}: {e}")
-            return {}
+            return {
+                "fields": {},
+                "errors": [f"Extractor import failed: {e}"],
+                "warnings": [],
+            }
         except Exception as e:
             logger.exception(f"Python extractor {extractor_module} failed: {e}")
-            return {}
+            return {
+                "fields": {},
+                "errors": [str(e)],
+                "warnings": [],
+            }
 
     @staticmethod
     def test_pattern_against_url(
-        url: str,
-        extractor_module: str,
-        use_cache: bool = True
+        url: str, extractor_module: str, use_cache: bool = True
     ) -> Dict[str, Any]:
         """
         Test Python extractor against a URL.
@@ -445,27 +462,37 @@ class PatternTestService:
             html, metadata = PatternTestService.fetch_html(url, use_cache=use_cache)
 
             # 2. Extract data using Python extractor
-            extraction_result = PatternTestService.extract_with_python_module(html, extractor_module)
+            extraction_payload = PatternTestService.extract_with_python_module(
+                html, extractor_module
+            )
+            extraction_result = extraction_payload.get("fields", {})
 
             # 3. Validate results
-            validation = PatternTestService._validate_extraction(extraction_result)
+            validation = PatternTestService._validate_extraction(
+                extraction_result,
+                extraction_payload.get("errors", []),
+                extraction_payload.get("warnings", []),
+            )
 
             return {
-                'success': extraction_result.get('price', {}).get('value') is not None,
-                'extraction': extraction_result,
-                'errors': validation['errors'],
-                'warnings': validation['warnings'],
-                'metadata': metadata
+                "success": (
+                    extraction_result.get("price", {}).get("value") is not None
+                    and not extraction_payload.get("errors")
+                ),
+                "extraction": extraction_result,
+                "errors": validation["errors"],
+                "warnings": validation["warnings"],
+                "metadata": metadata,
             }
 
         except Exception as e:
             logger.exception(f"Pattern test failed for {url}: {e}")
             return {
-                'success': False,
-                'extraction': {},
-                'errors': [str(e)],
-                'warnings': [],
-                'metadata': {}
+                "success": False,
+                "extraction": {},
+                "errors": [str(e)],
+                "warnings": [],
+                "metadata": {},
             }
 
     @staticmethod
@@ -482,16 +509,16 @@ class PatternTestService:
         """
         # Check cache first
         if use_cache:
-            cache_key = f'pattern_test_html_{url}'
+            cache_key = f"pattern_test_html_{url}"
             cached = cache.get(cache_key)
             if cached:
                 logger.info(f"Using cached HTML for {url}")
-                return cached['html'], cached['metadata']
+                return cached["html"], cached["metadata"]
 
         # Validate URL
         parsed = urlparse(url)
-        if parsed.scheme not in ['http', 'https']:
-            raise ValueError('URL must use HTTP or HTTPS')
+        if parsed.scheme not in ["http", "https"]:
+            raise ValueError("URL must use HTTP or HTTPS")
 
         # Fetch using Playwright browser automation (same as PriceFetcher)
         import asyncio
@@ -507,21 +534,21 @@ class PatternTestService:
                 browser = await p.chromium.launch(
                     headless=True,
                     args=[
-                        '--disable-blink-features=AutomationControlled',
-                        '--disable-features=IsolateOrigins,site-per-process',
-                    ]
+                        "--disable-blink-features=AutomationControlled",
+                        "--disable-features=IsolateOrigins,site-per-process",
+                    ],
                 )
 
                 # Create context with realistic options
                 context = await browser.new_context(
-                    viewport={'width': 1920, 'height': 1080},
-                    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    viewport={"width": 1920, "height": 1080},
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 )
 
                 page = await context.new_page()
 
                 # Navigate and wait for network idle (JavaScript rendering)
-                await page.goto(url, wait_until='networkidle', timeout=30000)
+                await page.goto(url, wait_until="networkidle", timeout=30000)
 
                 # Get rendered HTML
                 html = await page.content()
@@ -535,36 +562,40 @@ class PatternTestService:
         html, duration_ms = asyncio.run(fetch_with_browser(url))
 
         metadata = {
-            'fetch_time_ms': duration_ms,
-            'html_size': len(html),
-            'status_code': 200,
-            'content_type': 'text/html',
+            "fetch_time_ms": duration_ms,
+            "html_size": len(html),
+            "status_code": 200,
+            "content_type": "text/html",
         }
 
         # Cache for 5 minutes
         if use_cache:
-            cache_key = f'pattern_test_html_{url}'
-            cache.set(cache_key, {'html': html, 'metadata': metadata}, 300)
+            cache_key = f"pattern_test_html_{url}"
+            cache.set(cache_key, {"html": html, "metadata": metadata}, 300)
 
         return html, metadata
 
     @staticmethod
-    def _validate_extraction(extraction: Dict) -> Dict[str, List[str]]:
+    def _validate_extraction(
+        extraction: Dict,
+        extraction_errors: Optional[List[str]] = None,
+        extraction_warnings: Optional[List[str]] = None,
+    ) -> Dict[str, List[str]]:
         """Validate extraction results."""
-        errors = []
-        warnings = []
+        errors = list(extraction_errors or [])
+        warnings = list(extraction_warnings or [])
 
         # Check required fields
-        if not extraction.get('price', {}).get('value'):
-            errors.append('Price not found (required field)')
+        if not extraction.get("price", {}).get("value"):
+            errors.append("Price not found (required field)")
 
-        if not extraction.get('title', {}).get('value'):
-            warnings.append('Title not found')
+        if not extraction.get("title", {}).get("value"):
+            warnings.append("Title not found")
 
-        if not extraction.get('image', {}).get('value'):
-            warnings.append('Image not found')
+        if not extraction.get("image", {}).get("value"):
+            warnings.append("Image not found")
 
-        return {'errors': errors, 'warnings': warnings}
+        return {"errors": errors, "warnings": warnings}
 
     @staticmethod
     def test_pattern_for_visualization(pattern: Pattern) -> Dict[str, Any]:
@@ -575,28 +606,30 @@ class PatternTestService:
             pattern: Pattern instance to test
 
         Returns:
-            Dict with {success, test_url, extraction_results, metadata}
+            Dict with {success, test_url, extraction_results, errors, warnings, metadata}
         """
         # Get test URL from most recent ProductListing
-        test_url = ProductListing.objects.filter(
-            store__domain=pattern.domain,
-            active=True
-        ).order_by('-last_checked').values_list('url', flat=True).first()
+        test_url = (
+            ProductListing.objects.filter(store__domain=pattern.domain, active=True)
+            .order_by("-last_checked")
+            .values_list("url", flat=True)
+            .first()
+        )
 
         if not test_url:
             return {
-                'success': False,
-                'error': 'No active product listings for this domain',
-                'test_url': None,
-                'extraction_results': {}
+                "success": False,
+                "error": "No active product listings for this domain",
+                "test_url": None,
+                "extraction_results": {},
             }
 
         if not pattern.extractor_module:
             return {
-                'success': False,
-                'error': 'Pattern does not have a Python extractor module configured',
-                'test_url': test_url,
-                'extraction_results': {}
+                "success": False,
+                "error": "Pattern does not have a Python extractor module configured",
+                "test_url": test_url,
+                "extraction_results": {},
             }
 
         try:
@@ -604,23 +637,26 @@ class PatternTestService:
             html, metadata = PatternTestService.fetch_html(test_url, use_cache=True)
 
             # Extract using Python module
-            extraction_results = PatternTestService.extract_with_python_module(
-                html,
-                pattern.extractor_module
+            extraction_payload = PatternTestService.extract_with_python_module(
+                html, pattern.extractor_module
             )
+            extraction_results = extraction_payload.get("fields", {})
 
             return {
-                'success': bool(extraction_results),
-                'test_url': test_url,
-                'extraction_results': extraction_results,
-                'metadata': metadata
+                "success": bool(extraction_results)
+                and not extraction_payload.get("errors"),
+                "test_url": test_url,
+                "extraction_results": extraction_results,
+                "errors": extraction_payload.get("errors", []),
+                "warnings": extraction_payload.get("warnings", []),
+                "metadata": metadata,
             }
 
         except Exception as e:
             logger.exception(f"Error testing pattern for visualization: {e}")
             return {
-                'success': False,
-                'error': f'Test failed: {str(e)}',
-                'test_url': test_url,
-                'extraction_results': {}
+                "success": False,
+                "error": f"Test failed: {str(e)}",
+                "test_url": test_url,
+                "extraction_results": {},
             }

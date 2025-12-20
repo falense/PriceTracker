@@ -1,5 +1,5 @@
 """
-Auto-generated extractor for power.no
+Auto-generated extractor for elkjop.no
 
 Generated on 2025-12-20 for product extraction.
 """
@@ -14,7 +14,7 @@ from ._base import BaseExtractor
 
 
 PATTERN_METADATA = {
-    "domain": "power.no",
+    "domain": "elkjop.no",
     "generated_at": "2025-12-20T22:30:00",
     "generator": "generate-pattern",
     "version": "1.0",

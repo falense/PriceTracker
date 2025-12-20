@@ -8,7 +8,7 @@ import structlog
 
 from .models import ExtractionResult, ExtractedField, ValidationResult
 
-logger = structlog.get_logger(__name__).bind(service='fetcher')
+logger = structlog.get_logger(__name__).bind(service="fetcher")
 
 
 class Validator:
@@ -52,6 +52,12 @@ class Validator:
         errors: List[str] = []
         warnings: List[str] = []
 
+        if extraction.errors:
+            errors.extend(extraction.errors)
+
+        if extraction.warnings:
+            warnings.extend(extraction.warnings)
+
         # Validate price (required)
         price_result = self._validate_price(extraction.price)
         if not price_result["valid"]:
@@ -66,9 +72,7 @@ class Validator:
 
         # Check for suspicious changes if we have previous data
         if previous_extraction:
-            change_warnings = self._check_suspicious_changes(
-                extraction, previous_extraction
-            )
+            change_warnings = self._check_suspicious_changes(extraction, previous_extraction)
             warnings.extend(change_warnings)
 
         # Calculate overall confidence
@@ -190,8 +194,7 @@ class Validator:
 
                 if change_pct > self.max_price_change_pct:
                     warnings.append(
-                        f"Price changed by {change_pct:.1f}% "
-                        f"(${prev_price} → ${curr_price})"
+                        f"Price changed by {change_pct:.1f}% (${prev_price} → ${curr_price})"
                     )
 
         # Check title change

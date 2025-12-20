@@ -15,7 +15,10 @@ import json
 from pathlib import Path
 from urllib.parse import urlparse
 from datetime import datetime
-from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
+from playwright.async_api import (
+    async_playwright,
+    TimeoutError as PlaywrightTimeoutError,
+)
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -37,6 +40,7 @@ async def handle_cookie_dialog(page, quiet: bool = False):
         'button:has-text("Agree")',
         'button:has-text("OK")',
         'button:has-text("Godta")',  # Norwegian: Accept
+        'button:has-text("Godta alle")',  # Norwegian: Accept all
         'button:has-text("Godkjenn")',  # Norwegian: Approve
         'button:has-text("Aksepter")',  # Norwegian: Accept
         '[id*="accept"][id*="cookie"]',
@@ -44,12 +48,12 @@ async def handle_cookie_dialog(page, quiet: bool = False):
         '[class*="accept"][class*="cookie"]',
         '[class*="consent"][class*="accept"]',
         # CookieInformation (used by many Norwegian sites)
-        '#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll',
-        '#CybotCookiebotDialogBodyButtonAccept',
+        "#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll",
+        "#CybotCookiebotDialogBodyButtonAccept",
         'a[id*="CybotCookiebotDialogBodyLevelButtonAccept"]',
         '.CookieInformation button[data-action="accept"]',
         # OneTrust
-        '#onetrust-accept-btn-handler',
+        "#onetrust-accept-btn-handler",
         'button[id*="onetrust-accept"]',
     ]
 
@@ -71,6 +75,31 @@ async def handle_cookie_dialog(page, quiet: bool = False):
             # Selector not found or timeout, try next one
             continue
 
+    # Fallback: role-based click for common labels
+    try:
+        accept_button = page.get_by_role("button", name="Godta alle")
+        if await accept_button.is_visible():
+            await accept_button.click()
+            if not quiet:
+                print("✓ Cookie dialog accepted (role fallback)")
+            await page.wait_for_timeout(1000)
+            return
+    except:
+        pass
+
+    # Fallback: check iframe-based dialogs
+    for frame in page.frames:
+        try:
+            accept_button = frame.get_by_role("button", name="Godta alle")
+            if await accept_button.is_visible():
+                await accept_button.click()
+                if not quiet:
+                    print("✓ Cookie dialog accepted (iframe role fallback)")
+                await page.wait_for_timeout(1000)
+                return
+        except:
+            continue
+
 
 class SampleFetcher:
     """Fetches and stores web page samples for extractor development."""
@@ -89,10 +118,7 @@ class SampleFetcher:
             self.base_dir = Path(base_dir)
 
     async def fetch_sample(
-        self,
-        url: str,
-        domain: str = None,
-        quiet: bool = False
+        self, url: str, domain: str = None, quiet: bool = False
     ) -> Path:
         """
         Fetch HTML and screenshot, save to test_data/{domain}/sample_{timestamp}/.
@@ -112,13 +138,13 @@ class SampleFetcher:
         # Auto-detect domain from URL
         if not domain:
             parsed = urlparse(url)
-            domain = parsed.netloc.replace('www.', '')
+            domain = parsed.netloc.replace("www.", "")
 
         # Normalize domain for filename (replace dots with underscores)
-        domain_dir = domain.replace('.', '_')
+        domain_dir = domain.replace(".", "_")
 
         # Create timestamp-based sample directory
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         sample_dir = self.base_dir / domain_dir / f"sample_{timestamp}"
         sample_dir.mkdir(parents=True, exist_ok=True)
 
@@ -137,7 +163,7 @@ class SampleFetcher:
 
                 # Navigate to page
                 start_time = datetime.now()
-                await page.goto(url, wait_until='load', timeout=60000)
+                await page.goto(url, wait_until="load", timeout=60000)
 
                 # Wait for dynamic content to load
                 await page.wait_for_timeout(2000)
@@ -154,13 +180,13 @@ class SampleFetcher:
                 # Get HTML
                 html = await page.content()
                 html_path = sample_dir / "page.html"
-                html_path.write_text(html, encoding='utf-8')
+                html_path.write_text(html, encoding="utf-8")
 
                 if not quiet:
                     print(f"✓ HTML saved ({len(html):,} bytes)")
 
                 # Get screenshot
-                screenshot_bytes = await page.screenshot(full_page=True, type='png')
+                screenshot_bytes = await page.screenshot(full_page=True, type="png")
                 screenshot_path = sample_dir / "page.png"
                 screenshot_path.write_bytes(screenshot_bytes)
 
@@ -182,7 +208,7 @@ class SampleFetcher:
         }
 
         metadata_path = sample_dir / "metadata.json"
-        metadata_path.write_text(json.dumps(metadata, indent=2), encoding='utf-8')
+        metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
 
         if not quiet:
             print(f"✓ Metadata saved")
@@ -200,16 +226,14 @@ class SampleFetcher:
         Returns:
             List of sample directory paths, sorted by timestamp (newest first)
         """
-        domain_dir = domain.replace('.', '_')
+        domain_dir = domain.replace(".", "_")
         test_data_path = self.base_dir / domain_dir
 
         if not test_data_path.exists():
             return []
 
         samples = sorted(
-            test_data_path.glob("sample_*"),
-            key=lambda p: p.name,
-            reverse=True
+            test_data_path.glob("sample_*"), key=lambda p: p.name, reverse=True
         )
 
         return samples
@@ -231,42 +255,36 @@ class SampleFetcher:
 def main():
     """CLI entry point."""
     parser = argparse.ArgumentParser(
-        description='Fetch web page and capture HTML + screenshot for extractor development',
+        description="Fetch web page and capture HTML + screenshot for extractor development",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog='''
+        epilog="""
 Examples:
   %(prog)s https://www.komplett.no/product/1310167
   %(prog)s https://example.com --domain example.com
   %(prog)s https://example.com --quiet
-        '''
+        """,
+    )
+
+    parser.add_argument("url", help="URL to fetch and capture")
+
+    parser.add_argument(
+        "--domain", help="Domain name (auto-detected from URL if not provided)"
     )
 
     parser.add_argument(
-        'url',
-        help='URL to fetch and capture'
+        "-q", "--quiet", action="store_true", help="Suppress verbose output"
     )
 
     parser.add_argument(
-        '--domain',
-        help='Domain name (auto-detected from URL if not provided)'
-    )
-
-    parser.add_argument(
-        '-q', '--quiet',
-        action='store_true',
-        help='Suppress verbose output'
-    )
-
-    parser.add_argument(
-        '--force',
-        action='store_true',
-        help='Force refetch even if recent sample exists (currently not implemented)'
+        "--force",
+        action="store_true",
+        help="Force refetch even if recent sample exists (currently not implemented)",
     )
 
     args = parser.parse_args()
 
     # Validate URL
-    if not args.url.startswith(('http://', 'https://')):
+    if not args.url.startswith(("http://", "https://")):
         print("Error: URL must start with http:// or https://", file=sys.stderr)
         sys.exit(1)
 
@@ -297,6 +315,7 @@ Examples:
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 
