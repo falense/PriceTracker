@@ -34,6 +34,7 @@ Thumbs.db
 # Temporary test scripts (keep organized tests/ directory)
 test_*.py
 !tests/test_*.py
+!scripts/test_extractor.py
 
 # Logs
 *.log
