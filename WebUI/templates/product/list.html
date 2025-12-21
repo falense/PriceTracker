@@ -47,7 +47,7 @@
                     <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Best Price</p>
                     <div class="flex items-baseline space-x-2">
                         <span class="text-2xl font-bold text-gray-900 dark:text-white">
-                            {{ subscription.best_listing.current_price|format_currency:subscription.best_listing.store.domain }}
+                            {{ subscription.best_listing.current_price|format_currency:subscription.best_listing.currency }}
                         </span>
                         {% if not subscription.best_listing.available %}
                         <span class="text-xs px-2 py-1 bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200 rounded-full">
@@ -63,7 +63,7 @@
                 <div class="mb-4">
                     <p class="text-xs text-gray-500 dark:text-gray-400">
                         Target: <span class="font-semibold {% if subscription.best_listing.current_price <= subscription.target_price %}text-green-600 dark:text-green-400{% else %}text-orange-600 dark:text-orange-400{% endif %}">
-                            {{ subscription.target_price|format_currency:subscription.best_listing.store.domain }}
+                            {{ subscription.target_price|format_currency:subscription.best_listing.currency }}
                         </span>
                     </p>
                 </div>

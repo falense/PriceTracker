@@ -1,4 +1,5 @@
 """Base extractor interface for all generated extractors."""
+
 from typing import Optional, Dict, Any, Protocol
 from decimal import Decimal
 from bs4 import BeautifulSoup
@@ -36,6 +37,10 @@ class ExtractorProtocol(Protocol):
         """Extract manufacturer model number."""
         ...
 
+    def extract_currency(self, soup: BeautifulSoup) -> Optional[str]:
+        """Extract currency code (e.g., 'NOK', 'USD', 'EUR')."""
+        ...
+
 
 class BaseExtractor:
     """Base class for generated extractors (optional, for shared utilities)."""
@@ -61,33 +66,33 @@ class BaseExtractor:
 
         # Remove common currency symbols and whitespace
         text = str(text).strip()
-        text = text.replace(' ', '').replace('kr', '').replace('$', '')
-        text = text.replace('€', '').replace('£', '').replace(',-', '')
+        text = text.replace(" ", "").replace("kr", "").replace("$", "")
+        text = text.replace("€", "").replace("£", "").replace(",-", "")
 
         # Handle different decimal separators
         # "1.990,50" -> "1990.50"
         # "1,990.50" -> "1990.50"
-        if ',' in text and '.' in text:
+        if "," in text and "." in text:
             # Determine which is decimal separator
-            comma_pos = text.rindex(',')
-            dot_pos = text.rindex('.')
+            comma_pos = text.rindex(",")
+            dot_pos = text.rindex(".")
             if comma_pos > dot_pos:
                 # European format: 1.990,50
-                text = text.replace('.', '').replace(',', '.')
+                text = text.replace(".", "").replace(",", ".")
             else:
                 # US format: 1,990.50
-                text = text.replace(',', '')
-        elif ',' in text:
+                text = text.replace(",", "")
+        elif "," in text:
             # Assume comma is decimal if only 2 digits after
-            parts = text.split(',')
+            parts = text.split(",")
             if len(parts) == 2 and len(parts[1]) == 2:
-                text = text.replace(',', '.')
+                text = text.replace(",", ".")
             else:
                 # Thousand separator
-                text = text.replace(',', '')
+                text = text.replace(",", "")
 
         # Extract number
-        match = re.search(r'\d+\.?\d*', text)
+        match = re.search(r"\d+\.?\d*", text)
         if match:
             try:
                 price = Decimal(match.group())
@@ -117,7 +122,7 @@ class BaseExtractor:
         text = str(text).strip()
 
         # Remove excess whitespace
-        text = re.sub(r'\s+', ' ', text)
+        text = re.sub(r"\s+", " ", text)
 
         return text if text else None
 
@@ -142,7 +147,7 @@ class BaseExtractor:
             return None
 
         value = json_data
-        for key in path.split('.'):
+        for key in path.split("."):
             if not key:  # Skip empty keys
                 continue
 
@@ -173,6 +178,7 @@ class ExtractorResult:
         self.availability: Optional[str] = None
         self.article_number: Optional[str] = None
         self.model_number: Optional[str] = None
+        self.currency: Optional[str] = None
         self.errors: list[str] = []
         self.warnings: list[str] = []
 
@@ -184,15 +190,16 @@ class ExtractorResult:
             Dict representation of result
         """
         return {
-            'domain': self.domain,
-            'price': str(self.price) if self.price else None,
-            'title': self.title,
-            'image': self.image,
-            'availability': self.availability,
-            'article_number': self.article_number,
-            'model_number': self.model_number,
-            'errors': self.errors,
-            'warnings': self.warnings,
+            "domain": self.domain,
+            "price": str(self.price) if self.price else None,
+            "title": self.title,
+            "image": self.image,
+            "availability": self.availability,
+            "article_number": self.article_number,
+            "model_number": self.model_number,
+            "currency": self.currency,
+            "errors": self.errors,
+            "warnings": self.warnings,
         }
 
     @property

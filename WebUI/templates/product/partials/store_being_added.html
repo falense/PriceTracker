@@ -1,0 +1,97 @@
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-12">
+        <div class="text-center space-y-8">
+            <!-- Animated Spinner -->
+            <div class="flex justify-center">
+                <div class="relative">
+                    <div class="animate-spin rounded-full h-20 w-20 border-b-4 border-primary-600"></div>
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <svg class="w-8 h-8 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Main Message -->
+            <div>
+                <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-3">
+                    Adding {{ store_name }}
+                </h2>
+                <p class="text-lg text-gray-600 dark:text-gray-400">
+                    This might take a few minutes...
+                </p>
+            </div>
+            
+            <!-- Progress Indicator -->
+            <div class="max-w-md mx-auto">
+                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
+                    <div class="bg-primary-600 h-3 rounded-full animate-pulse" style="width: 40%"></div>
+                </div>
+            </div>
+            
+            <!-- Explanation Card -->
+            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 max-w-lg mx-auto text-left">
+                <div class="flex items-start space-x-3">
+                    <svg class="w-6 h-6 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <div>
+                        <p class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+                            First time tracking from {{ store_name }}
+                        </p>
+                        <p class="text-sm text-blue-700 dark:text-blue-300">
+                            We're setting up price tracking for this store. This is a one-time process that 
+                            teaches our system how to extract product information from {{ store_name }}.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- What's Happening (Expandable) -->
+            <details class="text-left max-w-lg mx-auto">
+                <summary class="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer hover:text-gray-900 dark:hover:text-white flex items-center justify-center space-x-2">
+                    <span>What's happening?</span>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                </summary>
+                <div class="mt-4 space-y-3 pl-4 border-l-2 border-gray-200 dark:border-gray-700">
+                    <div class="flex items-start space-x-3">
+                        <span class="text-green-600 dark:text-green-400">✓</span>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Analyzing store website structure</p>
+                    </div>
+                    <div class="flex items-start space-x-3">
+                        <span class="text-primary-600 dark:text-primary-400 animate-pulse">⟳</span>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Learning how to extract product data</p>
+                    </div>
+                    <div class="flex items-start space-x-3">
+                        <span class="text-gray-400">○</span>
+                        <p class="text-sm text-gray-400">Fetching your product details</p>
+                    </div>
+                </div>
+            </details>
+            
+            <!-- Timestamp -->
+            <p class="text-xs text-gray-500 dark:text-gray-500">
+                Started {{ subscription.created_at|timesince }} ago • Page will refresh automatically
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- HTMX Auto-refresh: Poll every 5 seconds -->
+<script>
+document.addEventListener('htmx:afterRequest', function(event) {
+    // When subscription_status redirects, HTMX gives us a 303 response
+    // We need to manually refresh the page to get the updated content
+    if (event.xhr.status >= 300 && event.xhr.status < 400) {
+        window.location.reload();
+    }
+});
+</script>
+<div hx-get="{% url 'subscription_status' subscription.id %}"
+     hx-trigger="every 5s"
+     hx-swap="innerHTML"
+     hx-target="#subscription-content">
+</div>

@@ -5,8 +5,15 @@ These services coordinate complex operations between models, tasks, and external
 """
 
 from .models import (
-    Product, Store, ProductListing, UserSubscription,
-    Pattern, Notification, PriceHistory, AdminFlag, normalize_name
+    Product,
+    Store,
+    ProductListing,
+    UserSubscription,
+    Pattern,
+    Notification,
+    PriceHistory,
+    AdminFlag,
+    normalize_name,
 )
 from .utils.currency import format_price
 from django.utils import timezone
@@ -48,7 +55,9 @@ class ProductService:
     """Business logic for product management with multi-store support."""
 
     @staticmethod
-    def add_product_for_user(user: User, url: str, priority: str = 'normal', target_price=None):
+    def add_product_for_user(
+        user: User, url: str, priority: str = "normal", target_price=None
+    ):
         """
         Add product subscription for user.
 
@@ -73,21 +82,27 @@ class ProductService:
         """
         # Step 1: Parse URL and get/create Store
         parsed = urlparse(url)
-        domain = parsed.netloc.replace('www.', '').lower()
+        domain = parsed.netloc.replace("www.", "").lower()
 
         if not domain:
             raise ValueError("Invalid URL: Could not extract domain")
 
+        # Get default currency for this domain
+        from app.utils.currency import get_currency_from_domain
+
+        default_currency, _ = get_currency_from_domain(domain)
+
         store, store_created = Store.objects.get_or_create(
             domain=domain,
             defaults={
-                'name': domain.replace('.com', '').replace('.', ' ').title(),
-                'active': True,
-            }
+                "name": domain.replace(".com", "").replace(".", " ").title(),
+                "active": True,
+                "currency": default_currency,  # Set currency based on domain
+            },
         )
 
         if store_created:
-            logger.info(f"Created new store: {store.name}")
+            logger.info(f"Created new store: {store.name} (currency: {store.currency})")
 
         # Step 2: Check if listing exists
         listing = ProductListing.objects.filter(url=url).first()
@@ -102,7 +117,9 @@ class ProductService:
             # Make the placeholder unique per listing so multiple products from the same store
             # don't collapse into a single Product before the first fetch updates the title.
             placeholder_suffix = uuid.uuid4().hex[:8]
-            product_name = f"{PLACEHOLDER_PRODUCT_PREFIX}{domain} ({placeholder_suffix})"
+            product_name = (
+                f"{PLACEHOLDER_PRODUCT_PREFIX}{domain} ({placeholder_suffix})"
+            )
             canonical = normalize_name(product_name)
 
             product = Product.objects.create(
@@ -118,20 +135,23 @@ class ProductService:
                 store=store,
                 url=url,
                 active=True,
+                currency=store.currency,  # Inherit currency from store
             )
-            logger.info(f"Created new listing: {listing}")
+            logger.info(
+                f"Created new listing: {listing} (currency: {listing.currency})"
+            )
 
         # Step 5: Create or update subscription
-        priority_map = {'high': 3, 'normal': 2, 'low': 1}
+        priority_map = {"high": 3, "normal": 2, "low": 1}
         priority_value = priority_map.get(priority, 2)
 
         subscription, created = UserSubscription.objects.get_or_create(
             user=user,
             product=product,
             defaults={
-                'priority': priority_value,
-                'target_price': target_price,
-            }
+                "priority": priority_value,
+                "target_price": target_price,
+            },
         )
 
         if not created:
@@ -184,11 +204,11 @@ class ProductService:
             logger.error(f"Failed to trigger pattern generation for {domain}: {e}")
             # Create admin flag
             AdminFlag.objects.create(
-                flag_type='pattern_generation_failed',
+                flag_type="pattern_generation_failed",
                 domain=domain,
                 url=url,
                 error_message=str(e),
-                status='pending'
+                status="pending",
             )
             raise
 
@@ -229,8 +249,12 @@ class ProductService:
             UserSubscription: Updated subscription instance
         """
         allowed_fields = [
-            'priority', 'target_price', 'notify_on_drop',
-            'notify_on_restock', 'notify_on_target', 'active'
+            "priority",
+            "target_price",
+            "notify_on_drop",
+            "notify_on_restock",
+            "notify_on_target",
+            "active",
         ]
 
         for field, value in kwargs.items():
@@ -240,7 +264,7 @@ class ProductService:
         subscription.save()
 
         # Update product subscriber count if active status changed
-        if 'active' in kwargs:
+        if "active" in kwargs:
             product = subscription.product
             product.subscriber_count = product.subscriptions.filter(active=True).count()
             product.save()
@@ -266,12 +290,11 @@ class ProductService:
             qs = qs.filter(active=True)
 
         # Prefetch related data for efficiency
-        qs = qs.select_related('product').prefetch_related(
-            'product__listings',
-            'product__listings__store'
+        qs = qs.select_related("product").prefetch_related(
+            "product__listings", "product__listings__store"
         )
 
-        return qs.order_by('-last_viewed', '-created_at')
+        return qs.order_by("-last_viewed", "-created_at")
 
     @staticmethod
     def get_best_prices_for_subscription(subscription: UserSubscription):
@@ -281,22 +304,26 @@ class ProductService:
         Returns:
             List of dicts with store, price, availability info
         """
-        listings = subscription.product.listings.filter(
-            active=True
-        ).select_related('store').order_by('current_price')
+        listings = (
+            subscription.product.listings.filter(active=True)
+            .select_related("store")
+            .order_by("current_price")
+        )
 
         prices = []
         for listing in listings:
             if listing.current_price:
-                prices.append({
-                    'store': listing.store,
-                    'listing': listing,
-                    'price': listing.current_price,
-                    'currency': listing.currency,
-                    'available': listing.available,
-                    'total_price': listing.total_price,
-                    'last_checked': listing.last_checked,
-                })
+                prices.append(
+                    {
+                        "store": listing.store,
+                        "listing": listing,
+                        "price": listing.current_price,
+                        "currency": listing.currency,
+                        "available": listing.available,
+                        "total_price": listing.total_price,
+                        "last_checked": listing.last_checked,
+                    }
+                )
 
         return prices
 
@@ -316,11 +343,11 @@ class PriorityAggregationService:
         intervals = {3: 900, 2: 3600, 1: 86400}
 
         # Get products with active subscriptions
-        products = Product.objects.filter(
-            subscriptions__active=True
-        ).annotate(
-            max_priority=Max('subscriptions__priority')
-        ).distinct()
+        products = (
+            Product.objects.filter(subscriptions__active=True)
+            .annotate(max_priority=Max("subscriptions__priority"))
+            .distinct()
+        )
 
         due_products = []
 
@@ -329,9 +356,7 @@ class PriorityAggregationService:
             cutoff_time = now - timedelta(seconds=check_interval)
 
             # Get listings needing check
-            listings = product.listings.filter(
-                active=True
-            ).filter(
+            listings = product.listings.filter(active=True).filter(
                 Q(last_checked__isnull=True) | Q(last_checked__lt=cutoff_time)
             )
 
@@ -348,27 +373,27 @@ class PriorityAggregationService:
         """
         from django.db.models import Count
 
-        stats = Product.objects.filter(
-            subscriptions__active=True
-        ).annotate(
-            max_priority=Max('subscriptions__priority')
-        ).aggregate(
-            high=Count('id', filter=Q(max_priority=3)),
-            normal=Count('id', filter=Q(max_priority=2)),
-            low=Count('id', filter=Q(max_priority=1)),
-            total=Count('id')
+        stats = (
+            Product.objects.filter(subscriptions__active=True)
+            .annotate(max_priority=Max("subscriptions__priority"))
+            .aggregate(
+                high=Count("id", filter=Q(max_priority=3)),
+                normal=Count("id", filter=Q(max_priority=2)),
+                low=Count("id", filter=Q(max_priority=1)),
+                total=Count("id"),
+            )
         )
 
         return {
-            'high': stats['high'],
-            'normal': stats['normal'],
-            'low': stats['low'],
-            'total': stats['total'],
-            'checks_per_hour': (
-                stats['high'] * 4 +  # Every 15 min = 4 per hour
-                stats['normal'] * 1 +  # Every hour = 1 per hour
-                stats['low'] / 24  # Every day = 1/24 per hour
-            )
+            "high": stats["high"],
+            "normal": stats["normal"],
+            "low": stats["low"],
+            "total": stats["total"],
+            "checks_per_hour": (
+                stats["high"] * 4  # Every 15 min = 4 per hour
+                + stats["normal"] * 1  # Every hour = 1 per hour
+                + stats["low"] / 24  # Every day = 1/24 per hour
+            ),
         }
 
 
@@ -376,7 +401,9 @@ class NotificationService:
     """Create and manage notifications for multi-store tracking."""
 
     @staticmethod
-    def check_subscriptions_for_listing(listing: ProductListing, old_price: Decimal = None):
+    def check_subscriptions_for_listing(
+        listing: ProductListing, old_price: Decimal = None
+    ):
         """
         Check all subscriptions for product and create notifications.
 
@@ -395,7 +422,11 @@ class NotificationService:
         # Get all active subscriptions
         for subscription in product.subscriptions.filter(active=True):
             # Price drop
-            if old_price and listing.current_price and listing.current_price < old_price:
+            if (
+                old_price
+                and listing.current_price
+                and listing.current_price < old_price
+            ):
                 if subscription.notify_on_drop:
                     notif = NotificationService._create_price_drop_notification(
                         subscription, listing, old_price, listing.current_price
@@ -405,7 +436,10 @@ class NotificationService:
 
             # Target price reached
             if subscription.notify_on_target and subscription.target_price:
-                if listing.current_price and listing.current_price <= subscription.target_price:
+                if (
+                    listing.current_price
+                    and listing.current_price <= subscription.target_price
+                ):
                     notif = NotificationService._create_target_reached_notification(
                         subscription, listing
                     )
@@ -415,10 +449,11 @@ class NotificationService:
             # Restock
             if subscription.notify_on_restock and listing.available:
                 # Check if previously unavailable
-                was_unavailable = PriceHistory.objects.filter(
-                    listing=listing,
-                    available=False
-                ).order_by('-recorded_at').first()
+                was_unavailable = (
+                    PriceHistory.objects.filter(listing=listing, available=False)
+                    .order_by("-recorded_at")
+                    .first()
+                )
 
                 if was_unavailable:
                     notif = NotificationService._create_restock_notification(
@@ -430,15 +465,19 @@ class NotificationService:
         return notifications
 
     @staticmethod
-    def _create_price_drop_notification(subscription: UserSubscription, listing: ProductListing,
-                                       old_price: Decimal, new_price: Decimal):
+    def _create_price_drop_notification(
+        subscription: UserSubscription,
+        listing: ProductListing,
+        old_price: Decimal,
+        new_price: Decimal,
+    ):
         """Create price drop notification."""
         # Avoid duplicates (within 1 hour)
         recent = Notification.objects.filter(
             subscription=subscription,
             listing=listing,
-            notification_type='price_drop',
-            created_at__gte=timezone.now() - timedelta(hours=1)
+            notification_type="price_drop",
+            created_at__gte=timezone.now() - timedelta(hours=1),
         ).exists()
 
         if recent:
@@ -447,8 +486,12 @@ class NotificationService:
         drop_amount = old_price - new_price
         drop_percent = (drop_amount / old_price) * 100
 
-        old_price_formatted = format_price(float(old_price), domain=listing.store.domain)
-        new_price_formatted = format_price(float(new_price), domain=listing.store.domain)
+        old_price_formatted = format_price(
+            float(old_price), currency_code=listing.currency
+        )
+        new_price_formatted = format_price(
+            float(new_price), currency_code=listing.currency
+        )
 
         message = (
             f"{listing.product.name} at {listing.store.name} dropped from "
@@ -460,7 +503,7 @@ class NotificationService:
             user=subscription.user,
             subscription=subscription,
             listing=listing,
-            notification_type='price_drop',
+            notification_type="price_drop",
             message=message,
             old_price=old_price,
             new_price=new_price,
@@ -470,21 +513,27 @@ class NotificationService:
         return notification
 
     @staticmethod
-    def _create_target_reached_notification(subscription: UserSubscription, listing: ProductListing):
+    def _create_target_reached_notification(
+        subscription: UserSubscription, listing: ProductListing
+    ):
         """Create target price notification."""
         # Avoid duplicates (within 24 hours)
         recent = Notification.objects.filter(
             subscription=subscription,
             listing=listing,
-            notification_type='target_reached',
-            created_at__gte=timezone.now() - timedelta(hours=24)
+            notification_type="target_reached",
+            created_at__gte=timezone.now() - timedelta(hours=24),
         ).exists()
 
         if recent:
             return None
 
-        current_formatted = format_price(float(listing.current_price), domain=listing.store.domain)
-        target_formatted = format_price(float(subscription.target_price), domain=listing.store.domain)
+        current_formatted = format_price(
+            float(listing.current_price), currency_code=listing.currency
+        )
+        target_formatted = format_price(
+            float(subscription.target_price), currency_code=listing.currency
+        )
 
         message = (
             f"{listing.product.name} at {listing.store.name} reached your target price! "
@@ -495,7 +544,7 @@ class NotificationService:
             user=subscription.user,
             subscription=subscription,
             listing=listing,
-            notification_type='target_reached',
+            notification_type="target_reached",
             message=message,
             new_price=listing.current_price,
         )
@@ -504,14 +553,16 @@ class NotificationService:
         return notification
 
     @staticmethod
-    def _create_restock_notification(subscription: UserSubscription, listing: ProductListing):
+    def _create_restock_notification(
+        subscription: UserSubscription, listing: ProductListing
+    ):
         """Create restock notification."""
         # Avoid duplicates (within 24 hours)
         recent = Notification.objects.filter(
             subscription=subscription,
             listing=listing,
-            notification_type='restock',
-            created_at__gte=timezone.now() - timedelta(hours=24)
+            notification_type="restock",
+            created_at__gte=timezone.now() - timedelta(hours=24),
         ).exists()
 
         if recent:
@@ -519,14 +570,16 @@ class NotificationService:
 
         message = f"{listing.product.name} is back in stock at {listing.store.name}!"
         if listing.current_price:
-            price_formatted = format_price(float(listing.current_price), domain=listing.store.domain)
+            price_formatted = format_price(
+                float(listing.current_price), domain=listing.store.domain
+            )
             message += f" Price: {price_formatted}"
 
         notification = Notification.objects.create(
             user=subscription.user,
             subscription=subscription,
             listing=listing,
-            notification_type='restock',
+            notification_type="restock",
             message=message,
             new_price=listing.current_price,
         )
@@ -545,10 +598,63 @@ class NotificationService:
         Returns:
             int: Number of notifications marked
         """
-        count = Notification.objects.filter(
-            user=user,
-            read=False
-        ).update(read=True, read_at=timezone.now())
+        count = Notification.objects.filter(user=user, read=False).update(
+            read=True, read_at=timezone.now()
+        )
 
         logger.info(f"Marked {count} notifications as read for user {user.username}")
         return count
+
+
+class SubscriptionStatusService:
+    """Detect subscription data fetching status."""
+
+    @staticmethod
+    def is_being_added(subscription: UserSubscription) -> bool:
+        """
+        Check if subscription is waiting for store pattern generation and initial fetch.
+
+        Returns True when product metadata is not yet populated, which indicates
+        the store is being added and data hasn't been fetched yet.
+
+        Detection criteria (all must be true):
+        - Product has no image_url (indicates no successful data fetch)
+        - No listing has been checked yet (last_checked is None)
+        - No listing has a price (current_price is None)
+
+        Args:
+            subscription: UserSubscription to check
+
+        Returns:
+            bool: True if waiting for initial data fetch (store being added)
+        """
+        listings = subscription.product.listings.all()
+
+        for listing in listings:
+            # Check if essential metadata is missing (indicates no successful fetch yet)
+            is_unpopulated = (
+                listing.current_price is None
+                and subscription.product.image_url is None
+                and listing.last_checked is None
+            )
+
+            if is_unpopulated:
+                return True
+
+        return False
+
+    @staticmethod
+    def get_store_name(subscription: UserSubscription) -> str:
+        """
+        Get the store name for display in loading message.
+
+        Args:
+            subscription: UserSubscription to get store from
+
+        Returns:
+            str: Store name or fallback text
+        """
+        listing = subscription.product.listings.first()
+        if listing:
+            return listing.store.name
+        return "the store"

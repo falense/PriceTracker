@@ -95,8 +95,8 @@ class Validator:
             "validation_completed",
             valid=valid,
             confidence=confidence,
-            errors=len(errors),
-            warnings=len(warnings),
+            errors=errors,
+            warnings=warnings,
         )
 
         return result

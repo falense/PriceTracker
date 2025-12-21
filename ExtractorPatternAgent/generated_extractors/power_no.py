@@ -26,6 +26,7 @@ PATTERN_METADATA = {
         "availability",
         "article_number",
         "model_number",
+        "currency",
     ],
     "notes": "JSON-LD Product offers with meta fallbacks",
 }
@@ -208,3 +209,15 @@ def extract_model_number(soup: BeautifulSoup) -> Optional[str]:
             return value
 
     return None
+
+def extract_currency(soup: BeautifulSoup) -> Optional[str]:
+    """
+    Extract currency code.
+    
+    Returns:
+        Currency code (e.g., 'NOK', 'USD', 'EUR')
+    
+    Confidence: 1.0 (hardcoded default)
+    """
+    return "NOK"
+

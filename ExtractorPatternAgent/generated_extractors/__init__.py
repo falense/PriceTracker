@@ -18,6 +18,7 @@ Example:
     >>> if result.success:
     >>>     print(f"Price: {result.price}")
 """
+
 import importlib
 import logging
 from pathlib import Path
@@ -52,22 +53,22 @@ class ExtractorRegistry:
         package_dir = Path(__file__).parent
 
         # Scan for .py files (excluding __init__.py and _base.py)
-        for file_path in package_dir.glob('*.py'):
+        for file_path in package_dir.glob("*.py"):
             module_name = file_path.stem
 
             # Skip private/special modules
-            if module_name.startswith('_'):
+            if module_name.startswith("_"):
                 continue
 
             try:
                 # Import module
                 module = importlib.import_module(
-                    f'ExtractorPatternAgent.generated_extractors.{module_name}'
+                    f"ExtractorPatternAgent.generated_extractors.{module_name}"
                 )
 
                 # Extract domain from metadata
-                if hasattr(module, 'PATTERN_METADATA'):
-                    domain = module.PATTERN_METADATA.get('domain')
+                if hasattr(module, "PATTERN_METADATA"):
+                    domain = module.PATTERN_METADATA.get("domain")
                     if domain:
                         self._extractors[domain] = module
                         logger.info(f"Registered extractor for {domain}")
@@ -100,7 +101,7 @@ class ExtractorRegistry:
             self.discover()
 
         # Normalize domain (remove www., lowercase)
-        domain = domain.lower().replace('www.', '')
+        domain = domain.lower().replace("www.", "")
 
         return self._extractors.get(domain)
 
@@ -227,7 +228,7 @@ def extract_from_html(domain: str, html: str) -> ExtractorResult:
 
     # Parse HTML
     try:
-        soup = BeautifulSoup(html, 'html.parser')
+        soup = BeautifulSoup(html, "html.parser")
     except Exception as e:
         result.errors.append(f"Failed to parse HTML: {e}")
         return result
@@ -268,6 +269,11 @@ def extract_from_html(domain: str, html: str) -> ExtractorResult:
     except Exception as e:
         result.warnings.append(f"Model number extraction failed: {e}")
 
+    try:
+        result.currency = extractor.extract_currency(soup)
+    except Exception as e:
+        result.warnings.append(f"Currency extraction failed: {e}")
+
     return result
 
 
@@ -288,7 +294,7 @@ def list_available_extractors() -> Dict[str, Dict[str, Any]]:
     result = {}
     for domain in _registry.list_domains():
         extractor = _registry.get_extractor(domain)
-        if extractor and hasattr(extractor, 'PATTERN_METADATA'):
+        if extractor and hasattr(extractor, "PATTERN_METADATA"):
             result[domain] = extractor.PATTERN_METADATA
 
     return result
@@ -306,11 +312,11 @@ def reload_extractors():
 
 # Public API
 __all__ = [
-    'get_parser',
-    'has_parser',
-    'extract_from_html',
-    'list_available_extractors',
-    'reload_extractors',
-    'ExtractorResult',
-    'BaseExtractor',
+    "get_parser",
+    "has_parser",
+    "extract_from_html",
+    "list_available_extractors",
+    "reload_extractors",
+    "ExtractorResult",
+    "BaseExtractor",
 ]

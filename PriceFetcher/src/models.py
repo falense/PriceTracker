@@ -64,6 +64,7 @@ class ExtractionResult(BaseModel):
     title: Optional[ExtractedField] = None
     availability: Optional[ExtractedField] = None
     image: Optional[ExtractedField] = None
+    currency: Optional[ExtractedField] = None
     errors: List[str] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list)
 

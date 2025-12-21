@@ -45,11 +45,11 @@
                     <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">Current Price</p>
                     <div class="flex items-baseline space-x-3">
                         <span class="text-4xl font-bold text-gray-900 dark:text-white">
-                            {{ product.current_price|format_currency:product.domain }}
+                            {{ product.current_price|format_currency:product.currency }}
                         </span>
                         {% if product.price_change_24h %}
                         <span class="text-lg font-medium {% if product.price_change_24h < 0 %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
-                            {% if product.price_change_24h > 0 %}+{% endif %}{{ product.price_change_24h|floatformat:2|format_currency:product.domain }} (24h)
+                            {% if product.price_change_24h > 0 %}+{% endif %}{{ product.price_change_24h|floatformat:2|format_currency:product.currency }} (24h)
                         </span>
                         {% endif %}
                     </div>
@@ -60,13 +60,13 @@
                     <div>
                         <p class="text-sm text-gray-500 dark:text-gray-400 mb-1">Lowest</p>
                         <p class="text-lg font-semibold text-green-600 dark:text-green-400">
-                            {% if product.lowest_price %}{{ product.lowest_price|format_currency:product.domain }}{% else %}—{% endif %}
+                            {% if product.lowest_price %}{{ product.lowest_price|format_currency:product.currency }}{% else %}—{% endif %}
                         </p>
                     </div>
                     <div>
                         <p class="text-sm text-gray-500 dark:text-gray-400 mb-1">Highest</p>
                         <p class="text-lg font-semibold text-red-600 dark:text-red-400">
-                            {% if product.highest_price %}{{ product.highest_price|format_currency:product.domain }}{% else %}—{% endif %}
+                            {% if product.highest_price %}{{ product.highest_price|format_currency:product.currency }}{% else %}—{% endif %}
                         </p>
                     </div>
                     <div>
@@ -132,7 +132,7 @@
                                     {{ history.recorded_at|date:"M d, Y H:i" }}
                                 </td>
                                 <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">
-                                    {{ history.price|format_currency:product.domain }}
+                                    {{ history.price|format_currency:history.currency }}
                                 </td>
                                 <td class="px-4 py-3 text-sm">
                                     <!-- Change calculation would go here -->

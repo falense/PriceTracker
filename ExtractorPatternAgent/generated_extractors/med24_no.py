@@ -29,6 +29,7 @@ PATTERN_METADATA = {
         "image",
         "article_number",
         "model_number",
+        "currency",
     ],
     "notes": "JSON-LD Product offers with Open Graph fallbacks",
 }
@@ -204,3 +205,15 @@ def extract_model_number(soup: BeautifulSoup) -> Optional[str]:
             return str(value).strip()
 
     return None
+
+def extract_currency(soup: BeautifulSoup) -> Optional[str]:
+    """
+    Extract currency code.
+    
+    Returns:
+        Currency code (e.g., 'NOK', 'USD', 'EUR')
+    
+    Confidence: 1.0 (hardcoded default)
+    """
+    return "NOK"
+

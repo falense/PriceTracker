@@ -109,9 +109,18 @@ class PatternManagementService:
         if domain.startswith("www."):
             domain = domain[4:]
 
+        # Get default currency for this domain
+        from app.utils.currency import get_currency_from_domain
+
+        default_currency, _ = get_currency_from_domain(domain)
+
         # Get or create store
         store, _ = Store.objects.get_or_create(
-            domain=domain, defaults={"name": domain.split(".")[0].title()}
+            domain=domain,
+            defaults={
+                "name": domain.split(".")[0].title(),
+                "currency": default_currency,
+            },
         )
 
         # Create pattern

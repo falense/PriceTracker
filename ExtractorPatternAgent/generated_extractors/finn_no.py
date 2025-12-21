@@ -30,6 +30,7 @@ PATTERN_METADATA = {
         "image",
         "article_number",
         "model_number",
+        "currency",
     ],
     "notes": "FINN recommerce items via advertising JSON with meta fallbacks",
 }
@@ -232,3 +233,15 @@ def extract_model_number(soup: BeautifulSoup) -> Optional[str]:
     No reliable source found on Finn listings.
     """
     return None
+
+def extract_currency(soup: BeautifulSoup) -> Optional[str]:
+    """
+    Extract currency code.
+    
+    Returns:
+        Currency code (e.g., 'NOK', 'USD', 'EUR')
+    
+    Confidence: 1.0 (hardcoded default)
+    """
+    return "NOK"
+

@@ -1,29 +1,30 @@
 """
 Currency utilities for mapping domains to currencies and formatting prices.
 """
+
 from typing import Dict, Tuple
 
 
 # Domain TLD to currency mapping
 TLD_CURRENCY_MAP = {
-    'no': ('NOK', 'kr'),     # Norwegian Krone
-    'se': ('SEK', 'kr'),     # Swedish Krona
-    'dk': ('DKK', 'kr'),     # Danish Krone
-    'uk': ('GBP', '£'),      # British Pound
-    'de': ('EUR', '€'),      # Euro
-    'fr': ('EUR', '€'),      # Euro
-    'es': ('EUR', '€'),      # Euro
-    'it': ('EUR', '€'),      # Euro
-    'nl': ('EUR', '€'),      # Euro
-    'com': ('USD', '$'),     # US Dollar
-    'ca': ('CAD', 'CA$'),    # Canadian Dollar
-    'au': ('AUD', 'A$'),     # Australian Dollar
-    'nz': ('NZD', 'NZ$'),    # New Zealand Dollar
-    'jp': ('JPY', '¥'),      # Japanese Yen
-    'cn': ('CNY', '¥'),      # Chinese Yuan
-    'in': ('INR', '₹'),      # Indian Rupee
-    'br': ('BRL', 'R$'),     # Brazilian Real
-    'mx': ('MXN', 'MX$'),    # Mexican Peso
+    "no": ("NOK", "kr"),  # Norwegian Krone
+    "se": ("SEK", "kr"),  # Swedish Krona
+    "dk": ("DKK", "kr"),  # Danish Krone
+    "uk": ("GBP", "£"),  # British Pound
+    "de": ("EUR", "€"),  # Euro
+    "fr": ("EUR", "€"),  # Euro
+    "es": ("EUR", "€"),  # Euro
+    "it": ("EUR", "€"),  # Euro
+    "nl": ("EUR", "€"),  # Euro
+    "com": ("USD", "$"),  # US Dollar
+    "ca": ("CAD", "CA$"),  # Canadian Dollar
+    "au": ("AUD", "A$"),  # Australian Dollar
+    "nz": ("NZD", "NZ$"),  # New Zealand Dollar
+    "jp": ("JPY", "¥"),  # Japanese Yen
+    "cn": ("CNY", "¥"),  # Chinese Yuan
+    "in": ("INR", "₹"),  # Indian Rupee
+    "br": ("BRL", "R$"),  # Brazilian Real
+    "mx": ("MXN", "MX$"),  # Mexican Peso
 }
 
 
@@ -39,15 +40,15 @@ def get_currency_from_domain(domain: str) -> Tuple[str, str]:
         Defaults to ('USD', '$') if domain TLD is not recognized
     """
     if not domain:
-        return ('USD', '$')
+        return ("USD", "$")
 
     # Extract TLD (last part after final dot)
-    parts = domain.lower().split('.')
+    parts = domain.lower().split(".")
     if len(parts) < 2:
-        return ('USD', '$')
+        return ("USD", "$")
 
     tld = parts[-1]
-    return TLD_CURRENCY_MAP.get(tld, ('USD', '$'))
+    return TLD_CURRENCY_MAP.get(tld, ("USD", "$"))
 
 
 def format_price(price: float, domain: str = None, currency_code: str = None) -> str:
@@ -56,16 +57,20 @@ def format_price(price: float, domain: str = None, currency_code: str = None) ->
 
     Args:
         price: Price value
-        domain: Domain name (optional, used to determine currency)
-        currency_code: Currency code (optional, overrides domain-based detection)
+        domain: Domain name (optional, used to determine currency as fallback)
+        currency_code: Currency code (optional, PREFERRED - uses actual extracted currency)
 
     Returns:
-        Formatted price string (e.g., '$99.99', 'kr 499')
+        Formatted price string (e.g., '$99.99', '499.00 kr')
+
+    Note:
+        Always prefer passing currency_code over domain for accurate currency display.
+        Domain-based detection is kept only for backward compatibility.
     """
     if price is None:
-        return 'N/A'
+        return "N/A"
 
-    # Determine currency
+    # ALWAYS prefer explicit currency_code over domain inference
     if currency_code:
         # Look up symbol from currency code
         symbol = None
@@ -74,17 +79,20 @@ def format_price(price: float, domain: str = None, currency_code: str = None) ->
                 symbol = sym
                 break
         if not symbol:
-            symbol = currency_code + ' '
+            # Fallback: use currency code itself as symbol
+            symbol = currency_code + " "
     elif domain:
+        # Fallback to domain-based detection (less accurate)
         currency_code, symbol = get_currency_from_domain(domain)
     else:
-        currency_code, symbol = ('USD', '$')
+        # Ultimate fallback
+        currency_code, symbol = ("USD", "$")
 
     # Format based on currency convention
-    if currency_code in ['NOK', 'SEK', 'DKK']:
-        # Scandinavian currencies: symbol after amount with space
+    if currency_code in ["NOK", "SEK", "DKK"]:
+        # Scandinavian currencies: amount first, symbol after with space
         return f"{price:.2f} {symbol}"
-    elif currency_code == 'EUR':
+    elif currency_code == "EUR":
         # Euro: symbol before with space (common in many EU countries)
         return f"{symbol} {price:.2f}"
     else:

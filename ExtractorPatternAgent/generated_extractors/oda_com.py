@@ -23,7 +23,7 @@ PATTERN_METADATA = {
     'generator': 'manual',
     'version': '1.0',
     'confidence': 0.90,  # Tested with real HTML - 5/6 fields extracting successfully
-    'fields': ['price', 'title', 'image', 'availability', 'article_number', 'model_number'],
+    'fields': ['price', 'title', 'image', 'availability', 'article_number', 'model_number', 'currency'],
     'notes': 'Tested and verified with product page. Uses OpenGraph meta tags for title/image, meta price tags and URL extraction for article number. Model number not typically available for beverage products.'
 }
 
@@ -421,3 +421,15 @@ def extract_model_number(soup: BeautifulSoup) -> Optional[str]:
                 return match.group(1).strip()
     
     return None
+
+def extract_currency(soup: BeautifulSoup) -> Optional[str]:
+    """
+    Extract currency code.
+    
+    Returns:
+        Currency code (e.g., 'NOK', 'USD', 'EUR')
+    
+    Confidence: 1.0 (hardcoded default)
+    """
+    return "NOK"
+

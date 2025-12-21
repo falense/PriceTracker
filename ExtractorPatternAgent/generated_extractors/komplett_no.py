@@ -18,7 +18,7 @@ PATTERN_METADATA = {
     'generator': 'JSON to Python converter',
     'version': '1.1',
     'confidence': 0.92,
-    'fields': ['price', 'title', 'availability', 'image', 'article_number', 'model_number'],
+    'fields': ['price', 'title', 'availability', 'image', 'article_number', 'model_number', 'currency'],
     'notes': 'Converted from JSON pattern, enhanced with article_number and model_number extraction'
 }
 
@@ -268,4 +268,14 @@ def extract_model_number(soup: BeautifulSoup) -> Optional[str]:
     
     return None
 
+def extract_currency(soup: BeautifulSoup) -> Optional[str]:
+    """
+    Extract currency code.
+    
+    Returns:
+        Currency code (e.g., 'NOK', 'USD', 'EUR')
+    
+    Confidence: 1.0 (hardcoded default)
+    """
+    return "NOK"
 

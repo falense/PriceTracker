@@ -74,7 +74,7 @@ class Extractor:
             return extraction
 
         except ImportError as e:
-            logger.error("extractor_import_failed", domain=domain, error=str(e))
+            logger.exception("extractor_import_failed", domain=domain, error=str(e))
             return self._empty_result(errors=[f"Extractor import failed: {e}"])
         except Exception as e:
             logger.exception("extraction_failed", domain=domain, error=str(e))
@@ -116,11 +116,19 @@ class Extractor:
             confidence=1.0 if availability_value else 0.0,
         )
 
+        currency_value = getattr(result, "currency", None)
+        currency = ExtractedField(
+            value=currency_value,
+            method="python_extractor" if currency_value else None,
+            confidence=1.0 if currency_value else 0.0,
+        )
+
         return ExtractionResult(
             price=price,
             title=title,
             image=image,
             availability=availability,
+            currency=currency,
             errors=list(getattr(result, "errors", []) or []),
             warnings=list(getattr(result, "warnings", []) or []),
         )

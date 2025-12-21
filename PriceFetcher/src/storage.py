@@ -1,19 +1,21 @@
 """Storage layer for price history and fetch logs."""
 
+import html
 import json
 import re
 import sqlite3
-from datetime import datetime
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 from urllib.parse import urljoin, urlparse
 
 import structlog
 
 from .models import ExtractionResult, Product, ValidationResult
 
-logger = structlog.get_logger(__name__).bind(service='fetcher')
+logger = structlog.get_logger(__name__).bind(service="fetcher")
 
 
 class PriceStorage:
@@ -67,7 +69,7 @@ class PriceStorage:
         cursor = conn.cursor()
 
         # SQLite stores UUIDs without hyphens, so remove them for the query
-        listing_id_clean = listing_id.replace('-', '')
+        listing_id_clean = listing_id.replace("-", "")
 
         query = """
             SELECT
@@ -101,9 +103,7 @@ class PriceStorage:
                 domain=row["domain"],
                 name=row["name"],
                 image_url=row["image_url"],
-                current_price=Decimal(str(row["current_price"]))
-                if row["current_price"]
-                else None,
+                current_price=Decimal(str(row["current_price"])) if row["current_price"] else None,
                 currency=row["currency"] or "USD",
                 check_interval=3600,  # Default, will be determined by priority
                 last_checked=datetime.fromisoformat(row["last_checked"])
@@ -111,10 +111,12 @@ class PriceStorage:
                 else None,
                 active=bool(row["active"]),
                 priority="normal",  # Default
-                listing_id=listing_id  # Store the listing ID for saving results
+                listing_id=listing_id,  # Store the listing ID for saving results
             )
 
-            logger.info("product_loaded_from_listing", listing_id=listing_id, product_id=row["product_id"])
+            logger.info(
+                "product_loaded_from_listing", listing_id=listing_id, product_id=row["product_id"]
+            )
             return product
 
         finally:
@@ -134,7 +136,7 @@ class PriceStorage:
         cursor = conn.cursor()
 
         # SQLite stores UUIDs without hyphens, so remove them for the query
-        product_id_clean = product_id.replace('-', '')
+        product_id_clean = product_id.replace("-", "")
 
         query = """
             SELECT id, url, domain, name, image_url, current_price, currency,
@@ -158,9 +160,7 @@ class PriceStorage:
                 domain=row["domain"],
                 name=row["name"],
                 image_url=row["image_url"],
-                current_price=Decimal(str(row["current_price"]))
-                if row["current_price"]
-                else None,
+                current_price=Decimal(str(row["current_price"])) if row["current_price"] else None,
                 currency=row["currency"] or "USD",
                 check_interval=row["check_interval"] or 3600,
                 last_checked=datetime.fromisoformat(row["last_checked"])
@@ -230,9 +230,7 @@ class PriceStorage:
         finally:
             conn.close()
 
-    def get_products_without_images(
-        self, limit: Optional[int] = None
-    ) -> List[Product]:
+    def get_products_without_images(self, limit: Optional[int] = None) -> List[Product]:
         """
         Get active products where image_url is NULL.
 
@@ -324,7 +322,7 @@ class PriceStorage:
 
         except Exception as e:
             conn.rollback()
-            logger.error(
+            logger.exception(
                 "product_image_update_failed",
                 product_id=product_id,
                 error=str(e),
@@ -357,7 +355,11 @@ class PriceStorage:
         try:
             # Extract numeric price value
             price_value = None
-            currency = "USD"
+            currency = "USD"  # default fallback
+
+            # Use extracted currency if available
+            if extraction.currency and extraction.currency.value:
+                currency = extraction.currency.value
 
             if extraction.price and extraction.price.value:
                 match = re.search(r"(\d+\.?\d*)", extraction.price.value)
@@ -374,8 +376,10 @@ class PriceStorage:
             image_url = None
             if extraction.image and extraction.image.value:
                 image_url = extraction.image.value.strip()
+                # Unescape HTML entities (&amp; -> &)
+                image_url = html.unescape(image_url)
                 # Normalize relative URLs to absolute
-                if image_url and not image_url.startswith(('http://', 'https://')):
+                if image_url and not image_url.startswith(("http://", "https://")):
                     if product_url:
                         parsed = urlparse(product_url)
                         base_url = f"{parsed.scheme}://{parsed.netloc}"
@@ -390,7 +394,7 @@ class PriceStorage:
 
             if listing_id:
                 # New multi-store schema: save to listing
-                listing_id_clean = listing_id.replace('-', '')
+                listing_id_clean = listing_id.replace("-", "")
 
                 # Store in price_history table (linked to listing)
                 cursor.execute(
@@ -416,6 +420,7 @@ class PriceStorage:
                     """
                     UPDATE app_productlisting
                     SET current_price = ?,
+                        currency = ?,
                         available = ?,
                         last_checked = ?,
                         updated_at = ?
@@ -423,6 +428,7 @@ class PriceStorage:
                     """,
                     (
                         price_value,
+                        currency,
                         available,
                         datetime.utcnow().isoformat(),
                         datetime.utcnow().isoformat(),
@@ -465,13 +471,8 @@ class PriceStorage:
                         update_values.append(canonical_title)
 
                     if image_url:
-                        # Update image_url only if currently empty
-                        update_fields.append("""
-                            image_url = CASE
-                                WHEN image_url IS NULL OR image_url = '' THEN ?
-                                ELSE image_url
-                            END
-                        """)
+                        # Always update image_url with latest extracted value
+                        update_fields.append("image_url = ?")
                         update_values.append(image_url)
 
                     # Always update updated_at
@@ -483,7 +484,7 @@ class PriceStorage:
 
                     query = f"""
                         UPDATE app_product
-                        SET {','.join(update_fields)}
+                        SET {",".join(update_fields)}
                         WHERE id = ?
                     """
 
@@ -507,7 +508,9 @@ class PriceStorage:
 
         except Exception as e:
             conn.rollback()
-            logger.error("price_save_failed", product_id=product_id, listing_id=listing_id, error=str(e))
+            logger.exception(
+                "price_save_failed", product_id=product_id, listing_id=listing_id, error=str(e)
+            )
             raise
         finally:
             conn.close()
@@ -542,7 +545,7 @@ class PriceStorage:
         cursor = conn.cursor()
 
         try:
-            listing_id_clean = listing_id.replace('-', '')
+            listing_id_clean = listing_id.replace("-", "")
             cursor.execute(
                 """
                 INSERT INTO app_fetchlog
@@ -566,11 +569,13 @@ class PriceStorage:
 
         except Exception as e:
             conn.rollback()
-            logger.error("fetch_log_failed", listing_id=listing_id, error=str(e))
+            logger.exception("fetch_log_failed", listing_id=listing_id, error=str(e))
         finally:
             conn.close()
 
-    def get_latest_price(self, product_id: str = None, listing_id: str = None) -> Optional[Dict[str, Any]]:
+    def get_latest_price(
+        self, product_id: str = None, listing_id: str = None
+    ) -> Optional[Dict[str, Any]]:
         """
         Get most recent price for product or listing.
 
@@ -587,7 +592,7 @@ class PriceStorage:
         try:
             if listing_id:
                 # New multi-store schema: query by listing_id
-                listing_id_clean = listing_id.replace('-', '')
+                listing_id_clean = listing_id.replace("-", "")
                 cursor.execute(
                     """
                     SELECT price, currency, available, extracted_data,
@@ -601,7 +606,7 @@ class PriceStorage:
                 )
             elif product_id:
                 # Legacy: get latest across all listings for this product
-                product_id_clean = product_id.replace('-', '')
+                product_id_clean = product_id.replace("-", "")
                 cursor.execute(
                     """
                     SELECT ph.price, ph.currency, ph.available, ph.extracted_data,
@@ -700,6 +705,6 @@ class PriceStorage:
 
         except Exception as e:
             conn.rollback()
-            logger.error("pattern_stats_update_failed", domain=domain, error=str(e))
+            logger.exception("pattern_stats_update_failed", domain=domain, error=str(e))
         finally:
             conn.close()

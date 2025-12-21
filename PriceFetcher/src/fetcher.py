@@ -22,7 +22,7 @@ from .stealth import (
 )
 
 # Bind service='fetcher' to all logs from this module
-logger = structlog.get_logger(__name__).bind(service='fetcher')
+logger = structlog.get_logger(__name__).bind(service="fetcher")
 
 
 class PriceFetcher:
@@ -194,16 +194,12 @@ class PriceFetcher:
             previous_extraction = None
             if previous and previous.get("extracted_data"):
                 try:
-                    previous_extraction = ExtractionResult(
-                        **previous["extracted_data"]
-                    )
+                    previous_extraction = ExtractionResult(**previous["extracted_data"])
                 except Exception as e:
                     logger.debug("previous_extraction_parse_failed", error=str(e))
 
             # Validate extraction
-            validation = self.validator.validate_extraction(
-                extraction, previous_extraction
-            )
+            validation = self.validator.validate_extraction(extraction, previous_extraction)
 
             # Store if valid
             if validation.valid:
@@ -240,7 +236,7 @@ class PriceFetcher:
             duration_ms = int((time.time() - start_time) * 1000)
             error_msg = str(e)
 
-            logger.error(
+            logger.exception(
                 "product_fetch_failed",
                 product_id=product_id,
                 url=url,
@@ -285,10 +281,11 @@ class PriceFetcher:
 
         # Extract domain for enhanced stealth detection
         from urllib.parse import urlparse
+
         domain = urlparse(url).netloc.lower()
 
         # Difficult sites that need enhanced stealth
-        difficult_sites = ['amazon.com', 'amazon.co.uk', 'amazon.de', 'walmart.com']
+        difficult_sites = ["amazon.com", "amazon.co.uk", "amazon.de", "walmart.com"]
         use_enhanced_stealth = any(site in domain for site in difficult_sites)
 
         for attempt in range(self.max_retries):
@@ -310,10 +307,7 @@ class PriceFetcher:
 
                 try:
                     # Launch browser with stealth args
-                    browser = await playwright.chromium.launch(
-                        headless=True,
-                        args=STEALTH_ARGS
-                    )
+                    browser = await playwright.chromium.launch(headless=True, args=STEALTH_ARGS)
 
                     # Create context with stealth options (enhanced for difficult sites)
                     if use_enhanced_stealth:
@@ -330,11 +324,7 @@ class PriceFetcher:
 
                     # Navigate (wait for JS if configured)
                     wait_until = "load" if self.wait_for_js else "domcontentloaded"
-                    await page.goto(
-                        url,
-                        wait_until=wait_until,
-                        timeout=self.browser_timeout
-                    )
+                    await page.goto(url, wait_until=wait_until, timeout=self.browser_timeout)
 
                     # For difficult sites, simulate human behavior
                     if use_enhanced_stealth:
@@ -425,12 +415,11 @@ class PriceFetcher:
 
                 if should_retry and attempt < self.max_retries - 1:
                     # Exponential backoff
-                    await asyncio.sleep(2 ** attempt)
+                    await asyncio.sleep(2**attempt)
                 elif not should_retry:
                     break
 
         # All retries failed
         raise Exception(
-            f"Failed to fetch {url} after {self.max_retries} attempts. "
-            f"Last error: {last_error}"
+            f"Failed to fetch {url} after {self.max_retries} attempts. Last error: {last_error}"
         )

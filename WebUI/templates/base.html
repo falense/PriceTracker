@@ -140,16 +140,14 @@
                             </svg>
                         </button>
 
-                        <!-- User menu -->
-                        <div class="relative" x-data="{ open: false }">
-                            <button @click="open = !open"
-                                    class="flex items-center space-x-2 p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
-                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                                </svg>
-                                <span class="text-sm font-medium">{{ user.username }}</span>
-                            </button>
-                        </div>
+                        <!-- Profile link -->
+                        <a href="{% url 'user_settings' %}"
+                           class="flex items-center space-x-2 p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                            </svg>
+                            <span class="text-sm font-medium">{{ user.username }}</span>
+                        </a>
 
                         <!-- Logout -->
                         <a href="{% url 'logout' %}"

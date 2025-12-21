@@ -14,7 +14,7 @@ from structlog.contextvars import bind_contextvars, clear_contextvars
 import asyncio
 
 # Use structlog with service='celery' for all task logging
-logger = structlog.get_logger(__name__).bind(service='celery')
+logger = structlog.get_logger(__name__).bind(service="celery")
 
 # Task timeout settings (in seconds)
 FETCH_TASK_SOFT_LIMIT = 180  # 3 minutes - sends SoftTimeLimitExceeded
@@ -45,9 +45,9 @@ def generate_pattern(self, url: str, domain: str, listing_id: str = None):
     clear_contextvars()
     bind_contextvars(
         task_id=self.request.id,
-        task_name='generate_pattern',
+        task_name="generate_pattern",
         domain=domain,
-        service='celery',
+        service="celery",
     )
     if listing_id:
         bind_contextvars(listing_id=listing_id)
@@ -58,10 +58,13 @@ def generate_pattern(self, url: str, domain: str, listing_id: str = None):
         clear_contextvars()
 
 
-async def _generate_pattern_async(task_self, url: str, domain: str, listing_id: str = None):
+async def _generate_pattern_async(
+    task_self, url: str, domain: str, listing_id: str = None
+):
     """Async implementation of generate_pattern."""
     from app.models import Pattern
     from ExtractorPatternAgent import PatternGenerator
+    from asgiref.sync import sync_to_async
 
     try:
         logger.info(f"Generating pattern for {domain}: {url}")
@@ -70,14 +73,19 @@ async def _generate_pattern_async(task_self, url: str, domain: str, listing_id: 
         generator = PatternGenerator()
         pattern_data = await generator.generate(url, domain)
 
-        # Save to database
-        pattern, created = Pattern.objects.update_or_create(
-            domain=domain,
-            defaults={
-                'pattern_json': pattern_data,
-                'last_validated': timezone.now()
-            }
-        )
+        # Save to database (wrap Django ORM call with sync_to_async)
+        def save_pattern():
+            pattern, created = Pattern.objects.update_or_create(
+                domain=domain,
+                defaults={
+                    "pattern_json": pattern_data,
+                    "extractor_module": pattern_data.get("extractor_module"),
+                    "last_validated": timezone.now(),
+                },
+            )
+            return pattern, created
+
+        pattern, created = await sync_to_async(save_pattern)()
         action = "Created" if created else "Updated"
         logger.info(f"{action} pattern in database for {domain}")
 
@@ -98,21 +106,17 @@ async def _generate_pattern_async(task_self, url: str, domain: str, listing_id: 
                 )
 
         return {
-            'status': 'success',
-            'domain': domain,
-            'action': action,
-            'fields_found': pattern_data.get('metadata', {}).get('fields_found', 0),
-            'confidence': pattern_data.get('metadata', {}).get('overall_confidence', 0),
-            'fetch_task_id': fetch_task_id,
+            "status": "success",
+            "domain": domain,
+            "action": action,
+            "fields_found": pattern_data.get("metadata", {}).get("fields_found", 0),
+            "confidence": pattern_data.get("metadata", {}).get("overall_confidence", 0),
+            "fetch_task_id": fetch_task_id,
         }
 
     except Exception as e:
         logger.exception(f"Pattern generation error for {domain}")
-        return {
-            'status': 'error',
-            'domain': domain,
-            'error': str(e)
-        }
+        return {"status": "error", "domain": domain, "error": str(e)}
 
 
 @shared_task(
@@ -135,9 +139,9 @@ def fetch_listing_price(self, listing_id: str):
     clear_contextvars()
     bind_contextvars(
         task_id=self.request.id,
-        task_name='fetch_listing_price',
+        task_name="fetch_listing_price",
         listing_id=listing_id,
-        service='celery',
+        service="celery",
     )
 
     try:
@@ -156,7 +160,9 @@ async def _fetch_listing_price_async(task_self, listing_id: str):
     try:
         # Get listing using sync_to_async to avoid async context errors
         listing = await sync_to_async(
-            lambda: ProductListing.objects.select_related('product', 'store').get(id=listing_id)
+            lambda: ProductListing.objects.select_related("product", "store").get(
+                id=listing_id
+            )
         )()
 
         # Add product_id to shared context for downstream loggers
@@ -173,18 +179,17 @@ async def _fetch_listing_price_async(task_self, listing_id: str):
         )
 
         # Get database path from Django settings
-        db_path = str(settings.DATABASES['default']['NAME'])
+        db_path = str(settings.DATABASES["default"]["NAME"])
 
         # Call async function directly
         result = await fetch_listing_price_direct(
-            listing_id=listing_id,
-            db_path=db_path
+            listing_id=listing_id, db_path=db_path
         )
 
         logger.info(
             "fetch_listing_completed",
-            status=result['status'],
-            price=result.get('price'),
+            status=result["status"],
+            price=result.get("price"),
         )
         return result
 
@@ -194,9 +199,9 @@ async def _fetch_listing_price_async(task_self, listing_id: str):
             listing_id=listing_id,
         )
         return {
-            'status': 'error',
-            'listing_id': listing_id,
-            'error': 'Listing not found'
+            "status": "error",
+            "listing_id": listing_id,
+            "error": "Listing not found",
         }
     except Exception as e:
         logger.error(
@@ -205,11 +210,7 @@ async def _fetch_listing_price_async(task_self, listing_id: str):
             error=str(e),
             exc_info=True,
         )
-        return {
-            'status': 'error',
-            'listing_id': listing_id,
-            'error': str(e)
-        }
+        return {"status": "error", "listing_id": listing_id, "error": str(e)}
 
 
 @shared_task
@@ -249,17 +250,11 @@ def fetch_prices_by_aggregated_priority():
             f"{product_count} products, {listing_count} listings queued"
         )
 
-        return {
-            'products_checked': product_count,
-            'listings_queued': listing_count
-        }
+        return {"products_checked": product_count, "listings_queued": listing_count}
 
     except Exception as e:
         logger.exception("Error in fetch_prices_by_aggregated_priority")
-        return {
-            'status': 'error',
-            'error': str(e)
-        }
+        return {"status": "error", "error": str(e)}
 
 
 @shared_task
@@ -279,23 +274,25 @@ def check_pattern_health():
             # Check if already flagged
             existing_flag = AdminFlag.objects.filter(
                 domain=pattern.domain,
-                flag_type='pattern_low_confidence',
-                status='pending'
+                flag_type="pattern_low_confidence",
+                status="pending",
             ).exists()
 
             if not existing_flag:
                 AdminFlag.objects.create(
-                    flag_type='pattern_low_confidence',
+                    flag_type="pattern_low_confidence",
                     domain=pattern.domain,
                     url=f"Pattern for {pattern.domain}",
                     error_message=f"Success rate: {pattern.success_rate:.1%} ({pattern.successful_attempts}/{pattern.total_attempts})",
-                    status='pending'
+                    status="pending",
                 )
                 flagged += 1
-                logger.warning(f"Flagged low-confidence pattern: {pattern.domain} ({pattern.success_rate:.1%})")
+                logger.warning(
+                    f"Flagged low-confidence pattern: {pattern.domain} ({pattern.success_rate:.1%})"
+                )
 
     logger.info(f"Pattern health check complete. Flagged {flagged} patterns.")
-    return {'flagged': flagged}
+    return {"flagged": flagged}
 
 
 @shared_task
@@ -312,7 +309,7 @@ def cleanup_old_logs():
     deleted_count, _ = FetchLog.objects.filter(fetched_at__lt=cutoff).delete()
 
     logger.info(f"Cleaned up {deleted_count} old fetch logs")
-    return {'deleted': deleted_count}
+    return {"deleted": deleted_count}
 
 
 @shared_task(
@@ -328,8 +325,8 @@ def fetch_missing_images():
     """
     clear_contextvars()
     bind_contextvars(
-        task_name='fetch_missing_images',
-        service='celery',
+        task_name="fetch_missing_images",
+        service="celery",
     )
 
     try:
@@ -347,13 +344,11 @@ async def _fetch_missing_images_async():
         logger.info("Starting fetch_missing_images task")
 
         # Get database path from Django settings
-        db_path = str(settings.DATABASES['default']['NAME'])
+        db_path = str(settings.DATABASES["default"]["NAME"])
 
         # Call async function directly
         result = await backfill_images_direct(
-            db_path=db_path,
-            limit=50,
-            request_delay=2.0
+            db_path=db_path, limit=50, request_delay=2.0
         )
 
         logger.info(
@@ -363,7 +358,4 @@ async def _fetch_missing_images_async():
 
     except Exception as e:
         logger.exception("Error in fetch_missing_images task")
-        return {
-            'status': 'error',
-            'error': str(e)
-        }
+        return {"status": "error", "error": str(e)}

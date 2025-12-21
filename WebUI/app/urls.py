@@ -1,71 +1,149 @@
 """
 URL configuration for PriceTracker app.
 """
+
 from django.urls import path
 from . import views
 
 urlpatterns = [
     # Main pages
-    path('', views.dashboard, name='dashboard'),
-    path('login/', views.login_view, name='login'),
-    path('logout/', views.logout_view, name='logout'),
-    path('register/', views.register_view, name='register'),
-
+    path("", views.dashboard, name="dashboard"),
+    path("login/", views.login_view, name="login"),
+    path("logout/", views.logout_view, name="logout"),
+    path("register/", views.register_view, name="register"),
     # Product management
-    path('products/', views.product_list, name='product_list'),
-    path('products/add/', views.add_product, name='add_product'),
-    path('products/<uuid:product_id>/', views.product_detail, name='product_detail'),
-    path('products/<uuid:product_id>/delete/', views.delete_product, name='delete_product'),
-    path('products/<uuid:product_id>/settings/', views.update_product_settings, name='update_product_settings'),
-
+    path("products/", views.product_list, name="product_list"),
+    path("products/add/", views.add_product, name="add_product"),
+    path("products/<uuid:product_id>/", views.product_detail, name="product_detail"),
+    path(
+        "products/<uuid:product_id>/delete/",
+        views.delete_product,
+        name="delete_product",
+    ),
+    path(
+        "products/<uuid:product_id>/settings/",
+        views.update_product_settings,
+        name="update_product_settings",
+    ),
     # Subscription management (new multi-store model)
-    path('subscriptions/<uuid:subscription_id>/', views.subscription_detail, name='subscription_detail'),
-    path('subscriptions/<uuid:subscription_id>/update/', views.update_subscription, name='update_subscription'),
-    path('subscriptions/<uuid:subscription_id>/unsubscribe/', views.unsubscribe, name='unsubscribe'),
-    path('subscriptions/<uuid:subscription_id>/refresh/', views.refresh_price, name='refresh_price'),
-
+    path(
+        "subscriptions/<uuid:subscription_id>/",
+        views.subscription_detail,
+        name="subscription_detail",
+    ),
+    path(
+        "subscriptions/<uuid:subscription_id>/status/",
+        views.subscription_status,
+        name="subscription_status",
+    ),
+    path(
+        "subscriptions/<uuid:subscription_id>/update/",
+        views.update_subscription,
+        name="update_subscription",
+    ),
+    path(
+        "subscriptions/<uuid:subscription_id>/unsubscribe/",
+        views.unsubscribe,
+        name="unsubscribe",
+    ),
+    path(
+        "subscriptions/<uuid:subscription_id>/refresh/",
+        views.refresh_price,
+        name="refresh_price",
+    ),
     # HTMX endpoints
-    path('search/', views.search_product, name='search_product'),
-    path('search/autocomplete/', views.search_autocomplete, name='search_autocomplete'),
-    path('products/<uuid:product_id>/chart/', views.price_history_chart, name='price_history_chart'),
-    path('products/<uuid:product_id>/status/', views.product_status, name='product_status'),
-
+    path("search/", views.search_product, name="search_product"),
+    path("search/autocomplete/", views.search_autocomplete, name="search_autocomplete"),
+    path(
+        "products/<uuid:product_id>/chart/",
+        views.price_history_chart,
+        name="price_history_chart",
+    ),
+    path(
+        "products/<uuid:product_id>/status/",
+        views.product_status,
+        name="product_status",
+    ),
     # Notifications
-    path('notifications/', views.notifications_list, name='notifications_list'),
-    path('notifications/mark-read/', views.mark_notifications_read, name='mark_notifications_read'),
-
+    path("notifications/", views.notifications_list, name="notifications_list"),
+    path(
+        "notifications/mark-read/",
+        views.mark_notifications_read,
+        name="mark_notifications_read",
+    ),
     # Admin pages (staff only)
-    path('admin-dashboard/', views.admin_dashboard, name='admin_dashboard'),
-    path('admin-dashboard/logs/', views.admin_logs, name='admin_logs'),
-
+    path("admin-dashboard/", views.admin_dashboard, name="admin_dashboard"),
+    path("admin-dashboard/logs/", views.admin_logs, name="admin_logs"),
     # Pattern Management
-    path('admin-dashboard/patterns/', views.pattern_list, name='pattern_list'),
-    path('admin-dashboard/patterns/create/', views.pattern_create, name='pattern_create'),
-    path('admin-dashboard/patterns/<str:domain>/', views.pattern_detail, name='pattern_detail'),
-    path('admin-dashboard/patterns/<str:domain>/edit/', views.pattern_edit, name='pattern_edit'),
-    path('admin-dashboard/patterns/<str:domain>/history/', views.pattern_history, name='pattern_history'),
-    path('admin-dashboard/patterns/<str:domain>/compare/<int:v1>/<int:v2>/', views.pattern_compare, name='pattern_compare'),
-    path('admin-dashboard/patterns/<str:domain>/rollback/<int:version>/', views.pattern_rollback, name='pattern_rollback'),
-    path('admin-dashboard/patterns/<str:domain>/delete/', views.pattern_delete, name='pattern_delete'),
-
+    path("admin-dashboard/patterns/", views.pattern_list, name="pattern_list"),
+    path(
+        "admin-dashboard/patterns/create/", views.pattern_create, name="pattern_create"
+    ),
+    path(
+        "admin-dashboard/patterns/<str:domain>/",
+        views.pattern_detail,
+        name="pattern_detail",
+    ),
+    path(
+        "admin-dashboard/patterns/<str:domain>/edit/",
+        views.pattern_edit,
+        name="pattern_edit",
+    ),
+    path(
+        "admin-dashboard/patterns/<str:domain>/history/",
+        views.pattern_history,
+        name="pattern_history",
+    ),
+    path(
+        "admin-dashboard/patterns/<str:domain>/compare/<int:v1>/<int:v2>/",
+        views.pattern_compare,
+        name="pattern_compare",
+    ),
+    path(
+        "admin-dashboard/patterns/<str:domain>/rollback/<int:version>/",
+        views.pattern_rollback,
+        name="pattern_rollback",
+    ),
+    path(
+        "admin-dashboard/patterns/<str:domain>/delete/",
+        views.pattern_delete,
+        name="pattern_delete",
+    ),
     # Pattern HTMX API endpoints
-    path('api/patterns/test/', views.api_test_pattern, name='api_test_pattern'),
-    path('api/patterns/test-selector/', views.api_test_selector, name='api_test_selector'),
-    path('api/patterns/validate/', views.api_validate_pattern, name='api_validate_pattern'),
-    path('api/patterns/fetch-html/', views.api_fetch_html, name='api_fetch_html'),
-    path('api/patterns/regenerate/', views.api_regenerate_pattern, name='api_regenerate_pattern'),
-    path('api/patterns/retest-visualization/', views.api_retest_pattern_visualization, name='api_retest_pattern_visualization'),
-
+    path("api/patterns/test/", views.api_test_pattern, name="api_test_pattern"),
+    path(
+        "api/patterns/test-selector/", views.api_test_selector, name="api_test_selector"
+    ),
+    path(
+        "api/patterns/validate/",
+        views.api_validate_pattern,
+        name="api_validate_pattern",
+    ),
+    path("api/patterns/fetch-html/", views.api_fetch_html, name="api_fetch_html"),
+    path(
+        "api/patterns/regenerate/",
+        views.api_regenerate_pattern,
+        name="api_regenerate_pattern",
+    ),
+    path(
+        "api/patterns/retest-visualization/",
+        views.api_retest_pattern_visualization,
+        name="api_retest_pattern_visualization",
+    ),
     # Admin Flags
-    path('admin-dashboard/flags/', views.admin_flags_list, name='admin_flags_list'),
-    path('admin-dashboard/flags/<int:flag_id>/resolve/', views.resolve_admin_flag, name='resolve_admin_flag'),
-
+    path("admin-dashboard/flags/", views.admin_flags_list, name="admin_flags_list"),
+    path(
+        "admin-dashboard/flags/<int:flag_id>/resolve/",
+        views.resolve_admin_flag,
+        name="resolve_admin_flag",
+    ),
     # Legacy pattern status view (keep for backward compatibility)
-    path('admin-dashboard/patterns-old/', views.patterns_status, name='patterns_status'),
-
+    path(
+        "admin-dashboard/patterns-old/", views.patterns_status, name="patterns_status"
+    ),
     # Settings
-    path('settings/', views.user_settings, name='user_settings'),
-
+    path("settings/", views.user_settings, name="user_settings"),
+    path("settings/change-password/", views.change_password, name="change_password"),
     # Utilities
-    path('proxy-image/', views.proxy_image, name='proxy_image'),
+    path("proxy-image/", views.proxy_image, name="proxy_image"),
 ]

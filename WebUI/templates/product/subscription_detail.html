@@ -1,10 +1,20 @@
 {% extends 'base.html' %}
 {% load currency_filters %}
 
-{% block title %}{{ product.name }} - PriceTracker{% endblock %}
+{% block title %}
+    {% if is_being_added %}
+        Adding {{ store_name }}
+    {% else %}
+        {{ product.name }}
+    {% endif %} - PriceTracker
+{% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<div id="subscription-content">
+    {% if is_being_added %}
+        {% include 'product/partials/store_being_added.html' %}
+    {% else %}
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <!-- Back Button -->
     <div class="mb-6">
         <a href="{% url 'dashboard' %}" class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">
@@ -47,7 +57,7 @@
                     <p class="text-sm text-green-800 dark:text-green-200 mb-2">Best Available Price</p>
                     <div class="flex items-baseline space-x-3">
                         <span class="text-4xl font-bold text-green-900 dark:text-green-100">
-                            {{ best_listing.current_price|format_currency:best_listing.store.domain }}
+                            {{ best_listing.current_price|format_currency:best_listing.currency }}
                         </span>
                         <span class="text-lg text-green-700 dark:text-green-300">
                             at {{ best_listing.store.name }}
@@ -56,9 +66,9 @@
                     {% if subscription.target_price %}
                     <p class="text-sm text-green-800 dark:text-green-200 mt-2">
                         {% if best_listing.current_price <= subscription.target_price %}
-                            ✓ Below your target price of {{ subscription.target_price|format_currency:best_listing.store.domain }}
+                            ✓ Below your target price of {{ subscription.target_price|format_currency:best_listing.currency }}
                         {% else %}
-                            Target: {{ subscription.target_price|format_currency:best_listing.store.domain }}
+                            Target: {{ subscription.target_price|format_currency:best_listing.currency }}
                         {% endif %}
                     </p>
                     {% endif %}
@@ -109,7 +119,7 @@
                             <div class="text-right">
                                 {% if listing.current_price %}
                                 <p class="text-2xl font-bold text-gray-900 dark:text-white">
-                                    {{ listing.current_price|format_currency:listing.store.domain }}
+                                    {{ listing.current_price|format_currency:listing.currency }}
                                 </p>
                                 <p class="text-sm text-gray-500 dark:text-gray-400">
                                     {% if listing.last_checked %}{{ listing.last_checked|timesince }} ago{% endif %}
@@ -162,7 +172,7 @@
                                     {{ history.recorded_at|date:"M d, Y H:i" }}
                                 </td>
                                 <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">
-                                    {{ history.price|format_currency:best_listing.store.domain }}
+                                    {{ history.price|format_currency:history.currency }}
                                 </td>
                             </tr>
                             {% endfor %}
@@ -556,8 +566,8 @@
                                     </div>
 
                                     <!-- Line 2: Context Details (ALL inline, no expansion) -->
-                                    {% with fields=log.context|context_value:"fields" status_code=log.context|context_value:"status_code" extraction_method=log.context|context_value:"extraction_method" confidence=log.context|context_value:"confidence" %}
-                                    {% if fields or status_code or extraction_method or confidence or log.duration_ms %}
+                                    {% with fields=log.context|context_value:"fields" status_code=log.context|context_value:"status_code" extraction_method=log.context|context_value:"extraction_method" confidence=log.context|context_value:"confidence" error=log.context|context_value:"error" errors=log.context|context_value:"errors" warnings=log.context|context_value:"warnings" %}
+                                    {% if fields or status_code or extraction_method or confidence or log.duration_ms or error or errors or warnings %}
                                     <div class="mt-1.5 text-xs text-gray-600 dark:text-gray-400">
                                         <div class="flex flex-wrap gap-x-3 gap-y-1 items-center">
                                             <!-- Fields extracted -->
@@ -602,6 +612,71 @@
                                             </span>
                                             {% endif %}
                                         </div>
+                                        
+                                        <!-- Errors Array (displayed on separate line) -->
+                                        {% if errors %}
+                                        <div class="mt-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded">
+                                            <div class="flex items-start gap-1">
+                                                <svg class="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                                </svg>
+                                                <div class="flex-1">
+                                                    <div class="text-xs font-medium text-red-900 dark:text-red-100 mb-1">Errors:</div>
+                                                    <ul class="list-disc list-inside space-y-0.5">
+                                                        {% for err in errors %}
+                                                        <li class="text-xs text-red-800 dark:text-red-200">{{ err }}</li>
+                                                        {% endfor %}
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                        
+                                        <!-- Warnings Array (displayed on separate line) -->
+                                        {% if warnings %}
+                                        <div class="mt-2 p-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded">
+                                            <div class="flex items-start gap-1">
+                                                <svg class="w-4 h-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                                </svg>
+                                                <div class="flex-1">
+                                                    <div class="text-xs font-medium text-yellow-900 dark:text-yellow-100 mb-1">Warnings:</div>
+                                                    <ul class="list-disc list-inside space-y-0.5">
+                                                        {% for warn in warnings %}
+                                                        <li class="text-xs text-yellow-800 dark:text-yellow-200">{{ warn }}</li>
+                                                        {% endfor %}
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                        
+                                        <!-- Single Error String (fallback for non-array errors) -->
+                                        {% if error and not errors %}
+                                        <div class="mt-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded">
+                                            <div class="flex items-start gap-1">
+                                                <svg class="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                                </svg>
+                                                <span class="text-xs font-medium text-red-800 dark:text-red-200">{{ error }}</span>
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                        
+                                        <!-- Exception Traceback (if present) -->
+                                        {% with exception=log.context|context_value:"exception" exc_info=log.context|context_value:"exc_info" %}
+                                        {% if exception or exc_info %}
+                                        <details class="mt-2">
+                                            <summary class="cursor-pointer text-xs font-medium text-red-700 dark:text-red-300 hover:text-red-900 dark:hover:text-red-100">
+                                                <svg class="w-3 h-3 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                                                </svg>
+                                                Show Traceback
+                                            </summary>
+                                            <pre class="mt-2 p-2 bg-gray-900 text-gray-100 dark:bg-black rounded text-xs overflow-x-auto font-mono">{{ exception|default:exc_info }}</pre>
+                                        </details>
+                                        {% endif %}
+                                        {% endwith %}
                                     </div>
                                     {% endif %}
                                     {% endwith %}
@@ -721,8 +796,8 @@
                             </div>
 
                             <!-- Line 3: Additional Context (ALL inline, same as grouped logs) -->
-                            {% with fields=log.context|context_value:"fields" status_code=log.context|context_value:"status_code" extraction_method=log.context|context_value:"extraction_method" confidence=log.context|context_value:"confidence" %}
-                            {% if fields or status_code or extraction_method or confidence or log.duration_ms %}
+                            {% with fields=log.context|context_value:"fields" status_code=log.context|context_value:"status_code" extraction_method=log.context|context_value:"extraction_method" confidence=log.context|context_value:"confidence" error=log.context|context_value:"error" errors=log.context|context_value:"errors" warnings=log.context|context_value:"warnings" %}
+                            {% if fields or status_code or extraction_method or confidence or log.duration_ms or error or errors or warnings %}
                             <div class="mt-1.5 text-xs text-gray-600 dark:text-gray-400">
                                 <div class="flex flex-wrap gap-x-3 gap-y-1 items-center">
                                     {% if fields %}
@@ -762,6 +837,71 @@
                                     </span>
                                     {% endif %}
                                 </div>
+                                
+                                <!-- Errors Array (displayed on separate line) -->
+                                {% if errors %}
+                                <div class="mt-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded">
+                                    <div class="flex items-start gap-1">
+                                        <svg class="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                        </svg>
+                                        <div class="flex-1">
+                                            <div class="text-xs font-medium text-red-900 dark:text-red-100 mb-1">Errors:</div>
+                                            <ul class="list-disc list-inside space-y-0.5">
+                                                {% for err in errors %}
+                                                <li class="text-xs text-red-800 dark:text-red-200">{{ err }}</li>
+                                                {% endfor %}
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                
+                                <!-- Warnings Array (displayed on separate line) -->
+                                {% if warnings %}
+                                <div class="mt-2 p-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded">
+                                    <div class="flex items-start gap-1">
+                                        <svg class="w-4 h-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                        </svg>
+                                        <div class="flex-1">
+                                            <div class="text-xs font-medium text-yellow-900 dark:text-yellow-100 mb-1">Warnings:</div>
+                                            <ul class="list-disc list-inside space-y-0.5">
+                                                {% for warn in warnings %}
+                                                <li class="text-xs text-yellow-800 dark:text-yellow-200">{{ warn }}</li>
+                                                {% endfor %}
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                
+                                <!-- Single Error String (fallback for non-array errors) -->
+                                {% if error and not errors %}
+                                <div class="mt-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded">
+                                    <div class="flex items-start gap-1">
+                                        <svg class="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                        </svg>
+                                        <span class="text-xs font-medium text-red-800 dark:text-red-200">{{ error }}</span>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                
+                                <!-- Exception Traceback (if present) -->
+                                {% with exception=log.context|context_value:"exception" exc_info=log.context|context_value:"exc_info" %}
+                                {% if exception or exc_info %}
+                                <details class="mt-2">
+                                    <summary class="cursor-pointer text-xs font-medium text-red-700 dark:text-red-300 hover:text-red-900 dark:hover:text-red-100">
+                                        <svg class="w-3 h-3 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                                        </svg>
+                                        Show Traceback
+                                    </summary>
+                                    <pre class="mt-2 p-2 bg-gray-900 text-gray-100 dark:bg-black rounded text-xs overflow-x-auto font-mono">{{ exception|default:exc_info }}</pre>
+                                </details>
+                                {% endif %}
+                                {% endwith %}
                             </div>
                             {% endif %}
                             {% endwith %}
@@ -773,21 +913,21 @@
 
                 <!-- Empty State -->
                 {% if not job_groups and not ungrouped_logs %}
-                <div class="p-8 text-center bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                    </svg>
-                    <p class="mt-4 text-gray-500 dark:text-gray-400">
-                        No operation logs found for the selected filter in the last 24 hours.
-                    </p>
-                </div>
-                {% endif %}
-            </div>
-        </div>
+                 <div class="p-8 text-center bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                     <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                     </svg>
+                     <p class="mt-4 text-gray-500 dark:text-gray-400">
+                         No operation logs found for the selected filter in the last 24 hours.
+                     </p>
+                 </div>
+                 {% endif %}
+             </div>
+         </div>
+     </div>
+     {% endif %}
     </div>
     {% endif %}
-    <!-- ========== END ADMIN SECTION ========== -->
-
 </div>
 {% endblock %}
 

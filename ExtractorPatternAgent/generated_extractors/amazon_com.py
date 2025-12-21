@@ -4,6 +4,7 @@ Auto-generated extractor for amazon.com
 Converted from JSON pattern on 2025-12-17T16:02:31.859862
 Original confidence: 0.00
 """
+
 import re
 from decimal import Decimal
 from typing import Optional
@@ -13,13 +14,13 @@ from ._base import BaseExtractor
 
 # Metadata (required for discovery)
 PATTERN_METADATA = {
-    'domain': 'amazon.com',
-    'generated_at': '2025-12-17T16:02:31.859866',
-    'generator': 'JSON to Python converter',
-    'version': '1.0',
-    'confidence': 0.00,
-    'fields': [],
-    'notes': 'Converted from JSON pattern'
+    "domain": "amazon.com",
+    "generated_at": "2025-12-17T16:02:31.859866",
+    "generator": "JSON to Python converter",
+    "version": "1.0",
+    "confidence": 0.00,
+    "fields": ["currency"],
+    "notes": "Converted from JSON pattern",
 }
 
 
@@ -53,3 +54,13 @@ def extract_model_number(soup: BeautifulSoup) -> Optional[str]:
     return None
 
 
+def extract_currency(soup: BeautifulSoup) -> Optional[str]:
+    """
+    Extract currency code.
+
+    Returns:
+        Currency code (e.g., 'NOK', 'USD', 'EUR')
+
+    Confidence: 1.0 (hardcoded default)
+    """
+    return "NOK"

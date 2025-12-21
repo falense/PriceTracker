@@ -1,6 +1,7 @@
 """
 Django template filters for currency formatting and JSON serialization.
 """
+
 import json
 from django import template
 from django.utils.safestring import mark_safe
@@ -9,18 +10,47 @@ from app.utils.currency import format_price, get_currency_from_domain
 register = template.Library()
 
 
-@register.filter(name='format_currency')
-def format_currency(price, domain):
+@register.filter(name="format_currency")
+def format_currency(price, currency_or_domain):
     """
-    Format price with appropriate currency symbol based on domain.
+    Format price with appropriate currency symbol.
 
-    Usage in template:
-        {{ product.current_price|format_currency:product.domain }}
+    Intelligently detects whether the argument is a currency code or domain.
+
+    Args:
+        price: Price value
+        currency_or_domain: Either:
+            - Currency code (e.g., 'NOK', 'USD') - PREFERRED for accuracy
+            - Domain (e.g., 'oda.com') - fallback for backward compatibility
+
+    Usage in templates:
+        {{ listing.current_price|format_currency:listing.currency }}  # Preferred
+        {{ listing.current_price|format_currency:listing.store.domain }}  # Fallback
+
+    Examples:
+        {{ 499.00|format_currency:"NOK" }}  → "499.00 kr"
+        {{ 499.00|format_currency:"USD" }}  → "$499.00"
+        {{ 499.00|format_currency:"oda.com" }}  → "$499.00" (domain fallback)
     """
-    return format_price(price, domain=domain)
+    if not currency_or_domain:
+        return format_price(price)
+
+    # Check if it's a currency code (2-4 letter uppercase, no dots)
+    # Currency codes: NOK, USD, EUR, GBP, etc.
+    if (
+        isinstance(currency_or_domain, str)
+        and 2 <= len(currency_or_domain) <= 4
+        and currency_or_domain.isupper()
+        and "." not in currency_or_domain
+    ):
+        # It's a currency code - use it directly (preferred)
+        return format_price(price, currency_code=currency_or_domain)
+    else:
+        # It's a domain - use domain-based detection (fallback)
+        return format_price(price, domain=currency_or_domain)
 
 
-@register.filter(name='currency_symbol')
+@register.filter(name="currency_symbol")
 def currency_symbol(domain):
     """
     Get currency symbol for a domain.
@@ -32,7 +62,7 @@ def currency_symbol(domain):
     return symbol
 
 
-@register.filter(name='to_json')
+@register.filter(name="to_json")
 def to_json(value):
     """
     Convert a Python object to JSON string.
@@ -41,14 +71,14 @@ def to_json(value):
         {{ log.context|to_json }}
     """
     if value is None:
-        return 'null'
+        return "null"
     try:
         return mark_safe(json.dumps(value, default=str, ensure_ascii=False))
     except (TypeError, ValueError):
-        return '{}'
+        return "{}"
 
 
-@register.filter(name='truncate_path')
+@register.filter(name="truncate_path")
 def truncate_path(url, max_length=50):
     """
     Truncate URL to show only path, with intelligent truncation.
@@ -58,26 +88,27 @@ def truncate_path(url, max_length=50):
         {{ log.context.url|truncate_path:40 }}
     """
     if not url:
-        return ''
+        return ""
     try:
         from urllib.parse import urlparse
+
         parsed = urlparse(str(url))
         path = parsed.path or url
 
         if len(path) > max_length:
             # Keep start and end, truncate middle
             keep_each = (max_length - 3) // 2
-            return path[:keep_each] + '...' + path[-keep_each:]
+            return path[:keep_each] + "..." + path[-keep_each:]
         return path
     except Exception:
         # Fallback: simple string truncation
         url_str = str(url)
         if len(url_str) > max_length:
-            return url_str[:max_length-3] + '...'
+            return url_str[: max_length - 3] + "..."
         return url_str
 
 
-@register.filter(name='context_value')
+@register.filter(name="context_value")
 def context_value(context_dict, key):
     """
     Safely get a value from context dict.
