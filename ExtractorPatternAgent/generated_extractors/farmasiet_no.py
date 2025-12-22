@@ -212,3 +212,15 @@ def extract_model_number(soup: BeautifulSoup) -> Optional[str]:
                 return BaseExtractor.clean_text(str(value))
     
     return None
+
+def extract_currency(soup: BeautifulSoup) -> Optional[str]:
+    """
+    Extract currency code.
+    
+    Returns:
+        Currency code (e.g., 'NOK', 'USD', 'EUR')
+    
+    Confidence: 1.0 (hardcoded default)
+    """
+    return "NOK"
+
