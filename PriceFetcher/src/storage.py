@@ -5,7 +5,7 @@ import json
 import re
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -16,6 +16,33 @@ import structlog
 from .models import ExtractionResult, Product, ValidationResult
 
 logger = structlog.get_logger(__name__).bind(service="fetcher")
+
+
+def format_datetime_for_django_sqlite(dt: datetime = None) -> str:
+    """
+    Format datetime for Django SQLite compatibility.
+
+    Django's SQLite backend converts timezone-aware datetimes to format:
+    "YYYY-MM-DD HH:MM:SS.mmmmmm" (space separator, no timezone suffix)
+
+    This is different from .isoformat() which produces:
+    "YYYY-MM-DDTHH:MM:SS.mmmmmm" (T separator)
+
+    SQLite stores datetimes as TEXT and does lexicographic comparison,
+    so we must use the same format Django uses to ensure queries work correctly.
+
+    Args:
+        dt: Datetime to format (defaults to current UTC time)
+
+    Returns:
+        Formatted datetime string compatible with Django SQLite backend
+    """
+    if dt is None:
+        dt = datetime.now(dt_timezone.utc)
+
+    # Use Django's format: "YYYY-MM-DD HH:MM:SS.mmmmmm"
+    # This is what Django's adapt_datetimefield_value() produces
+    return dt.strftime('%Y-%m-%d %H:%M:%S.%f')
 
 
 class PriceStorage:
@@ -308,7 +335,7 @@ class PriceStorage:
                 """,
                 (
                     image_url,
-                    datetime.utcnow().isoformat(),
+                    format_datetime_for_django_sqlite(),
                     product_id,
                 ),
             )
@@ -411,7 +438,7 @@ class PriceStorage:
                         available,
                         json.dumps(extraction.model_dump(), default=str),
                         validation.confidence,
-                        datetime.utcnow().isoformat(),
+                        format_datetime_for_django_sqlite(),
                     ),
                 )
 
@@ -430,8 +457,8 @@ class PriceStorage:
                         price_value,
                         currency,
                         available,
-                        datetime.utcnow().isoformat(),
-                        datetime.utcnow().isoformat(),
+                        format_datetime_for_django_sqlite(),
+                        format_datetime_for_django_sqlite(),
                         listing_id_clean,
                     ),
                 )
@@ -477,7 +504,7 @@ class PriceStorage:
 
                     # Always update updated_at
                     update_fields.append("updated_at = ?")
-                    update_values.append(datetime.utcnow().isoformat())
+                    update_values.append(format_datetime_for_django_sqlite())
 
                     # Add product_id for WHERE clause
                     update_values.append(product_id)
@@ -560,7 +587,7 @@ class PriceStorage:
                     json.dumps(errors or []),
                     json.dumps(warnings or []),
                     duration_ms,
-                    datetime.utcnow().isoformat(),
+                    format_datetime_for_django_sqlite(),
                 ),
             )
 
@@ -675,6 +702,44 @@ class PriceStorage:
         finally:
             conn.close()
 
+    def update_last_checked(self, listing_id: str) -> None:
+        """
+        Update last_checked timestamp for a listing.
+
+        This should be called after every fetch attempt, regardless of success or failure.
+        This prevents listings with failing patterns from being retried infinitely.
+
+        Args:
+            listing_id: ProductListing UUID (with or without hyphens)
+        """
+        try:
+            listing_id_clean = listing_id.replace("-", "")
+
+            conn = sqlite3.connect(self.db_path, timeout=30.0)
+            cursor = conn.cursor()
+
+            cursor.execute(
+                """
+                UPDATE app_productlisting
+                SET last_checked = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    format_datetime_for_django_sqlite(),
+                    format_datetime_for_django_sqlite(),
+                    listing_id_clean,
+                ),
+            )
+
+            conn.commit()
+            conn.close()
+            logger.debug("last_checked_updated", listing_id=listing_id)
+
+        except sqlite3.Error as e:
+            logger.error("update_last_checked_failed", listing_id=listing_id, error=str(e))
+            raise
+
     def update_pattern_stats(self, domain: str, success: bool) -> None:
         """
         Update pattern usage statistics.
@@ -697,7 +762,7 @@ class PriceStorage:
                     updated_at = ?
                 WHERE domain = ?
                 """,
-                (1 if success else 0, 1 if success else 0, datetime.utcnow().isoformat(), domain),
+                (1 if success else 0, 1 if success else 0, format_datetime_for_django_sqlite(), domain),
             )
 
             conn.commit()
