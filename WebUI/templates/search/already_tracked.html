@@ -19,21 +19,13 @@
             </p>
 
             <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-4">
-                {% if product.current_price %}
+                {% if product.lowest_price_listing and product.lowest_price_listing.current_price %}
                 <div>
                     <p class="text-sm text-gray-500 dark:text-gray-400">Current Price</p>
                     <p class="text-2xl font-bold text-gray-900 dark:text-white">
-                        ${{ product.current_price }}
+                        {{ product.lowest_price_listing.current_price|format_currency:product.lowest_price_listing.currency }}
                     </p>
                 </div>
-                {% if product.price_change_24h %}
-                <div>
-                    <p class="text-sm text-gray-500 dark:text-gray-400">24h Change</p>
-                    <p class="text-lg font-medium {% if product.price_change_24h < 0 %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
-                        {% if product.price_change_24h > 0 %}+{% endif %}${{ product.price_change_24h|floatformat:2 }}
-                    </p>
-                </div>
-                {% endif %}
                 {% endif %}
             </div>
 

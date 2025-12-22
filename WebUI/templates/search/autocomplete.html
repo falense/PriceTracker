@@ -1,3 +1,4 @@
+{% load currency_filters %}
 {% if products %}
 <div class="absolute z-10 w-full mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
     {% for product in products %}
@@ -6,11 +7,13 @@
         <div class="flex items-center space-x-3">
             <div class="flex-1">
                 <p class="text-sm font-medium text-gray-900 dark:text-white">{{ product.name }}</p>
-                <p class="text-xs text-gray-500 dark:text-gray-400">{{ product.domain }}</p>
+                {% if product.lowest_price_listing %}
+                <p class="text-xs text-gray-500 dark:text-gray-400">{{ product.lowest_price_listing.store.name }}</p>
+                {% endif %}
             </div>
-            {% if product.current_price %}
+            {% if product.lowest_price_listing and product.lowest_price_listing.current_price %}
             <span class="text-sm font-bold text-primary-600 dark:text-primary-400">
-                ${{ product.current_price }}
+                {{ product.lowest_price_listing.current_price|format_currency:product.lowest_price_listing.currency }}
             </span>
             {% endif %}
         </div>

@@ -27,8 +27,10 @@
                 </div>
 
                 <div class="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400 mb-6">
-                    <span>{{ product.domain }}</span>
+                    {% if product.lowest_price_listing %}
+                    <span>{{ product.lowest_price_listing.store.name }}</span>
                     <span>•</span>
+                    {% endif %}
                     <span>Added {{ product.created_at|date:"M d, Y" }}</span>
                 </div>
 
@@ -40,42 +42,49 @@
                 {% endif %}
 
                 <!-- Current Price -->
-                {% if product.current_price %}
+                {% if product.lowest_price_listing and product.lowest_price_listing.current_price %}
                 <div class="mb-6">
-                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">Current Price</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">Best Price</p>
                     <div class="flex items-baseline space-x-3">
                         <span class="text-4xl font-bold text-gray-900 dark:text-white">
-                            {{ product.current_price|format_currency:product.currency }}
+                            {{ product.lowest_price_listing.current_price|format_currency:product.lowest_price_listing.currency }}
                         </span>
-                        {% if product.price_change_24h %}
-                        <span class="text-lg font-medium {% if product.price_change_24h < 0 %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
-                            {% if product.price_change_24h > 0 %}+{% endif %}{{ product.price_change_24h|floatformat:2|format_currency:product.currency }} (24h)
+                        <span class="text-sm text-gray-500 dark:text-gray-400">
+                            at {{ product.lowest_price_listing.store.name }}
                         </span>
-                        {% endif %}
                     </div>
                 </div>
 
-                <!-- Price Stats -->
-                <div class="grid grid-cols-3 gap-4 mb-6">
-                    <div>
-                        <p class="text-sm text-gray-500 dark:text-gray-400 mb-1">Lowest</p>
-                        <p class="text-lg font-semibold text-green-600 dark:text-green-400">
-                            {% if product.lowest_price %}{{ product.lowest_price|format_currency:product.currency }}{% else %}—{% endif %}
-                        </p>
-                    </div>
-                    <div>
-                        <p class="text-sm text-gray-500 dark:text-gray-400 mb-1">Highest</p>
-                        <p class="text-lg font-semibold text-red-600 dark:text-red-400">
-                            {% if product.highest_price %}{{ product.highest_price|format_currency:product.currency }}{% else %}—{% endif %}
-                        </p>
-                    </div>
-                    <div>
-                        <p class="text-sm text-gray-500 dark:text-gray-400 mb-1">Last Checked</p>
-                        <p class="text-lg font-semibold text-gray-900 dark:text-white">
-                            {% if product.last_checked %}{{ product.last_checked|timesince }} ago{% else %}Never{% endif %}
-                        </p>
+                <!-- Listings Table -->
+                {% if listings %}
+                <div class="mb-6">
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">Available at {{ listings|length }} store{{ listings|length|pluralize }}</p>
+                    <div class="space-y-2">
+                        {% for listing in listings %}
+                        <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                            <div>
+                                <p class="font-medium text-gray-900 dark:text-white">{{ listing.store.name }}</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">
+                                    Updated {{ listing.last_checked|timesince }} ago
+                                </p>
+                            </div>
+                            <div class="text-right">
+                                {% if listing.current_price %}
+                                <p class="font-bold text-gray-900 dark:text-white">
+                                    {{ listing.current_price|format_currency:listing.currency }}
+                                </p>
+                                {% if not listing.available %}
+                                <p class="text-xs text-red-600 dark:text-red-400">Out of stock</p>
+                                {% endif %}
+                                {% else %}
+                                <p class="text-sm text-gray-500 dark:text-gray-400">Price unavailable</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
                     </div>
                 </div>
+                {% endif %}
                 {% else %}
                 <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-6">
                     <p class="text-yellow-800 dark:text-yellow-200">
@@ -85,22 +94,14 @@
                 {% endif %}
 
                 <!-- Actions -->
+                {% if product.lowest_price_listing %}
                 <div class="flex space-x-3">
-                    <a href="{{ product.url }}" target="_blank" rel="noopener noreferrer"
+                    <a href="{{ product.lowest_price_listing.url }}" target="_blank" rel="noopener noreferrer"
                        class="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium text-center">
-                        View on {{ product.domain }}
+                        View on {{ product.lowest_price_listing.store.name }}
                     </a>
-                    <form method="post" action="{% url 'refresh_price' product.id %}" class="inline">
-                        {% csrf_token %}
-                        <button type="submit"
-                                class="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 font-medium">
-                            <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                            </svg>
-                            Refresh Price
-                        </button>
-                    </form>
                 </div>
+                {% endif %}
             </div>
 
             <!-- Price History -->
