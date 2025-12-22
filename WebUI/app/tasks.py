@@ -155,6 +155,7 @@ async def _fetch_listing_price_async(task_self, listing_id: str):
     from django.conf import settings
     from PriceFetcher.src.celery_api import fetch_listing_price_direct
     from app.models import ProductListing
+    from app.services import NotificationService
     from asgiref.sync import sync_to_async
 
     try:
@@ -191,6 +192,32 @@ async def _fetch_listing_price_async(task_self, listing_id: str):
             status=result["status"],
             price=result.get("price"),
         )
+
+        # Check for restock notifications after successful fetch
+        if result.get("status") == "success":
+            try:
+                # Refetch listing to get updated availability status
+                updated_listing = await sync_to_async(
+                    lambda: ProductListing.objects.get(id=listing_id)
+                )()
+
+                # Check if any subscriptions should trigger notifications
+                await sync_to_async(
+                    NotificationService.check_subscriptions_for_listing
+                )(updated_listing)
+
+                logger.debug(
+                    "notification_check_completed",
+                    listing_id=listing_id,
+                )
+            except Exception as e:
+                # Don't fail the task if notification check fails
+                logger.warning(
+                    "notification_check_failed",
+                    listing_id=listing_id,
+                    error=str(e),
+                )
+
         return result
 
     except ProductListing.DoesNotExist:

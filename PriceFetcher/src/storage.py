@@ -45,6 +45,65 @@ def format_datetime_for_django_sqlite(dt: datetime = None) -> str:
     return dt.strftime('%Y-%m-%d %H:%M:%S.%f')
 
 
+def parse_availability(availability_text: Optional[str]) -> bool:
+    """
+    Parse availability text into boolean in-stock status.
+
+    Handles various formats from different stores:
+    - English: "In Stock", "Out of Stock", "Available", "Not available"
+    - Norwegian: "På lager", "Ikke på lager", "Utsolgt"
+    - Numeric: "50+", ">100", "20 stk"
+    - Schema.org: "InStock", "OutOfStock", "PreOrder"
+
+    Args:
+        availability_text: Raw availability string from extractor
+
+    Returns:
+        True if product is in stock, False otherwise
+    """
+    if not availability_text:
+        return False
+
+    text = availability_text.lower().strip()
+
+    # Check out of stock indicators first (highest priority)
+    # Must check these before positive patterns to avoid false positives
+    # e.g., "Out of Stock" contains "stock" but should return False
+    out_of_stock_patterns = [
+        "out of stock", "ikke på lager", "utsolgt",
+        "not available", "unavailable", "sold out",
+        "outofstock", "discontinued", "slutt på lager"
+    ]
+    for pattern in out_of_stock_patterns:
+        if pattern in text:
+            return False
+
+    # Check in stock indicators
+    in_stock_patterns = [
+        "in stock", "på lager", "available",
+        "instock", "stocked", "in store", "tilgjengelig",
+        "pre-order", "pre order"  # Pre-order counts as available
+    ]
+    for pattern in in_stock_patterns:
+        if pattern in text:
+            return True
+
+    # Check for numeric quantities (e.g., "50+", ">100", "20 stk")
+    # If there's a number, assume it means quantity in stock
+    if re.search(r'\d+', text):
+        return True
+
+    # Check schema.org values (lowercase)
+    if text in ["instock", "limitedavailability", "preorder", "limited availability"]:
+        return True
+    if text in ["outofstock", "discontinuedavailability", "soldout"]:
+        return False
+
+    # Default: assume unavailable if unclear
+    # Conservative approach - better to show "out of stock" than give false hope
+    return False
+
+
 class PriceStorage:
     """Store product prices and fetch history in shared SQLite database."""
 
@@ -393,11 +452,10 @@ class PriceStorage:
                 if match:
                     price_value = float(match.group(1))
 
-            # Extract availability
-            available = True
-            if extraction.availability and extraction.availability.value:
-                avail_text = extraction.availability.value.lower()
-                available = "stock" in avail_text or "available" in avail_text
+            # Extract availability using improved parsing logic
+            available = parse_availability(
+                extraction.availability.value if extraction.availability else None
+            )
 
             # Extract and normalize image URL
             image_url = None
