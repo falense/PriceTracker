@@ -786,9 +786,125 @@ def search_autocomplete(request):
 
 @login_required
 def price_history_chart(request, product_id):
-    """Price history chart data."""
-    # TODO: Implement
-    return HttpResponse("Chart data")
+    """Price history chart data for multi-store comparison."""
+    try:
+        # Get product
+        product = get_object_or_404(Product, id=product_id)
+
+        # Verify user has subscription to this product
+        subscription = UserSubscription.objects.filter(
+            user=request.user, product=product, active=True
+        ).first()
+
+        if not subscription:
+            return JsonResponse(
+                {"error": "You don't have an active subscription to this product"},
+                status=403
+            )
+
+        # Get all listings for this product
+        listings = ProductListing.objects.filter(product=product).select_related('store')
+
+        if not listings.exists():
+            return JsonResponse({
+                "labels": [],
+                "datasets": [],
+                "meta": {
+                    "currency": "NOK",
+                    "product_name": product.name,
+                    "message": "No stores available for this product"
+                }
+            })
+
+        # Color palette for stores (Tailwind-based)
+        STORE_COLORS = [
+            {"border": "#3b82f6", "bg": "rgba(59, 130, 246, 0.1)"},    # Blue
+            {"border": "#ef4444", "bg": "rgba(239, 68, 68, 0.1)"},    # Red
+            {"border": "#10b981", "bg": "rgba(16, 185, 129, 0.1)"},   # Green
+            {"border": "#f59e0b", "bg": "rgba(245, 158, 11, 0.1)"},   # Amber
+            {"border": "#8b5cf6", "bg": "rgba(139, 92, 246, 0.1)"},   # Violet
+            {"border": "#ec4899", "bg": "rgba(236, 72, 153, 0.1)"},   # Pink
+            {"border": "#14b8a6", "bg": "rgba(20, 184, 166, 0.1)"},   # Teal
+            {"border": "#f97316", "bg": "rgba(249, 115, 22, 0.1)"},   # Orange
+        ]
+
+        # Build datasets for each store
+        datasets = []
+        all_timestamps = set()
+        currency = "NOK"  # Default
+        best_store = None
+        best_price = None
+
+        for idx, listing in enumerate(listings):
+            # Get price history for this listing (last 100 records)
+            price_history = listing.price_history.all().order_by('recorded_at')[:100]
+
+            if not price_history.exists():
+                continue
+
+            # Extract data points
+            data_points = []
+            for history in price_history:
+                timestamp = history.recorded_at.strftime("%Y-%m-%d %H:%M")
+                all_timestamps.add(timestamp)
+                data_points.append({
+                    "x": timestamp,
+                    "y": float(history.price) if history.price else None
+                })
+                currency = history.currency  # Update currency from data
+
+                # Track best price
+                if history.price and (best_price is None or history.price < best_price):
+                    best_price = history.price
+                    best_store = listing.store.name
+
+            # Assign color (cycle through palette)
+            color = STORE_COLORS[idx % len(STORE_COLORS)]
+
+            datasets.append({
+                "label": listing.store.name,
+                "data": data_points,
+                "borderColor": color["border"],
+                "backgroundColor": color["bg"],
+                "tension": 0.4,
+                "storeId": str(listing.store.id),
+                "fill": False,
+                "pointRadius": 2,
+                "pointHoverRadius": 5
+            })
+
+        # Check if we have any data
+        if not datasets:
+            return JsonResponse({
+                "labels": [],
+                "datasets": [],
+                "meta": {
+                    "currency": currency,
+                    "product_name": product.name,
+                    "message": "No price history data available yet"
+                }
+            })
+
+        # Sort timestamps for labels
+        labels = sorted(list(all_timestamps))
+
+        return JsonResponse({
+            "labels": labels,
+            "datasets": datasets,
+            "meta": {
+                "currency": currency,
+                "product_name": product.name,
+                "best_store": best_store or "N/A",
+                "best_price": float(best_price) if best_price else None
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Error generating chart data for product {product_id}: {str(e)}")
+        return JsonResponse(
+            {"error": "Failed to generate chart data"},
+            status=500
+        )
 
 
 @login_required
