@@ -982,6 +982,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Load price history chart
     loadPriceChart();
+
+    // Check if we just performed a refresh - auto-reload after 10 seconds
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('refreshed') === '1') {
+        setTimeout(function() {
+            // Remove the refreshed parameter and reload
+            urlParams.delete('refreshed');
+            const newUrl = window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : '');
+            window.location.href = newUrl;
+        }, 10000);
+    }
 });
 
 // ========== Price History Chart ==========

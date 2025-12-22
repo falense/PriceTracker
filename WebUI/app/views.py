@@ -689,7 +689,10 @@ def refresh_price(request, subscription_id):
             {"subscription": subscription},
         )
 
-    return redirect("subscription_detail", subscription_id=subscription_id)
+    # Add query parameter to indicate refresh was triggered
+    from django.urls import reverse
+    url = reverse("subscription_detail", kwargs={"subscription_id": subscription_id})
+    return redirect(f"{url}?refreshed=1")
 
 
 # HTMX endpoints
