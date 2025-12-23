@@ -80,6 +80,9 @@ def enable_wal_mode(sender, connection, **kwargs):
     if connection.vendor == 'sqlite':
         cursor = connection.cursor()
         cursor.execute('PRAGMA journal_mode=WAL;')
+        # Explicitly set busy_timeout to 30 seconds (30000 ms)
+        # This ensures connections wait up to 30s for locks instead of failing immediately
+        cursor.execute('PRAGMA busy_timeout=30000;')
 
 from django.db.backends.signals import connection_created
 connection_created.connect(enable_wal_mode)

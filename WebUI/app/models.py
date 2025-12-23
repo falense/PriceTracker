@@ -398,10 +398,29 @@ class UserSubscription(models.Model):
         return f"{self.user.username} -> {self.product.name} ({priority_name})"
 
     def record_view(self):
-        """Track that user viewed this subscription."""
-        self.view_count += 1
-        self.last_viewed = timezone.now()
-        self.save(update_fields=['view_count', 'last_viewed', 'updated_at'])
+        """Track that user viewed this subscription with retry logic for database locks."""
+        from django.db import OperationalError
+        import time
+
+        max_retries = 3
+        retry_delay = 0.1  # Start with 100ms
+
+        for attempt in range(max_retries):
+            try:
+                self.view_count += 1
+                self.last_viewed = timezone.now()
+                self.save(update_fields=['view_count', 'last_viewed', 'updated_at'])
+                return  # Success - exit retry loop
+            except OperationalError as e:
+                if "database is locked" in str(e) and attempt < max_retries - 1:
+                    # Retry on lock errors with exponential backoff
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+                    # Reload the instance to get fresh data before retry
+                    self.refresh_from_db()
+                else:
+                    # Final attempt failed or different error - raise it
+                    raise
 
     @property
     def best_listing(self):
