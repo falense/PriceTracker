@@ -68,10 +68,21 @@ DATABASES = {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': os.getenv('DATABASE_PATH', BASE_DIR.parent / 'db.sqlite3'),
         'OPTIONS': {
-            'timeout': 20,
+            'timeout': 30,  # Increased timeout for concurrent access
         }
     }
 }
+
+# Enable WAL mode for SQLite to improve concurrent access
+# This allows multiple readers and one writer simultaneously
+def enable_wal_mode(sender, connection, **kwargs):
+    """Enable WAL mode on SQLite database for better concurrency."""
+    if connection.vendor == 'sqlite':
+        cursor = connection.cursor()
+        cursor.execute('PRAGMA journal_mode=WAL;')
+
+from django.db.backends.signals import connection_created
+connection_created.connect(enable_wal_mode)
 
 
 # Password validation

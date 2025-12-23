@@ -249,7 +249,7 @@ class PriceStorage:
         duration_ms: Optional[int] = None,
     ) -> None:
         """
-        Log an operation to the OperationLog table.
+        Log an operation to the OperationLog table with retry logic.
 
         Args:
             service: Service name ('celery', 'fetcher', 'extractor')
@@ -263,47 +263,73 @@ class PriceStorage:
             filename: Source file (e.g., 'fetcher.py', 'storage.py')
             duration_ms: Operation duration in milliseconds
         """
-        conn = self._get_connection()
-        cursor = conn.cursor()
+        import time
 
-        try:
-            # Clean UUIDs (remove hyphens)
-            listing_id_clean = listing_id.replace("-", "") if listing_id else None
-            product_id_clean = product_id.replace("-", "") if product_id else None
+        # Retry logic for database locks
+        max_retries = 3
+        retry_delay = 0.1  # Start with 100ms
 
-            cursor.execute(
-                """
-                INSERT INTO app_operationlog
-                (service, level, event, message, context, listing_id, product_id,
-                 task_id, filename, duration_ms, timestamp)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    service,
-                    level,
-                    event,
-                    message,
-                    json.dumps(context or {}),
-                    listing_id_clean,
-                    product_id_clean,
-                    task_id,
-                    filename,
-                    duration_ms,
-                    format_datetime_for_django_sqlite(),
-                ),
-            )
+        for attempt in range(max_retries):
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
 
-            conn.commit()
-            logger.debug("operation_logged", event_name=event, log_level=level)
+                try:
+                    # Clean UUIDs (remove hyphens)
+                    listing_id_clean = listing_id.replace("-", "") if listing_id else None
+                    product_id_clean = product_id.replace("-", "") if product_id else None
 
-        except Exception as e:
-            conn.rollback()
-            logger.exception("operation_log_failed", event_name=event, error=str(e))
-        finally:
-            conn.close()
+                    cursor.execute(
+                        """
+                        INSERT INTO app_operationlog
+                        (service, level, event, message, context, listing_id, product_id,
+                         task_id, filename, duration_ms, timestamp)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            service,
+                            level,
+                            event,
+                            message,
+                            json.dumps(context or {}),
+                            listing_id_clean,
+                            product_id_clean,
+                            task_id,
+                            filename,
+                            duration_ms,
+                            format_datetime_for_django_sqlite(),
+                        ),
+                    )
+
+                    conn.commit()
+                    # Success - exit retry loop
+                    return
+
+                except sqlite3.OperationalError as e:
+                    conn.rollback()
+                    if "database is locked" in str(e) and attempt < max_retries - 1:
+                        # Retry on lock errors
+                        time.sleep(retry_delay)
+                        retry_delay *= 2  # Exponential backoff
+                        continue
+                    else:
+                        raise
+                finally:
+                    conn.close()
+
+            except Exception as e:
+                # Only log on final failure to avoid log spam
+                if attempt == max_retries - 1:
+                    # Use warning instead of exception to avoid recursion if logger also logs to DB
+                    logger.warning(
+                        "operation_log_failed_final",
+                        event_name=event,
+                        error=str(e),
+                        attempts=max_retries
+                    )
 
     def _get_connection(self) -> sqlite3.Connection:
-        """Get database connection."""
+        """Get database connection with increased timeout for concurrent access."""
         if not self.db_path.exists():
             logger.warning("database_not_found", db_path=str(self.db_path))
             raise FileNotFoundError(
@@ -311,8 +337,14 @@ class PriceStorage:
                 "Run Django migrations first: python WebUI/manage.py migrate"
             )
 
-        conn = sqlite3.connect(self.db_path)
+        # Increase timeout to 30 seconds to handle concurrent writes better
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
         conn.row_factory = sqlite3.Row
+
+        # Enable WAL mode for better concurrent access
+        # WAL mode allows multiple readers and one writer simultaneously
+        conn.execute('PRAGMA journal_mode=WAL;')
+
         return conn
 
     def get_product_by_listing_id(self, listing_id: str) -> Optional[Product]:
