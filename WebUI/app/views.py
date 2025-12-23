@@ -176,6 +176,135 @@ def subscription_detail(request, subscription_id):
             "is_being_added": True,
             "store_name": store_name,
         }
+
+        # Admin-only: Add operation logs for debugging store setup
+        if request.user.is_staff:
+            from django.utils import timezone
+            from datetime import timedelta
+            from collections import defaultdict
+
+            # Get logs from the last hour (store setup should be recent)
+            time_since = timezone.now() - timedelta(hours=1)
+
+            # Get service filter from query params
+            service_filter = request.GET.get("service", "all")
+
+            # Base query: logs for this product
+            base_logs_query = subscription.product.operation_logs.filter(
+                timestamp__gte=time_since
+            ).select_related("listing", "listing__store")
+
+            # Calculate statistics
+            total_logs_all_services = base_logs_query.count()
+            error_count_all_services = base_logs_query.filter(level="ERROR").count()
+            warning_count_all_services = base_logs_query.filter(level="WARNING").count()
+
+            # Count by service
+            service_counts = {
+                "fetcher": base_logs_query.filter(service="fetcher").count(),
+                "extractor": base_logs_query.filter(service="extractor").count(),
+                "celery": base_logs_query.filter(service="celery").count(),
+            }
+
+            # Apply service filter
+            if service_filter != "all":
+                filtered_logs_query = base_logs_query.filter(service=service_filter)
+            else:
+                filtered_logs_query = base_logs_query
+
+            # Fetch logs (limit 200)
+            logs_list = list(filtered_logs_query.order_by("-timestamp")[:200])
+
+            # Group logs by task_id
+            job_groups = defaultdict(list)
+            ungrouped_logs = []
+
+            try:
+                for log in logs_list:
+                    if log.task_id:
+                        job_groups[log.task_id].append(log)
+                    else:
+                        ungrouped_logs.append(log)
+
+                # Process job groups (same logic as full view)
+                job_summaries = []
+                level_priority = {
+                    "CRITICAL": 5, "ERROR": 4, "WARNING": 3, "INFO": 2, "DEBUG": 1,
+                }
+
+                for task_id, logs in job_groups.items():
+                    logs_sorted = sorted(logs, key=lambda x: x.timestamp)
+                    start_time = logs_sorted[0].timestamp
+                    end_time = logs_sorted[-1].timestamp
+                    duration = (end_time - start_time).total_seconds()
+
+                    worst_level = max(logs, key=lambda x: level_priority.get(x.level, 0)).level
+                    status = "error" if worst_level in ["CRITICAL", "ERROR"] else "warning" if worst_level == "WARNING" else "success"
+
+                    services_involved = list(set(log.service for log in logs))
+
+                    # Extract job-level fields
+                    listing_id = product_id = store_domain = url = None
+                    for log in logs:
+                        if log.context:
+                            if not listing_id: listing_id = log.context.get("listing_id")
+                            if not product_id: product_id = log.context.get("product_id")
+                            if not store_domain: store_domain = log.context.get("store") or log.context.get("domain")
+                            if not url: url = log.context.get("url")
+                        if listing_id and product_id and store_domain and url:
+                            break
+
+                    # Format duration
+                    if duration < 1:
+                        duration_display = "< 1s"
+                    elif duration < 60:
+                        duration_display = f"{duration:.1f}s"
+                    elif duration < 3600:
+                        duration_display = f"{int(duration // 60)}m {int(duration % 60)}s"
+                    else:
+                        duration_display = f"{int(duration // 3600)}h {int((duration % 3600) // 60)}m"
+
+                    job_summaries.append({
+                        "task_id": task_id,
+                        "task_id_short": task_id[:8] if len(task_id) > 8 else task_id,
+                        "status": status,
+                        "worst_level": worst_level,
+                        "start_time": start_time,
+                        "end_time": end_time,
+                        "duration_seconds": duration,
+                        "duration_display": duration_display,
+                        "log_count": len(logs),
+                        "services": services_involved,
+                        "logs": logs_sorted,
+                        "listing_id": listing_id,
+                        "product_id": product_id,
+                        "store_domain": store_domain,
+                        "url": url,
+                    })
+
+                job_summaries.sort(key=lambda x: x["start_time"], reverse=True)
+                job_summaries = job_summaries[:50]
+
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error grouping operation logs: {e}", exc_info=True)
+                job_summaries = []
+                ungrouped_logs = logs_list
+
+            context.update({
+                "job_groups": job_summaries,
+                "ungrouped_logs": ungrouped_logs,
+                "operation_logs": logs_list,
+                "log_stats": {
+                    "total": total_logs_all_services,
+                    "errors": error_count_all_services,
+                    "warnings": warning_count_all_services,
+                    "service_counts": service_counts,
+                },
+                "service_filter": service_filter,
+            })
+
         return render(request, "product/subscription_detail.html", context)
 
     # Get all active listings for this product
@@ -399,6 +528,135 @@ def subscription_status(request, subscription_id):
             "is_being_added": True,
             "store_name": store_name,
         }
+
+        # Admin-only: Add operation logs for debugging store setup
+        if request.user.is_staff:
+            from django.utils import timezone
+            from datetime import timedelta
+            from collections import defaultdict
+
+            # Get logs from the last hour (store setup should be recent)
+            time_since = timezone.now() - timedelta(hours=1)
+
+            # Get service filter from query params
+            service_filter = request.GET.get("service", "all")
+
+            # Base query: logs for this product
+            base_logs_query = subscription.product.operation_logs.filter(
+                timestamp__gte=time_since
+            ).select_related("listing", "listing__store")
+
+            # Calculate statistics
+            total_logs_all_services = base_logs_query.count()
+            error_count_all_services = base_logs_query.filter(level="ERROR").count()
+            warning_count_all_services = base_logs_query.filter(level="WARNING").count()
+
+            # Count by service
+            service_counts = {
+                "fetcher": base_logs_query.filter(service="fetcher").count(),
+                "extractor": base_logs_query.filter(service="extractor").count(),
+                "celery": base_logs_query.filter(service="celery").count(),
+            }
+
+            # Apply service filter
+            if service_filter != "all":
+                filtered_logs_query = base_logs_query.filter(service=service_filter)
+            else:
+                filtered_logs_query = base_logs_query
+
+            # Fetch logs (limit 200)
+            logs_list = list(filtered_logs_query.order_by("-timestamp")[:200])
+
+            # Group logs by task_id
+            job_groups = defaultdict(list)
+            ungrouped_logs = []
+
+            try:
+                for log in logs_list:
+                    if log.task_id:
+                        job_groups[log.task_id].append(log)
+                    else:
+                        ungrouped_logs.append(log)
+
+                # Process job groups
+                job_summaries = []
+                level_priority = {
+                    "CRITICAL": 5, "ERROR": 4, "WARNING": 3, "INFO": 2, "DEBUG": 1,
+                }
+
+                for task_id, logs in job_groups.items():
+                    logs_sorted = sorted(logs, key=lambda x: x.timestamp)
+                    start_time = logs_sorted[0].timestamp
+                    end_time = logs_sorted[-1].timestamp
+                    duration = (end_time - start_time).total_seconds()
+
+                    worst_level = max(logs, key=lambda x: level_priority.get(x.level, 0)).level
+                    status = "error" if worst_level in ["CRITICAL", "ERROR"] else "warning" if worst_level == "WARNING" else "success"
+
+                    services_involved = list(set(log.service for log in logs))
+
+                    # Extract job-level fields
+                    listing_id = product_id = store_domain = url = None
+                    for log in logs:
+                        if log.context:
+                            if not listing_id: listing_id = log.context.get("listing_id")
+                            if not product_id: product_id = log.context.get("product_id")
+                            if not store_domain: store_domain = log.context.get("store") or log.context.get("domain")
+                            if not url: url = log.context.get("url")
+                        if listing_id and product_id and store_domain and url:
+                            break
+
+                    # Format duration
+                    if duration < 1:
+                        duration_display = "< 1s"
+                    elif duration < 60:
+                        duration_display = f"{duration:.1f}s"
+                    elif duration < 3600:
+                        duration_display = f"{int(duration // 60)}m {int(duration % 60)}s"
+                    else:
+                        duration_display = f"{int(duration // 3600)}h {int((duration % 3600) // 60)}m"
+
+                    job_summaries.append({
+                        "task_id": task_id,
+                        "task_id_short": task_id[:8] if len(task_id) > 8 else task_id,
+                        "status": status,
+                        "worst_level": worst_level,
+                        "start_time": start_time,
+                        "end_time": end_time,
+                        "duration_seconds": duration,
+                        "duration_display": duration_display,
+                        "log_count": len(logs),
+                        "services": services_involved,
+                        "logs": logs_sorted,
+                        "listing_id": listing_id,
+                        "product_id": product_id,
+                        "store_domain": store_domain,
+                        "url": url,
+                    })
+
+                job_summaries.sort(key=lambda x: x["start_time"], reverse=True)
+                job_summaries = job_summaries[:50]
+
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error grouping operation logs: {e}", exc_info=True)
+                job_summaries = []
+                ungrouped_logs = logs_list
+
+            context.update({
+                "job_groups": job_summaries,
+                "ungrouped_logs": ungrouped_logs,
+                "operation_logs": logs_list,
+                "log_stats": {
+                    "total": total_logs_all_services,
+                    "errors": error_count_all_services,
+                    "warnings": warning_count_all_services,
+                    "service_counts": service_counts,
+                },
+                "service_filter": service_filter,
+            })
+
         return render(request, "product/partials/store_being_added.html", context)
 
     # Data is ready! Return full page content
@@ -1319,32 +1577,6 @@ def pattern_list(request):
 
 
 @login_required
-def pattern_detail(request, domain):
-    """Pattern visualization view - read-only with live test results."""
-    if not request.user.is_staff:
-        messages.error(request, "Staff access required.")
-        return redirect("dashboard")
-
-    from .pattern_services import PatternTestService
-
-    pattern = get_object_or_404(Pattern, domain=domain)
-
-    # Test pattern for visualization
-    test_results = PatternTestService.test_pattern_for_visualization(pattern)
-
-    # Get history count for header
-    history_count = pattern.history.count()
-
-    context = {
-        "pattern": pattern,
-        "test_results": test_results,
-        "history_count": history_count,
-    }
-
-    return render(request, "admin/patterns/detail_visualization.html", context)
-
-
-@login_required
 @require_http_methods(["GET", "POST"])
 def pattern_create(request):
     """Create new pattern."""
@@ -1541,26 +1773,6 @@ def pattern_delete(request, domain):
         messages.error(request, f"Pattern for {domain} not found.")
 
     return redirect("pattern_list")
-
-
-@login_required
-def pattern_history(request, domain):
-    """Pattern version history."""
-    if not request.user.is_staff:
-        messages.error(request, "Staff access required.")
-        return redirect("dashboard")
-
-    from .pattern_services import PatternHistoryService
-
-    pattern = get_object_or_404(Pattern, domain=domain)
-    history = PatternHistoryService.get_pattern_history(domain, limit=100)
-
-    context = {
-        "pattern": pattern,
-        "history": history,
-    }
-
-    return render(request, "admin/patterns/history.html", context)
 
 
 @login_required

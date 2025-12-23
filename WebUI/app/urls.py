@@ -80,19 +80,9 @@ urlpatterns = [
         "admin-dashboard/patterns/create/", views.pattern_create, name="pattern_create"
     ),
     path(
-        "admin-dashboard/patterns/<str:domain>/",
-        views.pattern_detail,
-        name="pattern_detail",
-    ),
-    path(
         "admin-dashboard/patterns/<str:domain>/edit/",
         views.pattern_edit,
         name="pattern_edit",
-    ),
-    path(
-        "admin-dashboard/patterns/<str:domain>/history/",
-        views.pattern_history,
-        name="pattern_history",
     ),
     path(
         "admin-dashboard/patterns/<str:domain>/compare/<int:v1>/<int:v2>/",
