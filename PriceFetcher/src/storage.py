@@ -798,63 +798,6 @@ class PriceStorage:
         finally:
             conn.close()
 
-    def log_fetch(
-        self,
-        product_id: str = None,
-        success: bool = False,
-        extraction_method: Optional[str] = None,
-        errors: Optional[List[str]] = None,
-        warnings: Optional[List[str]] = None,
-        duration_ms: Optional[int] = None,
-        listing_id: Optional[str] = None,
-    ) -> None:
-        """
-        Log fetch attempt for debugging and monitoring.
-
-        Args:
-            product_id: Product UUID (legacy, ignored in new schema)
-            success: Whether fetch succeeded
-            extraction_method: Method that worked (css, xpath, jsonld, meta)
-            errors: List of errors encountered
-            warnings: List of warnings
-            duration_ms: Time taken in milliseconds
-            listing_id: ProductListing UUID (required for multi-store)
-        """
-        if not listing_id:
-            logger.warning("log_fetch called without listing_id, skipping")
-            return
-
-        conn = self._get_connection()
-        cursor = conn.cursor()
-
-        try:
-            listing_id_clean = listing_id.replace("-", "")
-            cursor.execute(
-                """
-                INSERT INTO app_fetchlog
-                (listing_id, success, extraction_method, errors, warnings,
-                 duration_ms, fetched_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    listing_id_clean,
-                    success,
-                    extraction_method,
-                    json.dumps(errors or []),
-                    json.dumps(warnings or []),
-                    duration_ms,
-                    format_datetime_for_django_sqlite(),
-                ),
-            )
-
-            conn.commit()
-            logger.debug("fetch_logged", listing_id=listing_id, success=success)
-
-        except Exception as e:
-            conn.rollback()
-            logger.exception("fetch_log_failed", listing_id=listing_id, error=str(e))
-        finally:
-            conn.close()
 
     def get_latest_price(
         self, product_id: str = None, listing_id: str = None

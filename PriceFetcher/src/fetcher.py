@@ -259,17 +259,8 @@ class PriceFetcher:
                     self.storage.update_last_checked(product.listing_id)
                 self.storage.update_pattern_stats(product.domain, success=False)
 
-            # Log fetch attempt
+            # Duration tracking for logging
             duration_ms = int((time.time() - start_time) * 1000)
-            self.storage.log_fetch(
-                product_id=product_id,
-                success=validation.valid,
-                extraction_method=extraction.price.method,
-                errors=validation.errors,
-                warnings=validation.warnings,
-                duration_ms=duration_ms,
-                listing_id=product.listing_id,
-            )
 
             return FetchResult(
                 product_id=product_id,
@@ -307,14 +298,6 @@ class PriceFetcher:
                 product_id=product_id,
                 filename="fetcher.py",
                 duration_ms=duration_ms,
-            )
-
-            self.storage.log_fetch(
-                product_id,
-                success=False,
-                errors=[error_msg],
-                duration_ms=duration_ms,
-                listing_id=product.listing_id,
             )
 
             # Update last_checked even on exception to prevent infinite retries
