@@ -1,23 +1,17 @@
 {% extends 'base.html' %}
 
-{% block title %}Pattern Management - PriceTracker{% endblock %}
+{% block title %}Extractor Health - PriceTracker{% endblock %}
 
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <!-- Header -->
-    <div class="flex justify-between items-center mb-8">
-        <div>
-            <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
-                Pattern Management
-            </h1>
-            <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                Manage, test, and validate extraction patterns for product data
-            </p>
-        </div>
-        <a href="{% url 'pattern_create' %}"
-           class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition-colors">
-            Create New Pattern
-        </a>
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+            Extractor Health Dashboard
+        </h1>
+        <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            Monitor the health and performance of Python extractors that fetch prices from product pages
+        </p>
     </div>
 
     <!-- Stats Cards -->
@@ -170,12 +164,12 @@
                             <svg class="mx-auto h-12 w-12 text-gray-400 dark:text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                             </svg>
-                            <p class="text-lg font-medium">No patterns found</p>
+                            <p class="text-lg font-medium">No extractors found</p>
                             <p class="mt-1">
                                 {% if search_query or filter_status != 'all' %}
                                     Try adjusting your search or filter criteria.
                                 {% else %}
-                                    Create your first pattern to get started.
+                                    No extractors are currently registered.
                                 {% endif %}
                             </p>
                         </td>
