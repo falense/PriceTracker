@@ -172,38 +172,56 @@
                     <div class="flex items-start justify-between">
                         <div class="flex-1">
                             <div class="flex items-center space-x-3">
-                                {% if log.success %}
+                                {% if log.level == "INFO" or log.level == "DEBUG" %}
                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                                    ✓ Success
+                                    ✓ {{ log.level }}
+                                </span>
+                                {% elif log.level == "WARNING" %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                                    ⚠ Warning
                                 </span>
                                 {% else %}
                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
-                                    ✗ Failed
+                                    ✗ {{ log.level }}
                                 </span>
                                 {% endif %}
                                 <span class="text-sm font-medium text-gray-900 dark:text-white">
-                                    {{ log.listing.product.name|truncatechars:60 }}
+                                    {% if log.listing %}
+                                        {{ log.listing.product.name|truncatechars:60 }}
+                                    {% elif log.product %}
+                                        {{ log.product.name|truncatechars:60 }}
+                                    {% else %}
+                                        {{ log.event }}
+                                    {% endif %}
                                 </span>
+                                {% if log.listing %}
                                 <span class="text-sm text-gray-500 dark:text-gray-400">
                                     @ {{ log.listing.store.name }}
                                 </span>
+                                {% endif %}
                             </div>
                             <div class="mt-2 flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400">
-                                <span>Method: {{ log.extraction_method|default:"N/A" }}</span>
+                                <span>Event: {{ log.event }}</span>
                                 {% if log.duration_ms %}
                                 <span>Duration: {{ log.duration_ms }}ms</span>
                                 {% endif %}
-                                <span>{{ log.fetched_at|date:"Y-m-d H:i:s" }}</span>
+                                <span>{{ log.timestamp|date:"Y-m-d H:i:s" }}</span>
+                                {% if log.task_id %}
+                                <span class="text-xs">Task: {{ log.task_id|truncatechars:12 }}</span>
+                                {% endif %}
                             </div>
-                            {% if log.errors %}
-                            <div class="mt-2 text-sm text-red-600 dark:text-red-400">
-                                Errors: {{ log.errors|join:", " }}
+                            {% if log.message %}
+                            <div class="mt-2 text-sm {% if log.level == 'ERROR' or log.level == 'CRITICAL' %}text-red-600 dark:text-red-400{% elif log.level == 'WARNING' %}text-yellow-600 dark:text-yellow-400{% else %}text-gray-600 dark:text-gray-300{% endif %}">
+                                {{ log.message|truncatechars:200 }}
                             </div>
                             {% endif %}
-                            {% if log.warnings %}
-                            <div class="mt-1 text-sm text-yellow-600 dark:text-yellow-400">
-                                Warnings: {{ log.warnings|join:", " }}
-                            </div>
+                            {% if log.context %}
+                            <details class="mt-2">
+                                <summary class="text-xs text-gray-500 dark:text-gray-400 cursor-pointer hover:underline">
+                                    Show Context Data
+                                </summary>
+                                <pre class="mt-2 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg text-xs text-gray-900 dark:text-gray-200 overflow-x-auto">{{ log.context }}</pre>
+                            </details>
                             {% endif %}
                         </div>
                     </div>
