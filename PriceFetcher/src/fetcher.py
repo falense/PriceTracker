@@ -159,6 +159,22 @@ class PriceFetcher:
             duration=summary.duration_seconds,
         )
 
+        # Log fetch run summary to OperationLog
+        self.storage.log_operation(
+            service="fetcher",
+            level="INFO",
+            event="fetch_run_completed",
+            message=f"Fetch run completed: {success_count}/{len(products)} successful",
+            context={
+                "total": len(products),
+                "success": success_count,
+                "failed": failed_count,
+                "duration_seconds": duration,
+            },
+            filename="fetcher.py",
+            duration_ms=int(duration * 1000),
+        )
+
         return summary
 
     async def fetch_product(
@@ -180,6 +196,18 @@ class PriceFetcher:
 
         logger.info("fetching_product", product_id=product_id, url=url)
 
+        # Log operation start
+        self.storage.log_operation(
+            service="fetcher",
+            level="INFO",
+            event="fetch_started",
+            message=f"Starting fetch for product {product_id}",
+            context={"url": url, "domain": product.domain},
+            listing_id=product.listing_id,
+            product_id=product_id,
+            filename="fetcher.py",
+        )
+
         try:
             # Fetch HTML
             html = await self._fetch_html(url)
@@ -200,6 +228,24 @@ class PriceFetcher:
 
             # Validate extraction
             validation = self.validator.validate_extraction(extraction, previous_extraction)
+
+            # Log extraction result
+            self.storage.log_operation(
+                service="fetcher",
+                level="INFO" if validation.valid else "WARNING",
+                event="extraction_completed",
+                message=f"Extraction {'succeeded' if validation.valid else 'failed'} with confidence {validation.confidence:.2f}",
+                context={
+                    "valid": validation.valid,
+                    "confidence": validation.confidence,
+                    "extraction_method": extraction.price.method if extraction.price else None,
+                    "errors": validation.errors,
+                    "warnings": validation.warnings,
+                },
+                listing_id=product.listing_id,
+                product_id=product_id,
+                filename="fetcher.py",
+            )
 
             # Store if valid
             if validation.valid:
@@ -244,6 +290,23 @@ class PriceFetcher:
                 product_id=product_id,
                 url=url,
                 error=error_msg,
+            )
+
+            # Log to OperationLog
+            self.storage.log_operation(
+                service="fetcher",
+                level="ERROR",
+                event="fetch_failed",
+                message=f"Fetch failed: {error_msg}",
+                context={
+                    "error": error_msg,
+                    "url": url,
+                    "domain": product.domain,
+                },
+                listing_id=product.listing_id,
+                product_id=product_id,
+                filename="fetcher.py",
+                duration_ms=duration_ms,
             )
 
             self.storage.log_fetch(

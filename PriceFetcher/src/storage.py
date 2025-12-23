@@ -14,6 +14,7 @@ from urllib.parse import urljoin, urlparse
 import structlog
 
 from .models import ExtractionResult, Product, ValidationResult
+from .git_utils import get_current_commit_hash, get_commit_info
 
 logger = structlog.get_logger(__name__).bind(service="fetcher")
 
@@ -127,6 +128,179 @@ class PriceStorage:
         normalized = re.sub(r"[^\w\s]", "", name.lower())
         normalized = re.sub(r"\s+", " ", normalized).strip()
         return normalized
+
+    def get_or_create_extractor_version(
+        self,
+        extractor_module: str,
+        commit_hash: Optional[str] = None,
+    ) -> Optional[int]:
+        """
+        Get or create an ExtractorVersion record.
+
+        Args:
+            extractor_module: Python module name (e.g., "python_extractor")
+            commit_hash: Git commit hash (defaults to current HEAD)
+
+        Returns:
+            ExtractorVersion ID (primary key), or None if git info unavailable
+        """
+        # Use provided commit hash or get current HEAD
+        if not commit_hash:
+            commit_hash = get_current_commit_hash()
+
+        if not commit_hash:
+            logger.warning("could_not_determine_git_commit")
+            return None
+
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            # Check if version already exists
+            cursor.execute(
+                """
+                SELECT id FROM app_extractorversion
+                WHERE commit_hash = ? AND extractor_module = ?
+                """,
+                (commit_hash, extractor_module),
+            )
+            row = cursor.fetchone()
+
+            if row:
+                logger.debug("found_existing_version", version_id=row["id"])
+                return row["id"]
+
+            # Get commit info
+            commit_info = get_commit_info(commit_hash)
+
+            # Prepare metadata
+            metadata = {}
+            commit_message = ""
+            commit_author = ""
+            commit_date = None
+
+            if commit_info:
+                metadata = {
+                    'branch': commit_info.get('branch'),
+                    'tags': commit_info.get('tags', []),
+                }
+                commit_message = commit_info.get('message', '')
+                commit_author = commit_info.get('author', '')
+                commit_date = commit_info.get('date')
+
+            # Format commit_date for Django SQLite
+            commit_date_str = None
+            if commit_date:
+                commit_date_str = format_datetime_for_django_sqlite(commit_date)
+
+            # Create new version
+            cursor.execute(
+                """
+                INSERT INTO app_extractorversion
+                (commit_hash, extractor_module, commit_message, commit_author,
+                 commit_date, metadata, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    commit_hash,
+                    extractor_module,
+                    commit_message,
+                    commit_author,
+                    commit_date_str,
+                    json.dumps(metadata),
+                    format_datetime_for_django_sqlite(),
+                ),
+            )
+
+            conn.commit()
+            version_id = cursor.lastrowid
+
+            logger.info(
+                "created_extractor_version",
+                version_id=version_id,
+                commit_hash=commit_hash[:7],
+                extractor_module=extractor_module,
+            )
+
+            return version_id
+
+        except Exception as e:
+            conn.rollback()
+            logger.exception(
+                "extractor_version_creation_failed",
+                commit_hash=commit_hash,
+                error=str(e)
+            )
+            return None
+        finally:
+            conn.close()
+
+    def log_operation(
+        self,
+        service: str,
+        level: str,
+        event: str,
+        message: str = "",
+        context: Optional[Dict[str, Any]] = None,
+        listing_id: Optional[str] = None,
+        product_id: Optional[str] = None,
+        task_id: Optional[str] = None,
+        filename: Optional[str] = None,
+        duration_ms: Optional[int] = None,
+    ) -> None:
+        """
+        Log an operation to the OperationLog table.
+
+        Args:
+            service: Service name ('celery', 'fetcher', 'extractor')
+            level: Log level ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL')
+            event: Structured event name (e.g., 'fetch_started', 'extraction_success')
+            message: Human-readable message
+            context: Structured context data (all log fields as JSON)
+            listing_id: ProductListing UUID
+            product_id: Product UUID
+            task_id: Celery task ID for correlation
+            filename: Source file (e.g., 'fetcher.py', 'storage.py')
+            duration_ms: Operation duration in milliseconds
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            # Clean UUIDs (remove hyphens)
+            listing_id_clean = listing_id.replace("-", "") if listing_id else None
+            product_id_clean = product_id.replace("-", "") if product_id else None
+
+            cursor.execute(
+                """
+                INSERT INTO app_operationlog
+                (service, level, event, message, context, listing_id, product_id,
+                 task_id, filename, duration_ms, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    service,
+                    level,
+                    event,
+                    message,
+                    json.dumps(context or {}),
+                    listing_id_clean,
+                    product_id_clean,
+                    task_id,
+                    filename,
+                    duration_ms,
+                    format_datetime_for_django_sqlite(),
+                ),
+            )
+
+            conn.commit()
+            logger.debug("operation_logged", event_name=event, log_level=level)
+
+        except Exception as e:
+            conn.rollback()
+            logger.exception("operation_log_failed", event_name=event, error=str(e))
+        finally:
+            conn.close()
 
     def _get_connection(self) -> sqlite3.Connection:
         """Get database connection."""
@@ -435,6 +609,9 @@ class PriceStorage:
             product_url: Product URL for normalizing relative image URLs
             listing_id: ProductListing UUID (for multi-store support)
         """
+        # Get or create extractor version before opening transaction
+        extractor_version_id = self.get_or_create_extractor_version("python_extractor")
+
         conn = self._get_connection()
         cursor = conn.cursor()
 
@@ -500,7 +677,7 @@ class PriceStorage:
                     ),
                 )
 
-                # Update listing's current_price, availability, and last_checked
+                # Update listing's current_price, availability, last_checked, and extractor_version
                 cursor.execute(
                     """
                     UPDATE app_productlisting
@@ -508,6 +685,7 @@ class PriceStorage:
                         currency = ?,
                         available = ?,
                         last_checked = ?,
+                        extractor_version_id = ?,
                         updated_at = ?
                     WHERE id = ?
                     """,
@@ -516,6 +694,7 @@ class PriceStorage:
                         currency,
                         available,
                         format_datetime_for_django_sqlite(),
+                        extractor_version_id,
                         format_datetime_for_django_sqlite(),
                         listing_id_clean,
                     ),
@@ -583,6 +762,25 @@ class PriceStorage:
                     confidence=validation.confidence,
                     title_extracted=title is not None,
                     image_extracted=image_url is not None,
+                )
+
+                # Log to OperationLog for unified monitoring
+                self.log_operation(
+                    service="fetcher",
+                    level="INFO",
+                    event="price_saved",
+                    message=f"Price saved: {currency}{price_value}",
+                    context={
+                        "price": price_value,
+                        "currency": currency,
+                        "available": available,
+                        "confidence": validation.confidence,
+                        "extractor_version_id": extractor_version_id,
+                        "extraction_method": extraction.price.method if extraction.price else None,
+                    },
+                    listing_id=listing_id,
+                    product_id=product_id,
+                    filename="storage.py",
                 )
             else:
                 # Fallback to old single-store schema
