@@ -16,7 +16,7 @@ from .models import (
     UserSubscription,
     Notification,
     Pattern,
-    FetchLog,
+    OperationLog,
 )
 
 logger = logging.getLogger(__name__)
@@ -1245,24 +1245,28 @@ def admin_logs(request):
     }
     time_since = time_filters.get(time_range)
 
-    # ========== PRICE FETCHES ==========
-    fetch_logs_query = FetchLog.objects.select_related(
+    # ========== PRICE FETCHES (from OperationLog) ==========
+    fetch_logs_query = OperationLog.objects.filter(
+        service='fetcher'
+    ).select_related(
         "listing__product", "listing__store"
-    ).order_by("-fetched_at")
+    ).order_by("-timestamp")
 
     if time_since:
-        fetch_logs_query = fetch_logs_query.filter(fetched_at__gte=time_since)
+        fetch_logs_query = fetch_logs_query.filter(timestamp__gte=time_since)
 
     if status_filter == "success":
-        fetch_logs_query = fetch_logs_query.filter(success=True)
+        # Success = INFO level, no ERROR/CRITICAL
+        fetch_logs_query = fetch_logs_query.filter(level__in=['INFO', 'DEBUG'])
     elif status_filter == "failed":
-        fetch_logs_query = fetch_logs_query.filter(success=False)
+        # Failed = ERROR or CRITICAL level
+        fetch_logs_query = fetch_logs_query.filter(level__in=['ERROR', 'CRITICAL'])
 
     # Get fetch log statistics
     fetch_stats = fetch_logs_query.aggregate(
         total=Count("id"),
-        success_count=Count("id", filter=Q(success=True)),
-        failed_count=Count("id", filter=Q(success=False)),
+        success_count=Count("id", filter=Q(level__in=['INFO', 'DEBUG'])),
+        failed_count=Count("id", filter=Q(level__in=['ERROR', 'CRITICAL'])),
         avg_duration=Avg("duration_ms"),
     )
 

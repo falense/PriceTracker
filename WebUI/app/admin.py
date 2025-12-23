@@ -10,7 +10,7 @@ from django.contrib import messages
 from datetime import datetime
 from .models import (
     Product, Store, ProductListing, UserSubscription,
-    PriceHistory, Pattern, Notification, FetchLog, UserView, AdminFlag, OperationLog
+    PriceHistory, Pattern, Notification, UserView, AdminFlag, OperationLog
 )
 
 
@@ -77,30 +77,6 @@ class OperationLogInline(admin.TabularInline):
             return obj.task_id[:8] + '...' if len(obj.task_id) > 8 else obj.task_id
         return '-'
     task_id_short.short_description = 'Task'
-    
-    def has_add_permission(self, request, obj=None):
-        return False
-
-
-class FetchLogInline(admin.TabularInline):
-    """Display FetchLog entries inline on ProductListing admin pages."""
-    model = FetchLog
-    extra = 0
-    can_delete = False
-    max_num = 15
-    fields = ['fetched_at', 'success', 'extraction_method', 'duration_ms', 'errors_summary']
-    readonly_fields = ['fetched_at', 'success', 'extraction_method', 'duration_ms', 'errors_summary']
-    ordering = ['-fetched_at']
-    
-    def errors_summary(self, obj):
-        """Show error count or first error."""
-        if obj.errors:
-            error_count = len(obj.errors)
-            if error_count > 0:
-                first_error = str(obj.errors[0])[:50]
-                return f"{error_count} error(s): {first_error}..."
-        return '-'
-    errors_summary.short_description = 'Errors'
     
     def has_add_permission(self, request, obj=None):
         return False
@@ -212,7 +188,7 @@ class ProductListingAdmin(admin.ModelAdmin):
     search_fields = ['product__name', 'url', 'store__name', 'store_product_id']
     readonly_fields = ['id', 'created_at', 'updated_at', 'total_price']
     actions = ['refresh_prices']
-    inlines = [FetchLogInline, OperationLogInline]
+    inlines = [OperationLogInline]
     fieldsets = (
         ('Listing Information', {
             'fields': ('id', 'product', 'store', 'url', 'store_product_id')
@@ -480,20 +456,6 @@ class NotificationAdmin(admin.ModelAdmin):
     search_fields = ['user__username', 'subscription__product__name', 'listing__store__name', 'message']
     readonly_fields = ['created_at', 'read_at']
     ordering = ['-created_at']
-
-
-@admin.register(FetchLog)
-class FetchLogAdmin(admin.ModelAdmin):
-    list_display = ['listing', 'success', 'extraction_method', 'duration_ms', 'fetched_at']
-    list_filter = ['success', 'extraction_method', 'fetched_at']
-    search_fields = ['listing__product__name', 'listing__store__name']
-    readonly_fields = ['fetched_at']
-    ordering = ['-fetched_at']
-
-    def get_queryset(self, request):
-        """Filter out logs with null fetched_at to prevent date_hierarchy errors."""
-        qs = super().get_queryset(request)
-        return qs.filter(fetched_at__isnull=False)
 
 
 @admin.register(UserView)

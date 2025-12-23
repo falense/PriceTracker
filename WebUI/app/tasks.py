@@ -325,17 +325,17 @@ def check_pattern_health():
 @shared_task
 def cleanup_old_logs():
     """
-    Weekly task to clean up old fetch logs.
+    Weekly task to clean up old operation logs.
     """
-    from app.models import FetchLog
+    from app.models import OperationLog
     from datetime import timedelta
 
     RETENTION_DAYS = 30
     cutoff = timezone.now() - timedelta(days=RETENTION_DAYS)
 
-    deleted_count, _ = FetchLog.objects.filter(fetched_at__lt=cutoff).delete()
+    deleted_count, _ = OperationLog.objects.filter(timestamp__lt=cutoff).delete()
 
-    logger.info(f"Cleaned up {deleted_count} old fetch logs")
+    logger.info(f"Cleaned up {deleted_count} old operation logs")
     return {"deleted": deleted_count}
 
 

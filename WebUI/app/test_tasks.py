@@ -28,7 +28,7 @@ from app.models import (
     Store,
     Pattern,
     PriceHistory,
-    FetchLog,
+    OperationLog,
     AdminFlag,
 )
 from app.tasks import (
@@ -448,35 +448,43 @@ class CleanupOldLogsTaskTests(TestCase):
     def test_deletes_old_logs(self):
         """Test that logs older than retention period are deleted."""
         # Create old log (35 days old)
-        old_log = FetchLog.objects.create(
+        old_log = OperationLog.objects.create(
+            service='fetcher',
             listing=self.listing,
-            success=True,
+            level='INFO',
+            event='test_event',
+            message='Old test log',
+            timestamp=timezone.now() - timedelta(days=35)
         )
-        old_log.fetched_at = timezone.now() - timedelta(days=35)
-        old_log.save()
 
         # Create recent log (20 days old)
-        recent_log = FetchLog.objects.create(
+        recent_log = OperationLog.objects.create(
+            service='fetcher',
             listing=self.listing,
-            success=True,
+            level='INFO',
+            event='test_event',
+            message='Recent test log',
+            timestamp=timezone.now() - timedelta(days=20)
         )
-        recent_log.fetched_at = timezone.now() - timedelta(days=20)
-        recent_log.save()
 
         # Execute task
         result = cleanup_old_logs()
 
         # Verify only old log was deleted
         self.assertEqual(result['deleted'], 1)
-        self.assertFalse(FetchLog.objects.filter(id=old_log.id).exists())
-        self.assertTrue(FetchLog.objects.filter(id=recent_log.id).exists())
+        self.assertFalse(OperationLog.objects.filter(id=old_log.id).exists())
+        self.assertTrue(OperationLog.objects.filter(id=recent_log.id).exists())
 
     def test_handles_no_old_logs(self):
         """Test that task handles case with no logs to delete."""
         # Create only recent logs
-        recent_log = FetchLog.objects.create(
+        recent_log = OperationLog.objects.create(
+            service='fetcher',
             listing=self.listing,
-            success=True,
+            level='INFO',
+            event='test_event',
+            message='Recent test log',
+            timestamp=timezone.now() - timedelta(days=10)
         )
 
         # Execute task
@@ -484,4 +492,4 @@ class CleanupOldLogsTaskTests(TestCase):
 
         # Verify no logs deleted
         self.assertEqual(result['deleted'], 0)
-        self.assertTrue(FetchLog.objects.filter(id=recent_log.id).exists())
+        self.assertTrue(OperationLog.objects.filter(id=recent_log.id).exists())

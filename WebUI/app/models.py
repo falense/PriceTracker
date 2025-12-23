@@ -797,49 +797,6 @@ class PatternHistory(models.Model):
         return f"{self.domain} v{self.version_number} ({self.created_at.strftime('%Y-%m-%d')})"
 
 
-class FetchLog(models.Model):
-    """
-    Log fetch attempts for debugging.
-    Now references ProductListing instead of Product.
-    """
-    id = models.BigAutoField(primary_key=True)
-
-    listing = models.ForeignKey(
-        ProductListing,
-        on_delete=models.CASCADE,
-        related_name='fetch_logs'
-    )
-    success = models.BooleanField()
-    extraction_method = models.CharField(
-        max_length=50,
-        null=True,
-        blank=True,
-        help_text='Method used: css, xpath, jsonld, meta'
-    )
-    errors = models.JSONField(default=list, blank=True)
-    warnings = models.JSONField(default=list, blank=True)
-    duration_ms = models.IntegerField(
-        null=True,
-        blank=True,
-        help_text='Fetch duration in milliseconds'
-    )
-    fetched_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ['-fetched_at']
-        indexes = [
-            models.Index(fields=['listing', '-fetched_at']),
-            models.Index(fields=['success', '-fetched_at']),
-        ]
-        verbose_name = 'Fetch Log'
-        verbose_name_plural = 'Fetch Logs'
-
-    def __str__(self):
-        status = 'Success' if self.success else 'Failed'
-        return (
-            f"{status}: {self.listing.product.name} at "
-            f"{self.listing.store.name} on {self.fetched_at.strftime('%Y-%m-%d %H:%M')}"
-        )
 
 
 class UserView(models.Model):
