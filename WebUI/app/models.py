@@ -262,7 +262,20 @@ class ProductListing(models.Model):
     )
 
     # Pattern tracking
-    pattern_version = models.CharField(max_length=50, null=True, blank=True)
+    pattern_version = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        help_text='Deprecated: use extractor_version FK instead'
+    )
+    extractor_version = models.ForeignKey(
+        'ExtractorVersion',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='listings',
+        help_text='Git version used to extract this listing data'
+    )
 
     # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
@@ -578,6 +591,16 @@ class Pattern(models.Model):
         help_text='Python extractor module name (e.g., "generated_extractors.komplett_no")'
     )
 
+    # Version tracking
+    extractor_version = models.ForeignKey(
+        'ExtractorVersion',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='patterns',
+        help_text='Git version of the extractor module'
+    )
+
     # Success tracking
     success_rate = models.FloatField(
         default=0.0,
@@ -618,6 +641,71 @@ class Pattern(models.Model):
     def is_healthy(self):
         """Check if pattern has good success rate."""
         return self.success_rate >= 0.6
+
+
+class ExtractorVersion(models.Model):
+    """
+    Git version tracking for extractor modules.
+    Tracks git commit hash and metadata for version control of extractors.
+    """
+    id = models.BigAutoField(primary_key=True)
+
+    # Git tracking
+    commit_hash = models.CharField(
+        max_length=40,
+        unique=True,
+        db_index=True,
+        help_text='Git commit SHA hash (40 characters)'
+    )
+    extractor_module = models.CharField(
+        max_length=255,
+        db_index=True,
+        help_text='Python extractor module name (e.g., "generated_extractors.komplett_no")'
+    )
+
+    # Git metadata
+    commit_message = models.TextField(
+        blank=True,
+        help_text='Git commit message'
+    )
+    commit_author = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text='Git commit author'
+    )
+    commit_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Git commit timestamp'
+    )
+
+    # Additional metadata
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Additional git metadata (branch, tags, etc.)'
+    )
+
+    # Timestamps
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        help_text='When this version was registered in the system'
+    )
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['commit_hash']),
+            models.Index(fields=['extractor_module', '-created_at']),
+            models.Index(fields=['-created_at']),
+        ]
+        verbose_name = 'Extractor Version'
+        verbose_name_plural = 'Extractor Versions'
+
+    def __str__(self):
+        short_hash = self.commit_hash[:7] if self.commit_hash else 'unknown'
+        return f"{self.extractor_module} @ {short_hash}"
 
 
 class PatternHistory(models.Model):
