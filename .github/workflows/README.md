@@ -26,10 +26,39 @@ Automatically approves and enables auto-merge for PRs that **only** modify files
 #### `auto-merge-patterns.yml` (Alternative)
 A more complex workflow with explicit test runs and approval steps.
 
+### Setup Requirements
+
+The workflow requires a **Personal Access Token (PAT)** to approve PRs, as GitHub Actions' default `GITHUB_TOKEN` cannot approve pull requests.
+
+#### Creating and adding a PAT:
+
+1. **Create a Personal Access Token:**
+   - Go to [GitHub Settings → Developer settings → Personal access tokens → Fine-grained tokens](https://github.com/settings/tokens?type=beta)
+   - Click "Generate new token"
+   - Name: `PriceTracker Pattern Auto-Approve`
+   - Repository access: Select "Only select repositories" → Choose `PriceTracker`
+   - Permissions:
+     - ✅ **Pull requests**: Read and write
+     - ✅ **Contents**: Read and write (for auto-merge and branch deletion)
+   - Generate token and copy it
+
+2. **Add the token as a repository secret:**
+   - Go to your repository → Settings → Secrets and variables → Actions
+   - Click "New repository secret"
+   - Name: `PAT_TOKEN`
+   - Value: Paste your PAT
+   - Click "Add secret"
+
+3. **Optional: Update branch protection rules:**
+   - Go to Settings → Branches → Edit your default branch protection
+   - Enable "Require status checks to pass before merging"
+   - Optional: Uncheck "Require approvals" for pattern-only PRs to allow immediate merge
+
 ### Security Notes
 
-Both workflows use:
-- `GITHUB_TOKEN` - Built-in token with write permissions for the repository
+The workflow uses:
+- `PAT_TOKEN` - Personal Access Token with limited scope to approve PRs and merge
+- Falls back to `GITHUB_TOKEN` for comments and other operations
 - Limited scope to only pattern files
 - Validation that ensures only pattern files are modified
 

@@ -47,37 +47,176 @@
                     </div>
                 </div>
             </div>
-            
-            <!-- What's Happening (Expandable) -->
-            <details class="text-left max-w-lg mx-auto">
-                <summary class="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer hover:text-gray-900 dark:hover:text-white flex items-center justify-center space-x-2">
-                    <span>What's happening?</span>
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                    </svg>
-                </summary>
-                <div class="mt-4 space-y-3 pl-4 border-l-2 border-gray-200 dark:border-gray-700">
-                    <div class="flex items-start space-x-3">
-                        <span class="text-green-600 dark:text-green-400">✓</span>
-                        <p class="text-sm text-gray-600 dark:text-gray-400">Analyzing store website structure</p>
-                    </div>
-                    <div class="flex items-start space-x-3">
-                        <span class="text-primary-600 dark:text-primary-400 animate-pulse">⟳</span>
-                        <p class="text-sm text-gray-600 dark:text-gray-400">Learning how to extract product data</p>
-                    </div>
-                    <div class="flex items-start space-x-3">
-                        <span class="text-gray-400">○</span>
-                        <p class="text-sm text-gray-400">Fetching your product details</p>
-                    </div>
-                </div>
-            </details>
-            
+
             <!-- Timestamp -->
             <p class="text-xs text-gray-500 dark:text-gray-500">
                 Started {{ subscription.created_at|timesince }} ago • Page will refresh automatically
             </p>
         </div>
     </div>
+
+    <!-- ========== ADMIN-ONLY: Operation Logs Section ========== -->
+    {% if user.is_staff %}
+    <div class="mt-8 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="bg-gray-50 dark:bg-gray-900 rounded-xl border-2 border-gray-300 dark:border-gray-600 p-6">
+            <!-- Section Header -->
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-900 dark:text-white flex items-center">
+                        <svg class="w-6 h-6 mr-2 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        Admin: Operation Logs
+                    </h2>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                        Real-time logs from store setup process
+                    </p>
+                </div>
+                <span class="px-3 py-1 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-full text-sm font-medium">
+                    Staff Only
+                </span>
+            </div>
+
+            <!-- Statistics Cards -->
+            {% if log_stats %}
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <!-- Total Logs -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase">Total Logs</p>
+                            <p class="text-2xl font-bold text-gray-900 dark:text-white mt-1">
+                                {{ log_stats.total }}
+                            </p>
+                        </div>
+                        <div class="p-2 bg-blue-100 dark:bg-blue-900 rounded">
+                            <svg class="w-5 h-5 text-blue-600 dark:text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Errors -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase">Errors</p>
+                            <p class="text-2xl font-bold text-red-600 dark:text-red-400 mt-1">
+                                {{ log_stats.errors }}
+                            </p>
+                        </div>
+                        <div class="p-2 bg-red-100 dark:bg-red-900 rounded">
+                            <svg class="w-5 h-5 text-red-600 dark:text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Warnings -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase">Warnings</p>
+                            <p class="text-2xl font-bold text-yellow-600 dark:text-yellow-400 mt-1">
+                                {{ log_stats.warnings }}
+                            </p>
+                        </div>
+                        <div class="p-2 bg-yellow-100 dark:bg-yellow-900 rounded">
+                            <svg class="w-5 h-5 text-yellow-600 dark:text-yellow-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Service Breakdown -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+                    <p class="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase mb-2">By Service</p>
+                    <div class="space-y-1 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-gray-600 dark:text-gray-400">Fetcher:</span>
+                            <span class="font-medium text-gray-900 dark:text-white">{{ log_stats.service_counts.fetcher }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600 dark:text-gray-400">Extractor:</span>
+                            <span class="font-medium text-gray-900 dark:text-white">{{ log_stats.service_counts.extractor }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600 dark:text-gray-400">Celery:</span>
+                            <span class="font-medium text-gray-900 dark:text-white">{{ log_stats.service_counts.celery }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Recent Logs (simplified view) -->
+            {% if operation_logs %}
+            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div class="px-4 py-3 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                    <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Recent Activity ({{ operation_logs|length }} logs)
+                    </h3>
+                </div>
+                <div class="divide-y divide-gray-200 dark:divide-gray-700 max-h-96 overflow-y-auto">
+                    {% for log in operation_logs|slice:":20" %}
+                    <div class="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="text-xs text-gray-600 dark:text-gray-400 font-mono">{{ log.timestamp|date:"H:i:s" }}</span>
+
+                            {% if log.service == 'fetcher' %}
+                            <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
+                                Fetcher
+                            </span>
+                            {% elif log.service == 'extractor' %}
+                            <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200">
+                                Extractor
+                            </span>
+                            {% else %}
+                            <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                                Celery
+                            </span>
+                            {% endif %}
+
+                            {% if log.level == 'ERROR' or log.level == 'CRITICAL' %}
+                            <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200">
+                                {{ log.level }}
+                            </span>
+                            {% elif log.level == 'WARNING' %}
+                            <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200">
+                                {{ log.level }}
+                            </span>
+                            {% else %}
+                            <span class="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                                {{ log.level }}
+                            </span>
+                            {% endif %}
+
+                            <span class="text-sm font-medium text-gray-900 dark:text-white">{{ log.event|default:"—" }}</span>
+
+                            {% if log.message and log.message != log.event %}
+                            <span class="text-xs text-gray-600 dark:text-gray-400 italic">
+                                — {{ log.message|truncatewords:15 }}
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% else %}
+            <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                <svg class="w-12 h-12 mx-auto mb-3 animate-spin text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                <p>Waiting for operation logs...</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
 </div>
 
 <!-- HTMX Auto-refresh: Poll every 5 seconds -->

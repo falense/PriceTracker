@@ -1,0 +1,46 @@
+{% load currency_filters %}
+<!-- Product already subscribed -->
+<div class="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-200 dark:border-blue-800 rounded-xl p-6">
+    <div class="flex items-start space-x-4">
+        <div class="flex-shrink-0">
+            <div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/40 rounded-full flex items-center justify-center">
+                <svg class="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </div>
+        </div>
+
+        <div class="flex-1">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-2">
+                You're already tracking this product
+            </h3>
+
+            <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                {{ subscription.product.name }}
+            </p>
+
+            <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-4">
+                {% if subscription.product.listings.first and subscription.product.listings.first.current_price %}
+                <div>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">Current Price</p>
+                    <p class="text-2xl font-bold text-gray-900 dark:text-white">
+                        {{ subscription.product.listings.first.current_price|format_currency:subscription.product.listings.first.currency }}
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-3">
+                <a href="{% url 'subscription_detail' subscription.id %}"
+                   class="inline-block px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-center transition-colors">
+                    View Product Details
+                </a>
+                <button type="button"
+                        onclick="document.getElementById('search-input').value = ''; document.getElementById('search-results').innerHTML = '';"
+                        class="px-6 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-white rounded-lg font-medium transition-colors">
+                    Clear Search
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

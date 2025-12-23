@@ -1,4 +1,4 @@
-name: Auto-approve pattern PRs
+name: Auto-merge pattern PRs (no approval required)
 
 on:
   pull_request:
@@ -7,10 +7,9 @@ on:
 permissions:
   contents: write
   pull-requests: write
-  checks: write
 
 jobs:
-  check-and-approve:
+  check-and-merge:
     runs-on: ubuntu-latest
     
     steps:
@@ -46,25 +45,34 @@ jobs:
           if [ "$IS_PATTERN_ONLY" = "true" ]; then
             echo "✅ This PR only contains pattern files"
           else
-            echo "⚠️ This PR contains non-pattern files - skipping auto-approval"
+            echo "⚠️ This PR contains non-pattern files - skipping auto-merge"
           fi
       
-      - name: Auto-approve PR
+      - name: Label as pattern-only PR
         if: steps.changed-files.outputs.is_pattern_only == 'true'
-        uses: hmarr/auto-approve-action@v4
-        with:
-          github-token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr edit ${{ github.event.pull_request.number }} --add-label "auto-generated-pattern"
       
       - name: Enable auto-merge
         if: steps.changed-files.outputs.is_pattern_only == 'true'
         env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr merge ${{ github.event.pull_request.number }} --auto --squash --delete-branch
+          gh pr merge ${{ github.event.pull_request.number }} --auto --squash --delete-branch || echo "Auto-merge failed - may need approval or branch protection settings adjusted"
       
       - name: Add comment
         if: steps.changed-files.outputs.is_pattern_only == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr comment ${{ github.event.pull_request.number }} --body "✅ This PR has been automatically validated (only contains pattern files) and set to auto-merge. It will merge once all required checks pass."
+          gh pr comment ${{ github.event.pull_request.number }} --body "✅ **Pattern-only PR detected**
+
+This PR only contains extraction pattern files in \`ExtractorPatternAgent/generated_extractors/\`.
+
+Auto-merge has been enabled. The PR will merge automatically when:
+- All required status checks pass
+- All required approvals are obtained (if any)
+
+If branch protection requires approvals, please approve manually or configure the repo to allow pattern-only PRs without approval."
