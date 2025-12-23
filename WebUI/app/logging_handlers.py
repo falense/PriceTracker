@@ -6,11 +6,68 @@ This module provides handlers that integrate with Django models and external sys
 
 import asyncio
 import logging
+import queue
 import sys
+import threading
 from typing import Any, Dict
 
 from django.utils import timezone
 from django.apps import apps
+from django.db import connections
+
+
+# Module-level queue and worker for async database logging
+# This prevents connection explosion from thread-per-log pattern
+_log_queue = queue.Queue(maxsize=1000)
+_worker_started = False
+_worker_lock = threading.Lock()
+
+
+def _start_log_worker():
+    """
+    Start the background worker thread for database logging.
+
+    This uses a single worker thread with a queue pattern to prevent
+    connection explosion from spawning a thread per log entry.
+    """
+    global _worker_started
+
+    with _worker_lock:
+        if _worker_started:
+            return
+        _worker_started = True
+
+    def _log_worker():
+        """Background worker that processes log entries from the queue."""
+        while True:
+            try:
+                log_data = _log_queue.get(timeout=1)
+                if log_data is None:  # Shutdown signal
+                    break
+
+                # Import here to avoid circular imports
+                from app.models import OperationLog
+
+                # Create log entry - single thread, single connection
+                OperationLog.objects.create(**log_data)
+
+                # Explicitly close connections to prevent pooling issues
+                connections.close_all()
+
+            except queue.Empty:
+                # No data available, continue waiting
+                continue
+            except Exception as e:
+                # Silently handle errors to prevent worker crash
+                # Errors are already logged to stderr by the emit() method
+                pass
+
+    worker = threading.Thread(
+        target=_log_worker,
+        daemon=True,
+        name="OperationLogWriter"
+    )
+    worker.start()
 
 
 def _is_async_context() -> bool:
@@ -125,19 +182,19 @@ class DatabaseLogHandler(logging.Handler):
 
             # Write to database - handle async context
             if _is_async_context():
-                # We're in an async context - schedule the DB write
-                # Use a thread to avoid blocking the event loop
-                import threading
-                def _write_log():
-                    try:
-                        OperationLog.objects.create(**log_data)
-                    except Exception:
-                        pass  # Silently fail in thread
+                # We're in an async context - use queue-based worker
+                # This prevents connection explosion from thread-per-log
+                _start_log_worker()  # Ensure worker is running
 
-                thread = threading.Thread(target=_write_log, daemon=True)
-                thread.start()
+                try:
+                    # Non-blocking queue put with backpressure
+                    _log_queue.put_nowait(log_data)
+                except queue.Full:
+                    # Queue is full - drop log entry to prevent blocking
+                    # This is acceptable for non-critical logs
+                    pass
             else:
-                # Normal sync context
+                # Normal sync context - write directly
                 OperationLog.objects.create(**log_data)
 
         except Exception as e:

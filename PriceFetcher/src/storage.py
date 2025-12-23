@@ -345,6 +345,10 @@ class PriceStorage:
         # WAL mode allows multiple readers and one writer simultaneously
         conn.execute('PRAGMA journal_mode=WAL;')
 
+        # Explicitly set busy_timeout to 30 seconds (30000 ms)
+        # This ensures the connection waits up to 30s for locks instead of failing immediately
+        conn.execute('PRAGMA busy_timeout=30000;')
+
         return conn
 
     def get_product_by_listing_id(self, listing_id: str) -> Optional[Product]:
@@ -644,6 +648,10 @@ class PriceStorage:
         # Get or create extractor version before opening transaction
         extractor_version_id = self.get_or_create_extractor_version("python_extractor")
 
+        # Track operation success for logging after transaction
+        operation_succeeded = False
+        log_context = {}
+
         conn = self._get_connection()
         cursor = conn.cursor()
 
@@ -796,13 +804,14 @@ class PriceStorage:
                     image_extracted=image_url is not None,
                 )
 
-                # Log to OperationLog for unified monitoring
-                self.log_operation(
-                    service="fetcher",
-                    level="INFO",
-                    event="price_saved",
-                    message=f"Price saved: {currency}{price_value}",
-                    context={
+                # Store log parameters for logging AFTER transaction closes
+                # This prevents nested connection deadlocks
+                log_context = {
+                    "service": "fetcher",
+                    "level": "INFO",
+                    "event": "price_saved",
+                    "message": f"Price saved: {currency}{price_value}",
+                    "context": {
                         "price": price_value,
                         "currency": currency,
                         "available": available,
@@ -810,16 +819,17 @@ class PriceStorage:
                         "extractor_version_id": extractor_version_id,
                         "extraction_method": extraction.price.method if extraction.price else None,
                     },
-                    listing_id=listing_id,
-                    product_id=product_id,
-                    filename="storage.py",
-                )
+                    "listing_id": listing_id,
+                    "product_id": product_id,
+                    "filename": "storage.py",
+                }
             else:
                 # Fallback to old single-store schema
                 logger.warning("listing_id_missing_using_fallback", product_id=product_id)
                 # This path is kept for backwards compatibility but shouldn't be used
 
             conn.commit()
+            operation_succeeded = True  # Mark success after commit
 
         except Exception as e:
             conn.rollback()
@@ -829,6 +839,10 @@ class PriceStorage:
             raise
         finally:
             conn.close()
+
+        # Log to OperationLog AFTER transaction closes (prevents nested connection deadlock)
+        if operation_succeeded and log_context:
+            self.log_operation(**log_context)
 
 
     def get_latest_price(
@@ -947,6 +961,8 @@ class PriceStorage:
             listing_id_clean = listing_id.replace("-", "")
 
             conn = sqlite3.connect(self.db_path, timeout=30.0)
+            conn.execute('PRAGMA journal_mode=WAL;')
+            conn.execute('PRAGMA busy_timeout=30000;')
             cursor = conn.cursor()
 
             cursor.execute(

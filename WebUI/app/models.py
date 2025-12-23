@@ -399,7 +399,7 @@ class UserSubscription(models.Model):
 
     def record_view(self):
         """Track that user viewed this subscription with retry logic for database locks."""
-        from django.db import OperationalError
+        from django.db import OperationalError, transaction
         import time
 
         max_retries = 3
@@ -407,17 +407,20 @@ class UserSubscription(models.Model):
 
         for attempt in range(max_retries):
             try:
-                self.view_count += 1
-                self.last_viewed = timezone.now()
-                self.save(update_fields=['view_count', 'last_viewed', 'updated_at'])
+                # Use atomic transaction to prevent mid-update refresh
+                with transaction.atomic():
+                    # Refresh BEFORE incrementing to get latest value
+                    # This prevents race condition where increment is lost
+                    self.refresh_from_db()
+                    self.view_count += 1
+                    self.last_viewed = timezone.now()
+                    self.save(update_fields=['view_count', 'last_viewed', 'updated_at'])
                 return  # Success - exit retry loop
             except OperationalError as e:
                 if "database is locked" in str(e) and attempt < max_retries - 1:
                     # Retry on lock errors with exponential backoff
                     time.sleep(retry_delay)
                     retry_delay *= 2
-                    # Reload the instance to get fresh data before retry
-                    self.refresh_from_db()
                 else:
                     # Final attempt failed or different error - raise it
                     raise
