@@ -20,6 +20,7 @@ ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 # Application definition
 
 INSTALLED_APPS = [
+    'corsheaders',  # Must be before django.contrib.admin
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -31,6 +32,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',  # After Security, before Common
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -168,3 +170,30 @@ LOGGING = {
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/'
+
+# ========== CORS Configuration for Firefox Addon ==========
+
+# Allow credentials (session cookies) from browser extensions
+CORS_ALLOW_CREDENTIALS = True
+
+# Allow Firefox extension origins (moz-extension:// protocol)
+# Extensions have dynamic UUIDs, so we use regex matching
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^moz-extension://.*$",  # Firefox extensions
+]
+
+# Allow necessary headers for CSRF protection
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',  # CRITICAL for CSRF protection
+    'x-requested-with',
+]
+
+# Expose headers in response (optional, for easier debugging)
+CORS_EXPOSE_HEADERS = ['X-CSRFToken']

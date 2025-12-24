@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PriceTracker</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- Loading State -->
+  <div id="loading-state" class="state">
+    <div class="spinner"></div>
+    <p>Checking tracking status...</p>
+  </div>
+
+  <!-- Not Logged In State -->
+  <div id="login-state" class="state hidden">
+    <div class="icon-warning">⚠️</div>
+    <h2>Please Log In</h2>
+    <p>You need to log into PriceTracker to use this extension.</p>
+    <button id="open-webui-btn" class="btn btn-primary">Open PriceTracker</button>
+  </div>
+
+  <!-- Not Tracked State -->
+  <div id="not-tracked-state" class="state hidden">
+    <div class="icon-add">📌</div>
+    <h2>Track this product</h2>
+    <p>Add this product to your PriceTracker list to monitor price changes.</p>
+    <button id="track-btn" class="btn btn-primary">Add to Tracking</button>
+  </div>
+
+  <!-- Tracked State -->
+  <div id="tracked-state" class="state hidden">
+    <div class="icon-tracked">✓</div>
+    <h2 id="product-name">Product Name</h2>
+
+    <div class="product-details">
+      <div class="detail-row">
+        <span class="label">Current Price:</span>
+        <span id="current-price" class="value">Loading...</span>
+      </div>
+      <div class="detail-row">
+        <span class="label">Priority:</span>
+        <span id="priority" class="value">Normal</span>
+      </div>
+      <div class="detail-row">
+        <span class="label">Availability:</span>
+        <span id="availability" class="value">In Stock</span>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button id="view-webui-btn" class="btn btn-secondary">View in PriceTracker</button>
+      <button id="remove-btn" class="btn btn-danger">Remove from Tracking</button>
+    </div>
+  </div>
+
+  <!-- Error State -->
+  <div id="error-state" class="state hidden">
+    <div class="icon-error">❌</div>
+    <h2>Error</h2>
+    <p id="error-message">An error occurred.</p>
+    <button id="retry-btn" class="btn btn-secondary">Retry</button>
+  </div>
+
+  <!-- Confirmation Dialog (Overlay) -->
+  <div id="confirm-dialog" class="dialog-overlay hidden">
+    <div class="dialog-box">
+      <h3>Remove from tracking?</h3>
+      <p>Are you sure you want to stop tracking this product?</p>
+      <div class="dialog-actions">
+        <button id="confirm-remove-btn" class="btn btn-danger">Yes, Remove</button>
+        <button id="cancel-remove-btn" class="btn btn-secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
