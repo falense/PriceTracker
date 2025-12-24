@@ -197,3 +197,13 @@ CORS_ALLOW_HEADERS = [
 
 # Expose headers in response (optional, for easier debugging)
 CORS_EXPOSE_HEADERS = ['X-CSRFToken']
+
+# CSRF trusted origins for browser extensions
+# Django 4.0+ requires explicit CSRF_TRUSTED_ORIGINS for cross-origin POST requests
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+]
+
+# Note: CSRF protection for moz-extension:// origins works differently
+# The extension must include the CSRF token from cookies in the X-CSRFToken header

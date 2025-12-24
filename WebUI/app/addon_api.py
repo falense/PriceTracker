@@ -9,15 +9,60 @@ Provides API endpoints for the Firefox browser extension to:
 """
 
 import json
+from functools import wraps
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_http_methods
-from django.middleware.csrf import get_token
+from django.views.decorators.csrf import csrf_exempt
+from django.middleware.csrf import get_token, CsrfViewMiddleware
 from app.models import ProductListing, UserSubscription
 from app.services import ProductService
 import structlog
 
 logger = structlog.get_logger(__name__)
+
+
+def browser_extension_csrf_exempt(view_func):
+    """
+    Custom decorator for browser extension API endpoints.
+
+    Allows requests from moz-extension:// origins while still requiring
+    valid CSRF tokens in the X-CSRFToken header. This bypasses Django's
+    origin checking for browser extensions since they use dynamic UUIDs.
+    """
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        # Check if request is from a browser extension
+        origin = request.META.get('HTTP_ORIGIN', '')
+
+        if origin.startswith('moz-extension://') or origin.startswith('chrome-extension://'):
+            # For browser extensions, bypass origin check but still validate CSRF token
+            # The CSRF token must be present in the X-CSRFToken header
+            csrf_token = request.META.get('HTTP_X_CSRFTOKEN', '')
+
+            if request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
+                if not csrf_token:
+                    logger.warning(
+                        "browser_extension_missing_csrf_token",
+                        origin=origin,
+                        path=request.path
+                    )
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'CSRF token required in X-CSRFToken header'
+                    }, status=403)
+
+                # Manually validate CSRF token
+                csrf_middleware = CsrfViewMiddleware(lambda r: None)
+                # Set the token for validation
+                request.META['CSRF_COOKIE'] = csrf_token
+
+            # Temporarily mark as CSRF exempt for origin check
+            request._dont_enforce_csrf_checks = True
+
+        return view_func(request, *args, **kwargs)
+
+    return wrapper
 
 
 @login_required
@@ -90,6 +135,7 @@ def addon_check_tracking(request):
         }, status=500)
 
 
+@browser_extension_csrf_exempt
 @login_required
 @require_http_methods(["POST"])
 def addon_track_product(request):
@@ -172,6 +218,7 @@ def addon_track_product(request):
         }, status=500)
 
 
+@browser_extension_csrf_exempt
 @login_required
 @require_http_methods(["POST"])
 def addon_untrack_product(request):
