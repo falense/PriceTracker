@@ -76,51 +76,11 @@ urlpatterns = [
     path("admin-dashboard/", views.admin_dashboard, name="admin_dashboard"),
     path("admin-dashboard/logs/", views.admin_logs, name="admin_logs"),
     path("admin-dashboard/version-analytics/", views.version_analytics, name="version_analytics"),
-    # Pattern Management
-    path("admin-dashboard/patterns/", views.pattern_list, name="pattern_list"),
-    path(
-        "admin-dashboard/patterns/create/", views.pattern_create, name="pattern_create"
-    ),
-    path(
-        "admin-dashboard/patterns/<str:domain>/edit/",
-        views.pattern_edit,
-        name="pattern_edit",
-    ),
-    path(
-        "admin-dashboard/patterns/<str:domain>/compare/<int:v1>/<int:v2>/",
-        views.pattern_compare,
-        name="pattern_compare",
-    ),
-    path(
-        "admin-dashboard/patterns/<str:domain>/rollback/<int:version>/",
-        views.pattern_rollback,
-        name="pattern_rollback",
-    ),
-    path(
-        "admin-dashboard/patterns/<str:domain>/delete/",
-        views.pattern_delete,
-        name="pattern_delete",
-    ),
-    # Pattern HTMX API endpoints
-    path("api/patterns/test/", views.api_test_pattern, name="api_test_pattern"),
-    path(
-        "api/patterns/test-selector/", views.api_test_selector, name="api_test_selector"
-    ),
-    path(
-        "api/patterns/validate/",
-        views.api_validate_pattern,
-        name="api_validate_pattern",
-    ),
-    path("api/patterns/fetch-html/", views.api_fetch_html, name="api_fetch_html"),
+    # Pattern API endpoints
     path(
         "api/patterns/regenerate/",
         views.api_regenerate_pattern,
         name="api_regenerate_pattern",
-    ),
-    path(
-        "api/patterns/retest-visualization/",
-        views.api_retest_pattern_visualization,
-        name="api_retest_pattern_visualization",
     ),
     # Firefox Addon API
     path(

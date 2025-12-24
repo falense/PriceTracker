@@ -85,7 +85,7 @@ class ProductServiceAddProductForUserTests(TestCase):
         self, mock_trigger_pattern_generation, mock_trigger_fetch_listing
     ):
         store = Store.objects.create(domain="example.com", name="Example", active=True)
-        Pattern.objects.create(domain="example.com", store=store, pattern_json={})
+        Pattern.objects.create(domain="example.com", store=store, extractor_module="test_extractor")
 
         url = "https://www.example.com/product/sku-111"
 

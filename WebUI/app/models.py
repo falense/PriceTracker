@@ -599,12 +599,7 @@ class Pattern(models.Model):
         db_index=True
     )
 
-    # Pattern data (transitioning from JSON to Python modules)
-    pattern_json = models.JSONField(
-        null=True,
-        blank=True,
-        help_text='Full pattern structure from ExtractorPatternAgent (deprecated, use extractor_module)'
-    )
+    # Pattern data (Python modules only)
     extractor_module = models.CharField(
         max_length=255,
         null=True,
@@ -642,8 +637,8 @@ class Pattern(models.Model):
         verbose_name_plural = 'Patterns'
 
     def __str__(self):
-        pattern_type = "Python" if self.extractor_module else "JSON"
-        return f"Pattern for {self.domain} ({pattern_type}, {self.success_rate:.1%} success)"
+        module = self.extractor_module or "No module"
+        return f"Pattern for {self.domain} ({module}, {self.success_rate:.1%} success)"
 
     def record_attempt(self, success: bool):
         """Record pattern usage and update success rate."""
@@ -728,97 +723,6 @@ class ExtractorVersion(models.Model):
     def __str__(self):
         short_hash = self.commit_hash[:7] if self.commit_hash else 'unknown'
         return f"{self.extractor_module} @ {short_hash}"
-
-
-class PatternHistory(models.Model):
-    """
-    Version history for extraction patterns.
-    Tracks all changes to patterns for audit and rollback.
-    """
-    id = models.BigAutoField(primary_key=True)
-
-    # Relationship to pattern
-    pattern = models.ForeignKey(
-        Pattern,
-        on_delete=models.CASCADE,
-        related_name='history'
-    )
-
-    # Domain for quick lookups
-    domain = models.CharField(
-        max_length=255,
-        db_index=True,
-        help_text='Denormalized domain for faster queries'
-    )
-
-    # Version tracking
-    version_number = models.IntegerField(
-        help_text='Sequential version number per pattern'
-    )
-
-    # Pattern snapshot
-    pattern_json = models.JSONField(
-        help_text='Snapshot of pattern at this version'
-    )
-
-    # Change tracking
-    changed_by = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        help_text='User who made this change'
-    )
-    change_reason = models.CharField(
-        max_length=500,
-        blank=True,
-        default='',
-        help_text='Reason for this change'
-    )
-    change_type = models.CharField(
-        max_length=50,
-        choices=[
-            ('manual_edit', 'Manual Edit'),
-            ('auto_generated', 'Auto-Generated'),
-            ('api_update', 'API Update'),
-            ('rollback', 'Rollback'),
-            ('auto_save', 'Auto-Save'),
-        ],
-        default='manual_edit'
-    )
-
-    # Metrics snapshot (at time of version)
-    success_rate_at_time = models.FloatField(
-        null=True,
-        blank=True,
-        help_text='Success rate when this version was created'
-    )
-    total_attempts_at_time = models.IntegerField(
-        default=0,
-        help_text='Total attempts when this version was created'
-    )
-
-    # Timestamp
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        db_index=True
-    )
-
-    class Meta:
-        ordering = ['-version_number']
-        unique_together = [['pattern', 'version_number']]
-        indexes = [
-            models.Index(fields=['domain', '-created_at']),
-            models.Index(fields=['pattern', '-version_number']),
-            models.Index(fields=['-created_at']),
-        ]
-        verbose_name = 'Pattern History'
-        verbose_name_plural = 'Pattern History'
-
-    def __str__(self):
-        return f"{self.domain} v{self.version_number} ({self.created_at.strftime('%Y-%m-%d')})"
-
-
 
 
 class UserView(models.Model):
@@ -1024,58 +928,3 @@ from django.db.models.signals import pre_save, post_save
 from django.dispatch import receiver
 
 
-@receiver(pre_save, sender=Pattern)
-def save_pattern_history(sender, instance, **kwargs):
-    """
-    Auto-save pattern history when pattern_json changes.
-    Creates a new PatternHistory entry before updating the Pattern.
-    """
-    # Only for updates (not new patterns)
-    if instance.pk:
-        try:
-            old_pattern = Pattern.objects.get(pk=instance.pk)
-
-            # Check if pattern_json actually changed
-            if old_pattern.pattern_json != instance.pattern_json:
-                # Get next version number for this pattern
-                last_version = PatternHistory.objects.filter(
-                    pattern=instance
-                ).aggregate(Max('version_number'))['version_number__max']
-
-                next_version = (last_version or 0) + 1
-
-                # Create history entry with OLD pattern data
-                PatternHistory.objects.create(
-                    pattern=instance,
-                    domain=instance.domain,
-                    version_number=next_version,
-                    pattern_json=old_pattern.pattern_json,  # Save OLD version
-                    success_rate_at_time=old_pattern.success_rate,
-                    total_attempts_at_time=old_pattern.total_attempts,
-                    change_type='auto_save'
-                )
-
-        except Pattern.DoesNotExist:
-            # Pattern was deleted, skip
-            pass
-
-
-@receiver(post_save, sender=Pattern)
-def create_initial_pattern_history(sender, instance, created, **kwargs):
-    """
-    Create initial PatternHistory entry when a new Pattern is created.
-    This ensures all patterns have version 1 in history.
-    """
-    if created:
-        # Check if version 1 already exists (in case it was created manually)
-        if not PatternHistory.objects.filter(pattern=instance, version_number=1).exists():
-            PatternHistory.objects.create(
-                pattern=instance,
-                domain=instance.domain,
-                version_number=1,
-                pattern_json=instance.pattern_json,
-                change_type='auto_generated',
-                change_reason='Initial pattern creation',
-                success_rate_at_time=instance.success_rate,
-                total_attempts_at_time=instance.total_attempts
-            )

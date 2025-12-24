@@ -345,7 +345,7 @@ class CheckPatternHealthTaskTests(TestCase):
         pattern = Pattern.objects.create(
             domain="example.com",
             store=self.store,
-            pattern_json={},
+            extractor_module="test_extractor",
             total_attempts=20,
             successful_attempts=10,  # 50% success rate < 60% threshold
             success_rate=0.5,  # Explicitly set success_rate
@@ -368,7 +368,7 @@ class CheckPatternHealthTaskTests(TestCase):
         pattern = Pattern.objects.create(
             domain="example.com",
             store=self.store,
-            pattern_json={},
+            extractor_module="test_extractor",
             total_attempts=20,
             successful_attempts=16,  # 80% success rate >= 60% threshold
             success_rate=0.8,  # Explicitly set success_rate
@@ -387,7 +387,7 @@ class CheckPatternHealthTaskTests(TestCase):
         pattern = Pattern.objects.create(
             domain="example.com",
             store=self.store,
-            pattern_json={},
+            extractor_module="test_extractor",
             total_attempts=20,
             successful_attempts=10,
             success_rate=0.5,  # Explicitly set success_rate
@@ -414,7 +414,7 @@ class CheckPatternHealthTaskTests(TestCase):
         pattern = Pattern.objects.create(
             domain="example.com",
             store=self.store,
-            pattern_json={},
+            extractor_module="test_extractor",
             total_attempts=5,
             successful_attempts=1,  # 20% success rate, but < 10 attempts
         )
