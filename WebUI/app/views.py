@@ -1207,13 +1207,100 @@ def mark_notifications_read(request):
 # Admin views
 @login_required
 def admin_dashboard(request):
-    """Admin dashboard."""
+    """Admin dashboard with version analytics."""
     if not request.user.is_staff:
         messages.error(request, "Access denied.")
         return redirect("dashboard")
 
-    # TODO: Implement
-    return render(request, "admin/dashboard.html")
+    from .version_services import VersionAnalyticsService
+    from .pattern_services import PatternManagementService
+    from .models import ExtractorVersion, PatternHistory
+    from datetime import timedelta
+    from django.utils import timezone
+
+    # Get version adoption metrics
+    adoption_stats = VersionAnalyticsService.get_version_adoption_stats()
+
+    # Get module usage stats
+    module_stats = VersionAnalyticsService.get_module_usage_stats()
+
+    # Get recent version activity
+    recent_versions = ExtractorVersion.objects.all().order_by('-created_at')[:5]
+
+    # Get recent pattern changes
+    recent_pattern_changes = PatternHistory.objects.select_related(
+        'pattern', 'changed_by'
+    ).order_by('-created_at')[:10]
+
+    # Get pattern health stats (reuse existing logic)
+    pattern_result = PatternManagementService.get_all_patterns(with_stats=True)
+    pattern_stats = pattern_result.get('stats', {})
+
+    # Get user contribution stats (last 30 days)
+    contribution_stats = VersionAnalyticsService.get_user_contribution_stats(days=30)
+
+    # Celery stats (if available)
+    try:
+        from .admin_services import CeleryMonitorService
+        celery_stats = CeleryMonitorService.get_worker_stats()
+    except Exception:
+        celery_stats = None
+
+    context = {
+        'adoption_stats': adoption_stats,
+        'module_stats': module_stats,
+        'recent_versions': recent_versions,
+        'recent_pattern_changes': recent_pattern_changes,
+        'pattern_stats': pattern_stats,
+        'contribution_stats': contribution_stats,
+        'celery_stats': celery_stats,
+    }
+
+    return render(request, "admin/dashboard.html", context)
+
+
+@login_required
+def version_analytics(request):
+    """Detailed version analytics and impact analysis."""
+    if not request.user.is_staff:
+        messages.error(request, "Access denied.")
+        return redirect("dashboard")
+
+    from .version_services import VersionAnalyticsService
+    from .models import ExtractorVersion
+
+    # Get selected module from query params
+    selected_module = request.GET.get('module', None)
+
+    # Get all available modules
+    all_modules = ExtractorVersion.objects.values_list(
+        'extractor_module', flat=True
+    ).distinct().order_by('extractor_module')
+
+    # Get overall adoption stats
+    adoption_stats = VersionAnalyticsService.get_version_adoption_stats()
+
+    # Get module usage stats
+    module_stats = VersionAnalyticsService.get_module_usage_stats()
+
+    # Get user contribution stats
+    contribution_stats = VersionAnalyticsService.get_user_contribution_stats(days=30)
+
+    # If module selected, get detailed impact analysis
+    impact_analysis = None
+    if selected_module:
+        impact_analysis = VersionAnalyticsService.get_version_impact_analysis(selected_module)
+
+    context = {
+        'all_modules': all_modules,
+        'selected_module': selected_module,
+        'adoption_stats': adoption_stats,
+        'module_stats': module_stats,
+        'contribution_stats': contribution_stats,
+        'impact_analysis': impact_analysis,
+    }
+
+    return render(request, "admin/version_analytics.html", context)
 
 
 @login_required

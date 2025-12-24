@@ -8,39 +8,189 @@
         Admin Dashboard
     </h1>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <!-- Patterns -->
-        <a href="{% url 'pattern_list' %}"
-           class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow">
-            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
-                Extraction Patterns
-            </h2>
-            <p class="text-gray-600 dark:text-gray-400">
-                Manage, test, and validate extraction patterns
-            </p>
-        </a>
+    <!-- Version Management Section -->
+    <section class="mb-12">
+        <h2 class="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-4">
+            Version Management
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Version Analytics -->
+            <a href="{% url 'version_analytics' %}"
+               class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow">
+                <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                    Version Analytics
+                </h3>
+                <p class="text-gray-600 dark:text-gray-400 mb-4">
+                    Impact analysis, adoption metrics, and trends
+                </p>
+                {% if adoption_stats %}
+                <div class="text-sm text-gray-700 dark:text-gray-300">
+                    <div class="flex justify-between mb-1">
+                        <span>Version Adoption:</span>
+                        <span class="font-semibold">{{ adoption_stats.version_adoption_rate|floatformat:1 }}%</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Active Modules:</span>
+                        <span class="font-semibold">{{ module_stats.total_modules }}</span>
+                    </div>
+                </div>
+                {% endif %}
+            </a>
 
-        <!-- System Logs -->
-        <a href="{% url 'admin_logs' %}"
-           class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow">
-            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
-                System Logs
-            </h2>
-            <p class="text-gray-600 dark:text-gray-400">
-                View logs sorted by task type (price fetches, patterns, etc.)
-            </p>
-        </a>
+            <!-- Extractor Versions -->
+            <a href="/admin/app/extractorversion/"
+               class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow">
+                <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                    Extractor Versions
+                </h3>
+                <p class="text-gray-600 dark:text-gray-400 mb-4">
+                    Git-tracked extractor module versions
+                </p>
+                {% if recent_versions %}
+                <div class="text-sm text-gray-700 dark:text-gray-300">
+                    <p class="font-medium mb-1">Recent versions:</p>
+                    {% for version in recent_versions|slice:":3" %}
+                    <div class="text-xs truncate">
+                        {{ version.extractor_module|truncatechars:25 }} @ {{ version.commit_hash|slice:":7" }}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </a>
 
-        <!-- Admin Flags -->
-        <a href="{% url 'admin_flags_list' %}"
-           class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow">
-            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
-                Admin Flags
-            </h2>
-            <p class="text-gray-600 dark:text-gray-400">
-                Review issues requiring attention
-            </p>
-        </a>
-    </div>
+            <!-- Pattern History -->
+            <a href="/admin/app/patternhistory/"
+               class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow">
+                <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                    Pattern History
+                </h3>
+                <p class="text-gray-600 dark:text-gray-400 mb-4">
+                    Audit trail of all pattern changes
+                </p>
+                {% if contribution_stats %}
+                <div class="text-sm text-gray-700 dark:text-gray-300">
+                    <div class="flex justify-between mb-1">
+                        <span>Changes (30d):</span>
+                        <span class="font-semibold">{{ contribution_stats.total_changes }}</span>
+                    </div>
+                    {% if contribution_stats.top_contributors %}
+                    <div class="text-xs">
+                        Top: {{ contribution_stats.top_contributors.0.changed_by__username }} ({{ contribution_stats.top_contributors.0.change_count }})
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </a>
+        </div>
+    </section>
+
+    <!-- Pattern Management Section -->
+    <section class="mb-12">
+        <h2 class="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-4">
+            Pattern Management
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Patterns -->
+            <a href="{% url 'pattern_list' %}"
+               class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow">
+                <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                    Extraction Patterns
+                </h3>
+                <p class="text-gray-600 dark:text-gray-400 mb-4">
+                    Manage, test, and validate extraction patterns
+                </p>
+                {% if pattern_stats %}
+                <div class="text-sm text-gray-700 dark:text-gray-300">
+                    <div class="flex justify-between mb-1">
+                        <span class="text-green-600 dark:text-green-400">Healthy:</span>
+                        <span class="font-semibold">{{ pattern_stats.healthy }}</span>
+                    </div>
+                    <div class="flex justify-between mb-1">
+                        <span class="text-orange-600 dark:text-orange-400">Warning:</span>
+                        <span class="font-semibold">{{ pattern_stats.warning }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-red-600 dark:text-red-400">Failing:</span>
+                        <span class="font-semibold">{{ pattern_stats.failing }}</span>
+                    </div>
+                </div>
+                {% endif %}
+            </a>
+
+            <!-- Recent Pattern Changes -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                    Recent Changes
+                </h3>
+                <p class="text-gray-600 dark:text-gray-400 mb-4">
+                    Latest pattern modifications
+                </p>
+                {% if recent_pattern_changes %}
+                <div class="text-xs space-y-2">
+                    {% for change in recent_pattern_changes|slice:":5" %}
+                    <div class="border-l-2 border-gray-300 dark:border-gray-600 pl-2">
+                        <div class="font-medium text-gray-900 dark:text-white truncate">
+                            {{ change.domain }}
+                        </div>
+                        <div class="text-gray-600 dark:text-gray-400">
+                            v{{ change.version_number }} • {{ change.get_change_type_display }}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-sm text-gray-500 dark:text-gray-400">No recent changes</p>
+                {% endif %}
+            </div>
+
+            <!-- Admin Flags -->
+            <a href="{% url 'admin_flags_list' %}"
+               class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow">
+                <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                    Admin Flags
+                </h3>
+                <p class="text-gray-600 dark:text-gray-400">
+                    Review issues requiring attention
+                </p>
+            </a>
+        </div>
+    </section>
+
+    <!-- System Monitoring Section -->
+    <section>
+        <h2 class="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-4">
+            System Monitoring
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- System Logs -->
+            <a href="{% url 'admin_logs' %}"
+               class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow">
+                <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                    System Logs
+                </h3>
+                <p class="text-gray-600 dark:text-gray-400">
+                    View logs sorted by task type (price fetches, patterns, etc.)
+                </p>
+            </a>
+
+            <!-- Celery Monitor -->
+            {% if celery_stats %}
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                    Celery Workers
+                </h3>
+                <p class="text-gray-600 dark:text-gray-400 mb-4">
+                    Background task processing status
+                </p>
+                <div class="text-sm text-gray-700 dark:text-gray-300">
+                    <div class="flex justify-between">
+                        <span>Active Workers:</span>
+                        <span class="font-semibold">{{ celery_stats.workers|length }}</span>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </section>
 </div>
 {% endblock %}

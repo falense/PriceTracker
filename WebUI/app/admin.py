@@ -10,7 +10,8 @@ from django.contrib import messages
 from datetime import datetime
 from .models import (
     Product, Store, ProductListing, UserSubscription,
-    PriceHistory, Pattern, Notification, UserView, AdminFlag, OperationLog
+    PriceHistory, Pattern, Notification, UserView, AdminFlag, OperationLog,
+    ExtractorVersion, PatternHistory
 )
 
 
@@ -532,4 +533,301 @@ class OperationLogAdmin(admin.ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         """Prevent editing of log entries."""
+        return False
+
+
+@admin.register(ExtractorVersion)
+class ExtractorVersionAdmin(admin.ModelAdmin):
+    """Admin interface for ExtractorVersion - read-only like OperationLogAdmin."""
+
+    list_display = [
+        'module_short',
+        'commit_short',
+        'commit_author',
+        'commit_date',
+        'pattern_count',
+        'listing_count',
+        'created_at'
+    ]
+    list_filter = ['extractor_module', 'commit_date', 'created_at']
+    search_fields = ['commit_hash', 'extractor_module', 'commit_message', 'commit_author']
+    readonly_fields = [
+        'commit_hash',
+        'extractor_module',
+        'commit_message',
+        'commit_author',
+        'commit_date',
+        'metadata',
+        'created_at',
+        'formatted_metadata_display',
+        'related_patterns_display',
+        'related_listings_display'
+    ]
+    date_hierarchy = 'created_at'
+    ordering = ['-created_at']
+
+    fieldsets = (
+        ('Version Information', {
+            'fields': ('extractor_module', 'commit_hash', 'created_at')
+        }),
+        ('Git Metadata', {
+            'fields': ('commit_author', 'commit_date', 'commit_message')
+        }),
+        ('Additional Metadata', {
+            'fields': ('formatted_metadata_display',),
+            'classes': ('collapse',)
+        }),
+        ('Usage', {
+            'fields': ('related_patterns_display', 'related_listings_display'),
+            'description': 'Patterns and listings using this version'
+        }),
+    )
+
+    def commit_short(self, obj):
+        """Show shortened commit hash."""
+        return obj.commit_hash[:8] if obj.commit_hash else '-'
+    commit_short.short_description = 'Commit'
+
+    def module_short(self, obj):
+        """Show shortened module name."""
+        # Extract just the domain part: "generated_extractors.komplett_no" -> "komplett_no"
+        parts = obj.extractor_module.split('.')
+        return parts[-1] if parts else obj.extractor_module
+    module_short.short_description = 'Module'
+
+    def pattern_count(self, obj):
+        """Count patterns using this version."""
+        count = obj.patterns.count()
+        if count > 0:
+            url = f"/admin/app/pattern/?extractor_version__id__exact={obj.id}"
+            return format_html('<a href="{}">{} patterns</a>', url, count)
+        return '0 patterns'
+    pattern_count.short_description = 'Patterns'
+
+    def listing_count(self, obj):
+        """Count listings using this version."""
+        count = obj.listings.count()
+        if count > 0:
+            url = f"/admin/app/productlisting/?extractor_version__id__exact={obj.id}"
+            return format_html('<a href="{}">{} listings</a>', url, count)
+        return '0 listings'
+    listing_count.short_description = 'Listings'
+
+    def formatted_metadata_display(self, obj):
+        """Display metadata JSON formatted."""
+        import json
+        if not obj.metadata:
+            return format_html('<em style="color: var(--body-quiet-color);">No metadata</em>')
+
+        formatted_json = json.dumps(obj.metadata, indent=2)
+        return format_html(
+            '<pre style="background: var(--darkened-bg); padding: 10px; border-radius: 4px;">{}</pre>',
+            formatted_json
+        )
+    formatted_metadata_display.short_description = 'Metadata'
+
+    def related_patterns_display(self, obj):
+        """Show related patterns with links."""
+        patterns = obj.patterns.all()[:10]
+        if not patterns:
+            return format_html('<em>No patterns using this version</em>')
+
+        links = []
+        for pattern in patterns:
+            url = f"/admin/app/pattern/{pattern.pk}/change/"
+            links.append(f'<a href="{url}">{pattern.domain}</a>')
+
+        more = obj.patterns.count() - 10
+        if more > 0:
+            links.append(f'<em>... and {more} more</em>')
+
+        return format_html('<br>'.join(links))
+    related_patterns_display.short_description = 'Related Patterns'
+
+    def related_listings_display(self, obj):
+        """Show count of related listings."""
+        count = obj.listings.count()
+        if count > 0:
+            url = f"/admin/app/productlisting/?extractor_version__id__exact={obj.id}"
+            return format_html('<a href="{}">View {} listings</a>', url, count)
+        return format_html('<em>No listings using this version</em>')
+    related_listings_display.short_description = 'Related Listings'
+
+    def has_add_permission(self, request):
+        """Prevent manual creation - versions are created by VersionService."""
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        """Prevent editing - versions are immutable git snapshots."""
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        """Allow deletion only if not referenced by patterns/listings."""
+        if obj:
+            return obj.patterns.count() == 0 and obj.listings.count() == 0
+        return True
+
+
+@admin.register(PatternHistory)
+class PatternHistoryAdmin(admin.ModelAdmin):
+    """Admin interface for PatternHistory - read-only audit trail."""
+
+    list_display = [
+        'domain',
+        'version_number',
+        'change_type',
+        'success_impact_display',
+        'changed_by',
+        'created_at'
+    ]
+    list_filter = ['change_type', 'created_at', 'domain']
+    search_fields = ['domain', 'change_reason', 'changed_by__username']
+    readonly_fields = [
+        'pattern',
+        'domain',
+        'version_number',
+        'pattern_json',
+        'changed_by',
+        'change_reason',
+        'change_type',
+        'success_rate_at_time',
+        'total_attempts_at_time',
+        'created_at',
+        'formatted_pattern_display',
+        'success_metrics_display',
+        'version_actions_display'
+    ]
+    date_hierarchy = 'created_at'
+    ordering = ['-created_at']
+
+    fieldsets = (
+        ('Version Information', {
+            'fields': ('pattern', 'domain', 'version_number', 'created_at')
+        }),
+        ('Change Tracking', {
+            'fields': ('change_type', 'changed_by', 'change_reason')
+        }),
+        ('Success Metrics', {
+            'fields': ('success_metrics_display',),
+            'description': 'Success rate at the time this version was created'
+        }),
+        ('Pattern Snapshot', {
+            'fields': ('formatted_pattern_display',),
+            'classes': ('collapse',),
+            'description': 'JSON snapshot of pattern at this version'
+        }),
+        ('Actions', {
+            'fields': ('version_actions_display',),
+            'description': 'Available operations for this version'
+        }),
+    )
+
+    def success_impact_display(self, obj):
+        """Show success rate with color coding."""
+        if obj.success_rate_at_time is None:
+            return format_html('<span style="color: gray;">N/A</span>')
+
+        rate = obj.success_rate_at_time
+        if obj.total_attempts_at_time < 10:
+            color = 'gray'
+            status = 'Insufficient data'
+        elif rate >= 0.8:
+            color = 'green'
+            status = 'Healthy'
+        elif rate >= 0.6:
+            color = 'orange'
+            status = 'Warning'
+        else:
+            color = 'red'
+            status = 'Critical'
+
+        percentage = f'{rate:.1%}'
+        attempts = obj.total_attempts_at_time
+
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span> ({}, {} attempts)',
+            color, percentage, status, attempts
+        )
+    success_impact_display.short_description = 'Success Rate'
+
+    def success_metrics_display(self, obj):
+        """Detailed success metrics at time of version."""
+        if obj.success_rate_at_time is None:
+            return format_html('<em>No metrics recorded</em>')
+
+        return format_html(
+            '''
+            <div style="padding: 10px; background: var(--darkened-bg); border-radius: 4px;">
+                <strong>Success Rate:</strong> {:.1%}<br>
+                <strong>Total Attempts:</strong> {}<br>
+                <strong>Successful:</strong> {} / {}
+            </div>
+            ''',
+            obj.success_rate_at_time,
+            obj.total_attempts_at_time,
+            int(obj.success_rate_at_time * obj.total_attempts_at_time) if obj.total_attempts_at_time > 0 else 0,
+            obj.total_attempts_at_time
+        )
+    success_metrics_display.short_description = 'Metrics Snapshot'
+
+    def formatted_pattern_display(self, obj):
+        """Display pattern JSON formatted (reuse PatternAdmin pattern)."""
+        import json
+
+        if not obj.pattern_json:
+            return format_html('<em style="color: var(--body-quiet-color);">No pattern data</em>')
+
+        try:
+            formatted_json = json.dumps(obj.pattern_json, indent=2, ensure_ascii=False)
+            return format_html(
+                '''
+                <div style="background: var(--darkened-bg); border: 1px solid var(--border-color); border-radius: 4px; padding: 15px;">
+                    <button onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent); this.textContent='✓ Copied!'; setTimeout(() => this.textContent='Copy JSON', 2000);"
+                            style="float: right; padding: 5px 10px; background: var(--link-fg); color: #fff; border: none; border-radius: 3px; cursor: pointer;">
+                        Copy JSON
+                    </button>
+                    <pre style="background: var(--body-bg); border: 1px solid var(--border-color); border-radius: 3px; padding: 12px; overflow-x: auto; margin-top: 10px; font-family: monospace; font-size: 13px; max-height: 600px;">{}</pre>
+                </div>
+                ''',
+                formatted_json
+            )
+        except Exception as e:
+            return format_html('<div style="color: #c30;">Error displaying pattern: {}</div>', str(e))
+    formatted_pattern_display.short_description = 'Pattern JSON'
+
+    def version_actions_display(self, obj):
+        """Show available actions (compare, rollback via custom views)."""
+        pattern_detail_url = f"/admin-dashboard/patterns/{obj.domain}/edit/"
+
+        # Get latest version to enable comparison
+        latest_version = PatternHistory.objects.filter(pattern=obj.pattern).order_by('-version_number').first()
+
+        actions = [
+            f'<a href="{pattern_detail_url}" style="display: inline-block; padding: 8px 12px; background: var(--link-fg); color: white; text-decoration: none; border-radius: 4px; margin-right: 5px;">View Current Pattern</a>'
+        ]
+
+        if latest_version and latest_version.version_number != obj.version_number:
+            compare_url = f"/admin-dashboard/patterns/{obj.domain}/compare/{obj.version_number}/{latest_version.version_number}/"
+            actions.append(
+                f'<a href="{compare_url}" style="display: inline-block; padding: 8px 12px; background: var(--link-fg); color: white; text-decoration: none; border-radius: 4px; margin-right: 5px;">Compare with Latest</a>'
+            )
+
+        # Note: Rollback is POST-only, so provide link to pattern detail where rollback can be triggered
+        actions.append(
+            f'<em style="display: block; margin-top: 10px; color: var(--body-quiet-color);">To rollback to this version, visit the pattern detail page above.</em>'
+        )
+
+        return format_html('<br>'.join(actions))
+    version_actions_display.short_description = 'Available Actions'
+
+    def has_add_permission(self, request):
+        """Prevent manual creation - history is created automatically."""
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        """Prevent editing - history is immutable audit trail."""
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        """Prevent deletion - maintain complete audit trail."""
         return False

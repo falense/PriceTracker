@@ -4,6 +4,7 @@ URL configuration for PriceTracker app.
 
 from django.urls import path
 from . import views
+from . import addon_api
 
 urlpatterns = [
     # Main pages
@@ -74,6 +75,7 @@ urlpatterns = [
     # Admin pages (staff only)
     path("admin-dashboard/", views.admin_dashboard, name="admin_dashboard"),
     path("admin-dashboard/logs/", views.admin_logs, name="admin_logs"),
+    path("admin-dashboard/version-analytics/", views.version_analytics, name="version_analytics"),
     # Pattern Management
     path("admin-dashboard/patterns/", views.pattern_list, name="pattern_list"),
     path(
@@ -119,6 +121,27 @@ urlpatterns = [
         "api/patterns/retest-visualization/",
         views.api_retest_pattern_visualization,
         name="api_retest_pattern_visualization",
+    ),
+    # Firefox Addon API
+    path(
+        "api/addon/check-tracking/",
+        addon_api.addon_check_tracking,
+        name="addon_check_tracking",
+    ),
+    path(
+        "api/addon/track-product/",
+        addon_api.addon_track_product,
+        name="addon_track_product",
+    ),
+    path(
+        "api/addon/untrack-product/",
+        addon_api.addon_untrack_product,
+        name="addon_untrack_product",
+    ),
+    path(
+        "api/addon/csrf-token/",
+        addon_api.addon_csrf_token,
+        name="addon_csrf_token",
     ),
     # Admin Flags
     path("admin-dashboard/flags/", views.admin_flags_list, name="admin_flags_list"),
