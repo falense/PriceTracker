@@ -185,7 +185,7 @@ def addon_track_product(request):
             user=request.user.username,
             product_name=product.name,
             url=url,
-            created=created
+            was_created=created
         )
 
         return JsonResponse({
