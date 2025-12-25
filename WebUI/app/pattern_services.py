@@ -134,8 +134,7 @@ class PatternManagementService:
             },
         )
 
-        # PatternHistory now stores Python module reference instead of JSON
-        # (We may need to update PatternHistory model later to handle Python code)
+        # Pattern changes are now tracked via ExtractorVersion model
 
         return pattern, created
 

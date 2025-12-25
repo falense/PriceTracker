@@ -10,7 +10,7 @@ from typing import Optional, List, Dict, Any
 from django.db import transaction
 from django.utils import timezone
 
-from .models import ExtractorVersion, Pattern, ProductListing, PatternHistory
+from .models import ExtractorVersion, Pattern, ProductListing
 from .utils.git_utils import (
     get_current_commit_hash,
     get_commit_info,
@@ -394,18 +394,8 @@ class VersionAnalyticsService:
                 avg_success_rate = sum(p.success_rate for p in patterns) / len(patterns)
                 total_attempts = sum(p.total_attempts for p in patterns)
 
-                # Get historical success rate from PatternHistory at time of version
-                historical_rates = []
-                for pattern in patterns:
-                    history = PatternHistory.objects.filter(
-                        pattern=pattern,
-                        created_at__gte=version.created_at
-                    ).order_by('created_at').first()
-
-                    if history and history.success_rate_at_time is not None:
-                        historical_rates.append(history.success_rate_at_time)
-
-                avg_historical_rate = sum(historical_rates) / len(historical_rates) if historical_rates else None
+                # PatternHistory was removed - historical tracking now via ExtractorVersion
+                avg_historical_rate = None
 
                 version_impacts.append({
                     'version': version,
@@ -439,43 +429,10 @@ class VersionAnalyticsService:
 
         since = timezone.now() - timedelta(days=days)
 
-        history = PatternHistory.objects.filter(
-            domain=domain,
-            created_at__gte=since
-        ).order_by('created_at')
-
-        if not history.exists():
-            return {
-                'domain': domain,
-                'error': 'No history in time range'
-            }
-
-        # Extract trend data
-        trend_points = []
-        for h in history:
-            trend_points.append({
-                'version': h.version_number,
-                'date': h.created_at,
-                'success_rate': h.success_rate_at_time,
-                'total_attempts': h.total_attempts_at_time,
-                'change_type': h.change_type,
-                'changed_by': h.changed_by.username if h.changed_by else 'system',
-            })
-
-        # Calculate overall trend
-        if len(trend_points) >= 2:
-            first_rate = trend_points[0]['success_rate'] or 0
-            last_rate = trend_points[-1]['success_rate'] or 0
-            trend_direction = 'improving' if last_rate > first_rate else 'declining' if last_rate < first_rate else 'stable'
-        else:
-            trend_direction = 'insufficient_data'
-
+        # PatternHistory was removed - return empty trend data
         return {
             'domain': domain,
-            'days_analyzed': days,
-            'trend_points': trend_points,
-            'trend_direction': trend_direction,
-            'total_versions': len(trend_points),
+            'error': 'PatternHistory model removed - use ExtractorVersion for tracking'
         }
 
     @staticmethod
@@ -524,26 +481,11 @@ class VersionAnalyticsService:
 
         since = timezone.now() - timedelta(days=days)
 
-        # Count changes per user
-        user_stats = PatternHistory.objects.filter(
-            created_at__gte=since,
-            changed_by__isnull=False
-        ).values(
-            'changed_by__username'
-        ).annotate(
-            change_count=Count('id')
-        ).order_by('-change_count')
-
-        # Count by change type
-        change_type_stats = PatternHistory.objects.filter(
-            created_at__gte=since
-        ).values('change_type').annotate(
-            count=Count('id')
-        ).order_by('-count')
-
+        # PatternHistory was removed - return empty stats
         return {
             'days_analyzed': days,
-            'total_changes': PatternHistory.objects.filter(created_at__gte=since).count(),
-            'top_contributors': list(user_stats[:10]),
-            'change_type_breakdown': list(change_type_stats),
+            'total_changes': 0,
+            'top_contributors': [],
+            'change_type_breakdown': [],
+            'note': 'PatternHistory model removed - use ExtractorVersion for tracking'
         }
