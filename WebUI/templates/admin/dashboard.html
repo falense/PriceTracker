@@ -58,29 +58,6 @@
                 {% endif %}
             </a>
 
-            <!-- Pattern History -->
-            <a href="/admin/app/patternhistory/"
-               class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow">
-                <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
-                    Pattern History
-                </h3>
-                <p class="text-gray-600 dark:text-gray-400 mb-4">
-                    Audit trail of all pattern changes
-                </p>
-                {% if contribution_stats %}
-                <div class="text-sm text-gray-700 dark:text-gray-300">
-                    <div class="flex justify-between mb-1">
-                        <span>Changes (30d):</span>
-                        <span class="font-semibold">{{ contribution_stats.total_changes }}</span>
-                    </div>
-                    {% if contribution_stats.top_contributors %}
-                    <div class="text-xs">
-                        Top: {{ contribution_stats.top_contributors.0.changed_by__username }} ({{ contribution_stats.top_contributors.0.change_count }})
-                    </div>
-                    {% endif %}
-                </div>
-                {% endif %}
-            </a>
         </div>
     </section>
 

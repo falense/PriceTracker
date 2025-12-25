@@ -91,11 +91,11 @@ Multi-store data model with user subscriptions:
 4. **UserSubscription** - User subscription to a product with priority settings
 5. **PriceHistory** - Historical price records per listing
 6. **Pattern** - Extraction patterns per store domain
-7. **PatternHistory** - Version history for patterns with rollback support
+7. **ExtractorVersion** - Git-tracked extractor module versions
 8. **Notification** - User notifications linked to subscriptions
-9. **FetchLog** - Fetch attempt logs per listing
-10. **UserView** - User engagement analytics
-11. **AdminFlag** - Admin attention flags
+9. **UserView** - User engagement analytics
+10. **AdminFlag** - Admin attention flags
+11. **OperationLog** - Structured logging for operations and tasks
 
 ## Development
 
