@@ -75,7 +75,6 @@ urlpatterns = [
     # Admin pages (staff only)
     path("admin-dashboard/", views.admin_dashboard, name="admin_dashboard"),
     path("admin-dashboard/logs/", views.admin_logs, name="admin_logs"),
-    path("admin-dashboard/version-analytics/", views.version_analytics, name="version_analytics"),
     path("admin-dashboard/operation-analytics/", views.operation_log_analytics, name="operation_log_analytics"),
     path("admin-dashboard/operation-health/", views.operation_log_health, name="operation_log_health"),
     path("admin-dashboard/task/<str:task_id>/", views.task_timeline, name="task_timeline"),

@@ -14,29 +14,6 @@
             Extractor Management
         </h2>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <!-- Version Analytics -->
-            <a href="{% url 'version_analytics' %}"
-               class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow">
-                <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
-                    Version Analytics
-                </h3>
-                <p class="text-gray-600 dark:text-gray-400 mb-4">
-                    Impact analysis, adoption metrics, and trends
-                </p>
-                {% if adoption_stats %}
-                <div class="text-sm text-gray-700 dark:text-gray-300">
-                    <div class="flex justify-between mb-1">
-                        <span>Version Adoption:</span>
-                        <span class="font-semibold">{{ adoption_stats.version_adoption_rate|floatformat:1 }}%</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span>Active Modules:</span>
-                        <span class="font-semibold">{{ module_stats.total_modules }}</span>
-                    </div>
-                </div>
-                {% endif %}
-            </a>
-
             <!-- Extractor Versions -->
             <a href="/admin/app/extractorversion/"
                class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow">
