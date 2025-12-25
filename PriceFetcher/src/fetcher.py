@@ -213,7 +213,7 @@ class PriceFetcher:
             html = await self._fetch_html(url)
 
             # Extract data using Python extractor
-            extraction = self.extractor.extract_with_domain(html, product.domain)
+            extraction, extractor_module = self.extractor.extract_with_domain(html, product.domain)
 
             # Get previous extraction for comparison
             previous = self.storage.get_latest_price(
@@ -239,6 +239,7 @@ class PriceFetcher:
                     "valid": validation.valid,
                     "confidence": validation.confidence,
                     "extraction_method": extraction.price.method if extraction.price else None,
+                    "extractor_module": extractor_module,
                     "errors": validation.errors,
                     "warnings": validation.warnings,
                 },
@@ -250,7 +251,9 @@ class PriceFetcher:
             # Store if valid
             if validation.valid:
                 self.storage.save_price(
-                    product_id, extraction, validation, url, listing_id=product.listing_id
+                    product_id, extraction, validation, url,
+                    listing_id=product.listing_id,
+                    extractor_module=extractor_module
                 )
                 self.storage.update_pattern_stats(product.domain, success=True)
             else:

@@ -21,7 +21,7 @@ if str(EXTRACTOR_PATH) not in sys.path:
 class Extractor:
     """Apply Python extractors to HTML to extract product data."""
 
-    def extract_with_domain(self, html: str, domain: str) -> ExtractionResult:
+    def extract_with_domain(self, html: str, domain: str) -> tuple[ExtractionResult, Optional[str]]:
         """
         Extract data using Python extractor module for domain.
 
@@ -30,23 +30,34 @@ class Extractor:
             domain: Store domain (e.g., "komplett.no")
 
         Returns:
-            ExtractionResult with extracted fields
+            Tuple of (ExtractionResult with extracted fields, extractor module name)
+            Module name will be None if extraction failed or no extractor found
         """
         logger.debug("extraction_started", domain=domain)
 
         try:
             # Import generated_extractors API
-            from generated_extractors import extract_from_html
+            from generated_extractors import extract_from_html, get_parser
 
             # Normalize domain (remove www.)
             normalized_domain = domain.lower().replace("www.", "")
+
+            # Determine which module will be used
+            # Convert domain to module name (e.g., "komplett.no" -> "komplett_no")
+            module_name = normalized_domain.replace(".", "_").replace("-", "_")
+
+            # Check if parser exists for this domain
+            parser_module = get_parser(normalized_domain)
+            if parser_module is None:
+                logger.warning("no_extractor_found", domain=domain, module=module_name)
+                return self._empty_result(errors=["No extractor found for domain"]), None
 
             # Extract using Python module
             result = extract_from_html(normalized_domain, html)
 
             if result is None:
-                logger.warning("extraction_returned_empty", domain=domain)
-                return self._empty_result(errors=["Extractor returned no result"])
+                logger.warning("extraction_returned_empty", domain=domain, module=module_name)
+                return self._empty_result(errors=["Extractor returned no result"]), module_name
 
             # Convert to ExtractionResult format
             extraction = self._convert_to_extraction_result(result)
@@ -55,30 +66,33 @@ class Extractor:
                 logger.error(
                     "extraction_reported_errors",
                     domain=domain,
+                    module=module_name,
                     errors=extraction.errors,
                 )
             elif extraction.warnings:
                 logger.warning(
                     "extraction_reported_warnings",
                     domain=domain,
+                    module=module_name,
                     warnings=extraction.warnings,
                 )
 
             logger.info(
                 "extraction_completed",
                 domain=domain,
+                module=module_name,
                 price_found=extraction.price.value is not None,
                 method="python_extractor",
             )
 
-            return extraction
+            return extraction, module_name
 
         except ImportError as e:
             logger.exception("extractor_import_failed", domain=domain, error=str(e))
-            return self._empty_result(errors=[f"Extractor import failed: {e}"])
+            return self._empty_result(errors=[f"Extractor import failed: {e}"]), None
         except Exception as e:
             logger.exception("extraction_failed", domain=domain, error=str(e))
-            return self._empty_result(errors=[str(e)])
+            return self._empty_result(errors=[str(e)]), None
 
     def _convert_to_extraction_result(self, result) -> ExtractionResult:
         """Convert ExtractorResult to ExtractionResult model."""
