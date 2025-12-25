@@ -983,7 +983,9 @@ class PriceStorage:
 
     def get_pattern_success_stats(self, domain: str) -> Dict[str, Any]:
         """
-        Get pattern success statistics for a domain.
+        Get extractor version success statistics for a domain.
+
+        Retrieves stats from the active ExtractorVersion for the domain.
 
         Args:
             domain: Domain name (e.g., "amazon.com")
@@ -998,8 +1000,8 @@ class PriceStorage:
             cursor.execute(
                 """
                 SELECT success_rate, total_attempts, successful_attempts
-                FROM app_pattern
-                WHERE domain = ?
+                FROM app_extractorversion
+                WHERE domain = ? AND is_active = 1
                 """,
                 (domain,),
             )
@@ -1059,11 +1061,13 @@ class PriceStorage:
 
     def update_pattern_stats(self, domain: str, success: bool) -> None:
         """
-        Update pattern usage statistics.
+        Update extractor version usage statistics.
+
+        Finds the active ExtractorVersion for the domain and updates its success metrics.
 
         Args:
             domain: Domain name
-            success: Whether pattern extraction succeeded
+            success: Whether extraction succeeded
         """
         conn = self._get_connection()
         cursor = conn.cursor()
@@ -1071,22 +1075,21 @@ class PriceStorage:
         try:
             cursor.execute(
                 """
-                UPDATE app_pattern
+                UPDATE app_extractorversion
                 SET total_attempts = total_attempts + 1,
                     successful_attempts = successful_attempts + ?,
                     success_rate = CAST(successful_attempts + ? AS REAL) /
-                                   (total_attempts + 1),
-                    updated_at = ?
-                WHERE domain = ?
+                                   (total_attempts + 1)
+                WHERE domain = ? AND is_active = 1
                 """,
-                (1 if success else 0, 1 if success else 0, format_datetime_for_django_sqlite(), domain),
+                (1 if success else 0, 1 if success else 0, domain),
             )
 
             conn.commit()
-            logger.debug("pattern_stats_updated", domain=domain, success=success)
+            logger.debug("extractor_version_stats_updated", domain=domain, success=success)
 
         except Exception as e:
             conn.rollback()
-            logger.exception("pattern_stats_update_failed", domain=domain, error=str(e))
+            logger.exception("extractor_version_stats_update_failed", domain=domain, error=str(e))
         finally:
             conn.close()

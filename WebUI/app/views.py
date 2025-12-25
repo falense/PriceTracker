@@ -1213,7 +1213,6 @@ def admin_dashboard(request):
         return redirect("dashboard")
 
     from .version_services import VersionAnalyticsService
-    from .pattern_services import PatternManagementService
     from .models import ExtractorVersion
     from datetime import timedelta
     from django.utils import timezone
@@ -1230,9 +1229,21 @@ def admin_dashboard(request):
     # PatternHistory was removed - use ExtractorVersion for change tracking
     recent_pattern_changes = []
 
-    # Get pattern health stats (reuse existing logic)
-    pattern_result = PatternManagementService.get_all_patterns(with_stats=True)
-    pattern_stats = pattern_result.get('stats', {})
+    # Get extractor version health stats (active versions only)
+    active_versions = ExtractorVersion.objects.filter(is_active=True)
+    total = active_versions.count()
+    healthy = active_versions.filter(success_rate__gte=0.8).count()
+    warning = active_versions.filter(success_rate__gte=0.6, success_rate__lt=0.8).count()
+    failing = active_versions.filter(success_rate__lt=0.6).count()
+    pending = active_versions.filter(total_attempts=0).count()
+
+    pattern_stats = {
+        "total": total,
+        "healthy": healthy,
+        "warning": warning,
+        "failing": failing,
+        "pending": pending,
+    }
 
     # Get user contribution stats (last 30 days)
     contribution_stats = VersionAnalyticsService.get_user_contribution_stats(days=30)

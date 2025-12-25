@@ -576,90 +576,6 @@ class Notification(models.Model):
             self.save(update_fields=['read', 'read_at'])
 
 
-class Pattern(models.Model):
-    """
-    Extraction patterns per store domain.
-    Now references Store instead of just domain string.
-    """
-    id = models.AutoField(primary_key=True)
-
-    # Relationship to store
-    store = models.OneToOneField(
-        Store,
-        on_delete=models.CASCADE,
-        related_name='pattern',
-        null=True,  # Allow null during migration
-        blank=True
-    )
-
-    # Keep domain for backward compatibility during migration
-    domain = models.CharField(
-        max_length=255,
-        unique=True,
-        db_index=True
-    )
-
-    # Pattern data (Python modules only)
-    extractor_module = models.CharField(
-        max_length=255,
-        null=True,
-        blank=True,
-        db_index=True,
-        help_text='Python extractor module name (e.g., "generated_extractors.komplett_no")'
-    )
-
-    # Version tracking
-    extractor_version = models.ForeignKey(
-        'ExtractorVersion',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='patterns',
-        help_text='Git version of the extractor module'
-    )
-
-    # Success tracking
-    success_rate = models.FloatField(
-        default=0.0,
-        help_text='Percentage of successful extractions'
-    )
-    total_attempts = models.IntegerField(default=0)
-    successful_attempts = models.IntegerField(default=0)
-
-    # Metadata
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    last_validated = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        ordering = ['domain']
-        verbose_name = 'Pattern'
-        verbose_name_plural = 'Patterns'
-
-    def __str__(self):
-        module = self.extractor_module or "No module"
-        return f"Pattern for {self.domain} ({module}, {self.success_rate:.1%} success)"
-
-    def record_attempt(self, success: bool):
-        """Record pattern usage and update success rate."""
-        self.total_attempts += 1
-        if success:
-            self.successful_attempts += 1
-        self.success_rate = (
-            self.successful_attempts / self.total_attempts
-            if self.total_attempts > 0 else 0
-        )
-        self.save(update_fields=[
-            'total_attempts', 'successful_attempts',
-            'success_rate', 'updated_at'
-        ])
-
-    @property
-    def is_healthy(self):
-        """Check if pattern has good success rate."""
-        return self.success_rate >= 0.6
-
-
 class ExtractorVersion(models.Model):
     """
     Git version tracking for extractor modules.
@@ -703,6 +619,49 @@ class ExtractorVersion(models.Model):
         help_text='Additional git metadata (branch, tags, etc.)'
     )
 
+    # Domain and store reference (moved from Pattern)
+    domain = models.CharField(
+        max_length=255,
+        db_index=True,
+        null=True,  # Temporarily nullable for migration
+        blank=True,
+        help_text='Domain this extractor handles (e.g., komplett.no)'
+    )
+    store = models.ForeignKey(
+        'Store',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='extractor_versions',
+        help_text='Store this extractor is for'
+    )
+
+    # Active version tracking
+    is_active = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text='Whether this version is currently deployed for this domain'
+    )
+
+    # Health metrics (moved from Pattern)
+    success_rate = models.FloatField(
+        default=0.0,
+        help_text='Percentage of successful extractions for this version (0.0-1.0)'
+    )
+    total_attempts = models.IntegerField(
+        default=0,
+        help_text='Total extraction attempts with this version'
+    )
+    successful_attempts = models.IntegerField(
+        default=0,
+        help_text='Number of successful extraction attempts'
+    )
+    last_validated = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Last time this version was validated'
+    )
+
     # Timestamps
     created_at = models.DateTimeField(
         auto_now_add=True,
@@ -716,13 +675,51 @@ class ExtractorVersion(models.Model):
             models.Index(fields=['commit_hash']),
             models.Index(fields=['extractor_module', '-created_at']),
             models.Index(fields=['-created_at']),
+            models.Index(fields=['domain', 'is_active']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['domain', 'is_active'],
+                condition=models.Q(is_active=True),
+                name='unique_active_version_per_domain'
+            )
         ]
         verbose_name = 'Extractor Version'
         verbose_name_plural = 'Extractor Versions'
 
     def __str__(self):
         short_hash = self.commit_hash[:7] if self.commit_hash else 'unknown'
-        return f"{self.extractor_module} @ {short_hash}"
+        module_display = self.extractor_module or 'unknown'
+        if self.domain:
+            return f"{self.domain} ({module_display} @ {short_hash})"
+        return f"{module_display} @ {short_hash}"
+
+    def record_attempt(self, success: bool):
+        """
+        Record extraction attempt and update success rate.
+
+        Args:
+            success: Whether the extraction was successful
+        """
+        self.total_attempts += 1
+        if success:
+            self.successful_attempts += 1
+
+        self.success_rate = (
+            self.successful_attempts / self.total_attempts
+            if self.total_attempts > 0 else 0.0
+        )
+
+        self.save(update_fields=[
+            'total_attempts',
+            'successful_attempts',
+            'success_rate',
+        ])
+
+    @property
+    def is_healthy(self):
+        """Check if this version has good success rate (>= 60%)."""
+        return self.success_rate >= 0.6
 
 
 class UserView(models.Model):

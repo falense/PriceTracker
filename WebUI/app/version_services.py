@@ -10,7 +10,7 @@ from typing import Optional, List, Dict, Any
 from django.db import transaction
 from django.utils import timezone
 
-from .models import ExtractorVersion, Pattern, ProductListing
+from .models import ExtractorVersion, ProductListing
 from .utils.git_utils import (
     get_current_commit_hash,
     get_commit_info,
@@ -27,14 +27,20 @@ class VersionService:
     @staticmethod
     def get_or_create_version(
         extractor_module: str,
+        domain: Optional[str] = None,
+        store=None,
         commit_hash: Optional[str] = None,
+        set_active: bool = False,
     ) -> Optional[ExtractorVersion]:
         """
         Get or create an ExtractorVersion for the given module and commit.
 
         Args:
             extractor_module: Python module name (e.g., "generated_extractors.komplett_no")
+            domain: Domain this extractor handles (e.g., "komplett.no")
+            store: Store model instance (optional)
             commit_hash: Git commit hash (defaults to current HEAD)
+            set_active: If True, mark this version as active and deactivate others for this domain
 
         Returns:
             ExtractorVersion instance, or None if git info unavailable
@@ -47,44 +53,94 @@ class VersionService:
             logger.warning("Could not determine git commit hash")
             return None
 
-        # Check if version already exists
+        # Check if version already exists for this commit and module
         try:
             version = ExtractorVersion.objects.get(
                 commit_hash=commit_hash,
                 extractor_module=extractor_module
             )
             logger.debug(f"Found existing version: {version}")
+
+            # Update domain/store if provided and different
+            updated = False
+            if domain and version.domain != domain:
+                version.domain = domain
+                updated = True
+            if store and version.store != store:
+                version.store = store
+                updated = True
+
+            if updated:
+                version.save()
+
+            # Handle activation if requested
+            if set_active and domain and not version.is_active:
+                VersionService._set_active_version(version, domain)
+
             return version
         except ExtractorVersion.DoesNotExist:
             pass
 
         # Get commit info
         commit_info = get_commit_info(commit_hash)
-        if not commit_info:
-            logger.warning(f"Could not get commit info for {commit_hash}")
-            # Create minimal version record
-            return ExtractorVersion.objects.create(
-                commit_hash=commit_hash,
-                extractor_module=extractor_module,
-            )
 
-        # Create new version with full metadata
-        metadata = {
-            'branch': commit_info.get('branch'),
-            'tags': commit_info.get('tags', []),
+        # Prepare version data
+        version_data = {
+            'commit_hash': commit_hash,
+            'extractor_module': extractor_module,
+            'domain': domain,
+            'store': store,
+            'is_active': set_active,
         }
 
-        version = ExtractorVersion.objects.create(
-            commit_hash=commit_hash,
-            extractor_module=extractor_module,
-            commit_message=commit_info.get('message', ''),
-            commit_author=commit_info.get('author', ''),
-            commit_date=commit_info.get('date'),
-            metadata=metadata,
-        )
+        if commit_info:
+            metadata = {
+                'branch': commit_info.get('branch'),
+                'tags': commit_info.get('tags', []),
+            }
+            version_data.update({
+                'commit_message': commit_info.get('message', ''),
+                'commit_author': commit_info.get('author', ''),
+                'commit_date': commit_info.get('date'),
+                'metadata': metadata,
+            })
+        else:
+            logger.warning(f"Could not get commit info for {commit_hash}")
 
-        logger.info(f"Created new version: {version}")
+        # If setting as active, deactivate other versions for this domain first
+        if set_active and domain:
+            ExtractorVersion.objects.filter(
+                domain=domain,
+                is_active=True
+            ).exclude(
+                commit_hash=commit_hash,
+                extractor_module=extractor_module
+            ).update(is_active=False)
+
+        version = ExtractorVersion.objects.create(**version_data)
+        logger.info(f"Created new version: {version} (active={set_active})")
         return version
+
+    @staticmethod
+    def _set_active_version(version: ExtractorVersion, domain: str):
+        """
+        Mark a version as active and deactivate all other versions for the domain.
+
+        Args:
+            version: The version to activate
+            domain: The domain to manage
+        """
+        # Deactivate all other versions for this domain
+        ExtractorVersion.objects.filter(
+            domain=domain,
+            is_active=True
+        ).exclude(id=version.id).update(is_active=False)
+
+        # Activate this version
+        if not version.is_active:
+            version.is_active = True
+            version.save(update_fields=['is_active'])
+            logger.info(f"Activated version: {version}")
 
     @staticmethod
     def get_current_version(extractor_module: str) -> Optional[ExtractorVersion]:
@@ -179,9 +235,7 @@ class VersionService:
         if extractor_module:
             # Stats for single module
             latest_version = versions.order_by('-created_at').first()
-            pattern_count = Pattern.objects.filter(
-                extractor_version__extractor_module=extractor_module
-            ).count()
+            active_version = versions.filter(is_active=True).first()
             listing_count = ProductListing.objects.filter(
                 extractor_version__extractor_module=extractor_module
             ).count()
@@ -190,7 +244,7 @@ class VersionService:
                 'extractor_module': extractor_module,
                 'total_versions': total_versions,
                 'latest_version': latest_version,
-                'patterns_using_version': pattern_count,
+                'active_version': active_version,
                 'listings_using_version': listing_count,
             }
         else:
@@ -203,40 +257,6 @@ class VersionService:
                 'total_versions': total_versions,
                 'unique_modules': unique_modules,
             }
-
-    @staticmethod
-    @transaction.atomic
-    def update_pattern_version(
-        pattern: Pattern,
-        extractor_module: Optional[str] = None,
-        commit_hash: Optional[str] = None,
-    ) -> bool:
-        """
-        Update a pattern to track the current or specified extractor version.
-
-        Args:
-            pattern: Pattern instance to update
-            extractor_module: Module name (defaults to pattern.extractor_module)
-            commit_hash: Specific commit (defaults to current HEAD)
-
-        Returns:
-            True if updated successfully, False otherwise
-        """
-        module = extractor_module or pattern.extractor_module
-        if not module:
-            logger.warning(f"No extractor module specified for pattern {pattern.domain}")
-            return False
-
-        version = VersionService.get_or_create_version(module, commit_hash)
-        if not version:
-            logger.warning(f"Could not create version for {module}")
-            return False
-
-        pattern.extractor_version = version
-        pattern.save(update_fields=['extractor_version', 'updated_at'])
-
-        logger.info(f"Updated pattern {pattern.domain} to version {version}")
-        return True
 
     @staticmethod
     @transaction.atomic
@@ -322,15 +342,9 @@ class VersionAnalyticsService:
         """
         from django.db.models import Count
 
-        # Count patterns per version
-        pattern_versions = Pattern.objects.exclude(
-            extractor_version__isnull=True
-        ).values(
-            'extractor_version__extractor_module',
-            'extractor_version__commit_hash'
-        ).annotate(
-            pattern_count=Count('id')
-        ).order_by('-pattern_count')
+        # Count active extractor versions
+        active_versions = ExtractorVersion.objects.filter(is_active=True).count()
+        total_versions = ExtractorVersion.objects.count()
 
         # Count listings per version
         listing_versions = ProductListing.objects.exclude(
@@ -343,24 +357,19 @@ class VersionAnalyticsService:
         ).order_by('-listing_count')
 
         # Get total counts
-        total_patterns = Pattern.objects.count()
-        patterns_with_version = Pattern.objects.exclude(extractor_version__isnull=True).count()
-
         total_listings = ProductListing.objects.count()
         listings_with_version = ProductListing.objects.exclude(extractor_version__isnull=True).count()
 
         return {
-            'total_patterns': total_patterns,
-            'patterns_with_version': patterns_with_version,
-            'patterns_without_version': total_patterns - patterns_with_version,
-            'version_adoption_rate': (patterns_with_version / total_patterns * 100) if total_patterns > 0 else 0,
+            'total_extractors': active_versions,
+            'total_versions': total_versions,
+            'active_rate': (active_versions / total_versions * 100) if total_versions > 0 else 0,
 
             'total_listings': total_listings,
             'listings_with_version': listings_with_version,
             'listings_without_version': total_listings - listings_with_version,
             'listing_version_rate': (listings_with_version / total_listings * 100) if total_listings > 0 else 0,
 
-            'top_pattern_versions': list(pattern_versions[:10]),
             'top_listing_versions': list(listing_versions[:10]),
         }
 
@@ -445,8 +454,10 @@ class VersionAnalyticsService:
         """
         from django.db.models import Count
 
-        # Count patterns per module
-        module_stats = Pattern.objects.exclude(
+        # Count active extractors per module
+        module_stats = ExtractorVersion.objects.filter(
+            is_active=True
+        ).exclude(
             extractor_module__isnull=True
         ).values('extractor_module').annotate(
             count=Count('id')
@@ -460,7 +471,7 @@ class VersionAnalyticsService:
         ).order_by('-version_count')
 
         return {
-            'total_modules': Pattern.objects.exclude(extractor_module__isnull=True).values('extractor_module').distinct().count(),
+            'total_modules': ExtractorVersion.objects.filter(is_active=True).exclude(extractor_module__isnull=True).values('extractor_module').distinct().count(),
             'module_usage': list(module_stats),
             'version_diversity': list(version_diversity),
         }

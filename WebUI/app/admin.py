@@ -10,7 +10,7 @@ from django.contrib import messages
 from datetime import datetime
 from .models import (
     Product, Store, ProductListing, UserSubscription,
-    PriceHistory, Pattern, Notification, UserView, AdminFlag, OperationLog,
+    PriceHistory, Notification, UserView, AdminFlag, OperationLog,
     ExtractorVersion
 )
 
@@ -309,111 +309,6 @@ class PriceHistoryAdmin(admin.ModelAdmin):
     ordering = ['-recorded_at']
 
 
-@admin.register(Pattern)
-class PatternAdmin(admin.ModelAdmin):
-    list_display = ['domain', 'success_rate_display', 'total_attempts', 'last_validated', 'created_at']
-    list_filter = ['created_at', 'updated_at']
-    search_fields = ['domain']
-    readonly_fields = ['created_at', 'updated_at', 'success_rate', 'total_attempts', 'successful_attempts', 'extractor_module']
-    actions = ['regenerate_pattern']
-    fieldsets = (
-        ('Domain Information', {
-            'fields': ('domain', 'store')
-        }),
-        ('Extractor Module', {
-            'fields': ('extractor_module',),
-            'description': 'Python extractor module for this domain. Use the "Regenerate pattern" action to update.'
-        }),
-        ('Success Metrics', {
-            'fields': ('success_rate', 'total_attempts', 'successful_attempts', 'last_validated')
-        }),
-        ('Timestamps', {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',)
-        }),
-    )
-
-    def success_rate_display(self, obj):
-        """Display success rate with color coding."""
-        if obj.success_rate is None or obj.total_attempts is None:
-            return format_html('<span style="color: gray;">N/A</span>')
-
-        if obj.total_attempts < 10:
-            color = 'gray'
-            status = 'Not enough data'
-        elif obj.success_rate >= 0.8:
-            color = 'green'
-            status = 'Healthy'
-        elif obj.success_rate >= 0.6:
-            color = 'orange'
-            status = 'Warning'
-        else:
-            color = 'red'
-            status = 'Critical'
-
-        percentage = f'{obj.success_rate:.1%}'
-        return format_html(
-            '<span style="color: {}; font-weight: bold;">{}</span> ({})',
-            color, percentage, status
-        )
-    success_rate_display.short_description = 'Success Rate'
-
-    @admin.action(description='Regenerate pattern for selected domains')
-    def regenerate_pattern(self, request, queryset):
-        """Trigger pattern regeneration for selected domains."""
-        try:
-            from app.tasks import generate_pattern
-
-            regenerated = 0
-            failed = []
-
-            for pattern in queryset:
-                # Get a sample listing for this domain
-                sample_listing = ProductListing.objects.filter(
-                    store__domain=pattern.domain
-                ).first()
-
-                if not sample_listing:
-                    failed.append(f"{pattern.domain} (no listings found)")
-                    continue
-
-                try:
-                    task = generate_pattern.delay(
-                        url=sample_listing.url,
-                        domain=pattern.domain,
-                        listing_id=str(sample_listing.id)
-                    )
-
-                    regenerated += 1
-                    self.message_user(
-                        request,
-                        f'Queued pattern regeneration for {pattern.domain} (Task ID: {task.id})',
-                        level=messages.SUCCESS
-                    )
-                except Exception as e:
-                    failed.append(f"{pattern.domain} ({str(e)})")
-
-            if regenerated:
-                self.message_user(
-                    request,
-                    f'Successfully queued {regenerated} pattern regeneration task(s)',
-                    level=messages.SUCCESS
-                )
-
-            if failed:
-                self.message_user(
-                    request,
-                    f'Failed to queue: {", ".join(failed)}',
-                    level=messages.ERROR
-                )
-        except ImportError:
-            self.message_user(
-                request,
-                'Task module not available yet',
-                level=messages.WARNING
-            )
-
-
 @admin.register(Notification)
 class NotificationAdmin(admin.ModelAdmin):
     list_display = ['user', 'subscription', 'listing', 'notification_type', 'read', 'created_at']
@@ -505,16 +400,19 @@ class ExtractorVersionAdmin(admin.ModelAdmin):
     """Admin interface for ExtractorVersion - read-only like OperationLogAdmin."""
 
     list_display = [
+        'domain',
         'module_short',
+        'is_active',
         'commit_short',
+        'success_rate_display',
+        'total_attempts',
         'commit_author',
         'commit_date',
-        'pattern_count',
         'listing_count',
         'created_at'
     ]
-    list_filter = ['extractor_module', 'commit_date', 'created_at']
-    search_fields = ['commit_hash', 'extractor_module', 'commit_message', 'commit_author']
+    list_filter = ['is_active', 'extractor_module', 'domain', 'commit_date', 'created_at']
+    search_fields = ['domain', 'commit_hash', 'extractor_module', 'commit_message', 'commit_author']
     readonly_fields = [
         'commit_hash',
         'extractor_module',
@@ -522,9 +420,15 @@ class ExtractorVersionAdmin(admin.ModelAdmin):
         'commit_author',
         'commit_date',
         'metadata',
+        'domain',
+        'store',
+        'is_active',
+        'success_rate',
+        'total_attempts',
+        'successful_attempts',
+        'last_validated',
         'created_at',
         'formatted_metadata_display',
-        'related_patterns_display',
         'related_listings_display'
     ]
     date_hierarchy = 'created_at'
@@ -534,6 +438,12 @@ class ExtractorVersionAdmin(admin.ModelAdmin):
         ('Version Information', {
             'fields': ('extractor_module', 'commit_hash', 'created_at')
         }),
+        ('Domain & Status', {
+            'fields': ('domain', 'store', 'is_active')
+        }),
+        ('Health Metrics', {
+            'fields': ('success_rate', 'total_attempts', 'successful_attempts', 'last_validated')
+        }),
         ('Git Metadata', {
             'fields': ('commit_author', 'commit_date', 'commit_message')
         }),
@@ -542,8 +452,8 @@ class ExtractorVersionAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
         ('Usage', {
-            'fields': ('related_patterns_display', 'related_listings_display'),
-            'description': 'Patterns and listings using this version'
+            'fields': ('related_listings_display',),
+            'description': 'Listings using this version'
         }),
     )
 
@@ -559,14 +469,30 @@ class ExtractorVersionAdmin(admin.ModelAdmin):
         return parts[-1] if parts else obj.extractor_module
     module_short.short_description = 'Module'
 
-    def pattern_count(self, obj):
-        """Count patterns using this version."""
-        count = obj.patterns.count()
-        if count > 0:
-            url = f"/admin/app/pattern/?extractor_version__id__exact={obj.id}"
-            return format_html('<a href="{}">{} patterns</a>', url, count)
-        return '0 patterns'
-    pattern_count.short_description = 'Patterns'
+    def success_rate_display(self, obj):
+        """Display success rate with color coding."""
+        if obj.success_rate is None or obj.total_attempts is None:
+            return format_html('<span style="color: gray;">N/A</span>')
+
+        if obj.total_attempts < 10:
+            color = 'gray'
+            status = 'Not enough data'
+        elif obj.success_rate >= 0.8:
+            color = 'green'
+            status = 'Healthy'
+        elif obj.success_rate >= 0.6:
+            color = 'orange'
+            status = 'Warning'
+        else:
+            color = 'red'
+            status = 'Critical'
+
+        percentage = f'{obj.success_rate:.1%}'
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span> ({})',
+            color, percentage, status
+        )
+    success_rate_display.short_description = 'Success Rate'
 
     def listing_count(self, obj):
         """Count listings using this version."""
@@ -589,24 +515,6 @@ class ExtractorVersionAdmin(admin.ModelAdmin):
             formatted_json
         )
     formatted_metadata_display.short_description = 'Metadata'
-
-    def related_patterns_display(self, obj):
-        """Show related patterns with links."""
-        patterns = obj.patterns.all()[:10]
-        if not patterns:
-            return format_html('<em>No patterns using this version</em>')
-
-        links = []
-        for pattern in patterns:
-            url = f"/admin/app/pattern/{pattern.pk}/change/"
-            links.append(f'<a href="{url}">{pattern.domain}</a>')
-
-        more = obj.patterns.count() - 10
-        if more > 0:
-            links.append(f'<em>... and {more} more</em>')
-
-        return format_html('<br>'.join(links))
-    related_patterns_display.short_description = 'Related Patterns'
 
     def related_listings_display(self, obj):
         """Show count of related listings."""

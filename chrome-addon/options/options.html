@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PriceTracker Settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>PriceTracker Settings</h1>
+      <p class="subtitle">Configure your price tracking preferences</p>
+    </header>
+
+    <main>
+      <section class="settings-section">
+        <h2>Default Priority</h2>
+        <p class="description">
+          Choose the default monitoring frequency for new products added via the extension.
+        </p>
+
+        <div class="setting-item">
+          <label for="priority-select">Priority Level:</label>
+          <select id="priority-select" class="select-input">
+            <option value="1">Low - Daily checks (lightest on server)</option>
+            <option value="2" selected>Normal - Hourly checks (recommended)</option>
+            <option value="3">High - Every 15 minutes (most frequent)</option>
+          </select>
+        </div>
+
+        <div class="info-box">
+          <strong>ℹ️ Priority Levels Explained:</strong>
+          <ul>
+            <li><strong>Low:</strong> Product prices checked once per day</li>
+            <li><strong>Normal:</strong> Product prices checked every hour</li>
+            <li><strong>High:</strong> Product prices checked every 15 minutes</li>
+          </ul>
+          <p>You can change individual product priorities later in the PriceTracker web interface.</p>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <h2>WebUI Connection</h2>
+        <p class="description">
+          The extension connects to your PriceTracker instance.
+        </p>
+
+        <div class="setting-item">
+          <label>Server URL:</label>
+          <div class="value-display">http://localhost:8000</div>
+        </div>
+
+        <div class="info-box">
+          <strong>ℹ️ Note:</strong> The extension currently connects to localhost:8000 by default.
+          Make sure the PriceTracker web application is running and you are logged in.
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <button id="save-btn" class="btn btn-primary">Save Settings</button>
+      <button id="reset-btn" class="btn btn-secondary">Reset to Defaults</button>
+
+      <div id="status-message" class="status-message hidden">
+        <span id="status-text">Settings saved!</span>
+      </div>
+    </footer>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
