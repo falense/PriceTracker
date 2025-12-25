@@ -333,6 +333,27 @@ class VersionAnalyticsService:
     """Service for version analytics and impact analysis."""
 
     @staticmethod
+    def _determine_health_status(success_rate: float, total_attempts: int) -> str:
+        """
+        Determine health status from success metrics.
+
+        Args:
+            success_rate: Success rate (0.0 to 1.0)
+            total_attempts: Total extraction attempts
+
+        Returns:
+            Health status: 'healthy'|'warning'|'failing'|'pending'
+        """
+        if total_attempts == 0:
+            return 'pending'
+        elif success_rate >= 0.8:
+            return 'healthy'
+        elif success_rate >= 0.6:
+            return 'warning'
+        else:
+            return 'failing'
+
+    @staticmethod
     def get_version_adoption_stats() -> Dict[str, Any]:
         """
         Get version adoption metrics across all extractors.
@@ -527,17 +548,18 @@ class VersionAnalyticsService:
 
         for version in active_versions:
             # Calculate health status
-            if version.total_attempts == 0:
-                status = 'pending'
+            status = VersionAnalyticsService._determine_health_status(
+                version.success_rate, version.total_attempts
+            )
+
+            # Update counts
+            if status == 'pending':
                 pending_count += 1
-            elif version.success_rate >= 0.8:
-                status = 'healthy'
+            elif status == 'healthy':
                 healthy_count += 1
-            elif version.success_rate >= 0.6:
-                status = 'warning'
+            elif status == 'warning':
                 warning_count += 1
-            else:
-                status = 'failing'
+            elif status == 'failing':
                 failing_count += 1
 
             # Count listings using this version
@@ -582,3 +604,81 @@ class VersionAnalyticsService:
                 'pending_modules': pending_count,
             }
         }
+
+    @staticmethod
+    def get_module_version_history(module_name: str) -> Dict[str, Any]:
+        """
+        Get detailed version history for a specific extractor module.
+
+        Args:
+            module_name: Extractor module name (e.g., "generated_extractors.komplett_no")
+
+        Returns:
+            Dict with active version, current stats, and version history
+        """
+        try:
+            # Get active version
+            active_version = ExtractorVersion.objects.get(
+                extractor_module=module_name,
+                is_active=True
+            )
+
+            # Calculate current stats from active version
+            current_status = VersionAnalyticsService._determine_health_status(
+                active_version.success_rate,
+                active_version.total_attempts
+            )
+
+            current_stats = {
+                'success_rate': active_version.success_rate * 100,  # Convert to percentage
+                'total_attempts': active_version.total_attempts,
+                'successful_attempts': active_version.successful_attempts,
+                'status': current_status,
+            }
+
+            # Get all versions for this module
+            all_versions = ExtractorVersion.objects.filter(
+                extractor_module=module_name
+            ).prefetch_related('listings').order_by('-created_at')
+
+            version_history = []
+            for version in all_versions:
+                # Count listings using this version
+                listing_count = version.listings.count()
+
+                # Truncate commit message
+                commit_message = version.commit_message[:100] if version.commit_message else ''
+                if len(version.commit_message or '') > 100:
+                    commit_message += '...'
+
+                version_history.append({
+                    'version': version,
+                    'commit_hash': version.commit_hash,
+                    'commit_short': version.commit_hash[:7] if version.commit_hash else '',
+                    'commit_message': commit_message,
+                    'commit_author': version.commit_author,
+                    'commit_date': version.commit_date,
+                    'success_rate': version.success_rate * 100,  # Convert to percentage
+                    'total_attempts': version.total_attempts,
+                    'listing_count': listing_count,
+                    'is_active': version.is_active,
+                })
+
+            return {
+                'module_name': module_name,
+                'active_version': active_version,
+                'domain': active_version.domain,
+                'current_stats': current_stats,
+                'version_history': version_history,
+                'error': None,
+            }
+
+        except ExtractorVersion.DoesNotExist:
+            return {
+                'module_name': module_name,
+                'active_version': None,
+                'domain': None,
+                'current_stats': None,
+                'version_history': [],
+                'error': f'No active version found for module {module_name}',
+            }
