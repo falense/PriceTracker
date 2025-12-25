@@ -49,14 +49,14 @@ class Extractor:
             # Check if parser exists for this domain
             parser_module = get_parser(normalized_domain)
             if parser_module is None:
-                logger.warning("no_extractor_found", domain=domain, module=module_name)
+                logger.warning("no_extractor_found", domain=domain, extractor_module=module_name)
                 return self._empty_result(errors=["No extractor found for domain"]), None
 
             # Extract using Python module
             result = extract_from_html(normalized_domain, html)
 
             if result is None:
-                logger.warning("extraction_returned_empty", domain=domain, module=module_name)
+                logger.warning("extraction_returned_empty", domain=domain, extractor_module=module_name)
                 return self._empty_result(errors=["Extractor returned no result"]), module_name
 
             # Convert to ExtractionResult format
@@ -66,21 +66,21 @@ class Extractor:
                 logger.error(
                     "extraction_reported_errors",
                     domain=domain,
-                    module=module_name,
+                    extractor_module=module_name,
                     errors=extraction.errors,
                 )
             elif extraction.warnings:
                 logger.warning(
                     "extraction_reported_warnings",
                     domain=domain,
-                    module=module_name,
+                    extractor_module=module_name,
                     warnings=extraction.warnings,
                 )
 
             logger.info(
                 "extraction_completed",
                 domain=domain,
-                module=module_name,
+                extractor_module=module_name,
                 price_found=extraction.price.value is not None,
                 method="python_extractor",
             )

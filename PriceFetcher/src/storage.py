@@ -209,7 +209,7 @@ class PriceStorage:
         if not version_info:
             logger.warning(
                 "extractor_not_in_manifest",
-                module=extractor_module,
+                extractor_module=extractor_module,
                 available_modules=list(manifest.keys())[:5],  # Show first 5
             )
             return None
@@ -217,7 +217,7 @@ class PriceStorage:
         # Extract commit hash and other info
         commit_hash = version_info.get('commit_hash')
         if not commit_hash:
-            logger.warning("no_commit_hash_in_manifest", module=extractor_module)
+            logger.warning("no_commit_hash_in_manifest", extractor_module=extractor_module)
             return None
 
         conn = self._get_connection()
@@ -235,7 +235,7 @@ class PriceStorage:
             row = cursor.fetchone()
 
             if row:
-                logger.debug("found_existing_version", version_id=row["id"], module=extractor_module)
+                logger.debug("found_existing_version", version_id=row["id"], extractor_module=extractor_module)
                 return row["id"]
 
             # Prepare metadata - include all version info
