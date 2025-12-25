@@ -1596,13 +1596,47 @@ def operation_log_health(request):
 
 @login_required
 def patterns_status(request):
-    """Pattern health status."""
+    """
+    Extractor module health status with dual-mode display.
+
+    Modes:
+    - Overview: Display all active extractors with health metrics
+    - Detail: Show version history for a specific extractor module
+    """
     if not request.user.is_staff:
         messages.error(request, "Access denied.")
         return redirect("dashboard")
 
-    # TODO: Implement
-    return render(request, "admin/patterns.html")
+    from .version_services import VersionAnalyticsService
+
+    # Check if requesting detail view for specific module
+    selected_module = request.GET.get('module')
+
+    if selected_module:
+        # DETAIL MODE: Show version history for specific module
+        module_data = VersionAnalyticsService.get_module_version_history(selected_module)
+
+        # Get list of all modules for navigation
+        overview_data = VersionAnalyticsService.get_module_health_overview()
+        all_modules = overview_data['modules']
+
+        context = {
+            'view_mode': 'detail',
+            'module_data': module_data,
+            'all_modules': all_modules,
+            'selected_module': selected_module,
+        }
+    else:
+        # OVERVIEW MODE: Show all active extractors
+        overview_data = VersionAnalyticsService.get_module_health_overview()
+
+        context = {
+            'view_mode': 'overview',
+            'modules': overview_data['modules'],
+            'summary_stats': overview_data['summary_stats'],
+        }
+
+    return render(request, "admin/patterns.html", context)
 
 
 @login_required
