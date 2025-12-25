@@ -113,9 +113,9 @@ urlpatterns = [
         views.resolve_admin_flag,
         name="resolve_admin_flag",
     ),
-    # Legacy pattern status view (keep for backward compatibility)
+    # Extractor health and version history
     path(
-        "admin-dashboard/patterns-old/", views.patterns_status, name="patterns_status"
+        "admin-dashboard/patterns/", views.patterns_status, name="patterns_status"
     ),
     # Settings
     path("settings/", views.user_settings, name="user_settings"),
