@@ -15,7 +15,6 @@ from .models import (
     ProductListing,
     UserSubscription,
     Notification,
-    Pattern,
     OperationLog,
 )
 
@@ -1754,7 +1753,16 @@ def api_regenerate_pattern(request):
         return JsonResponse({"error": "Domain is required"}, status=400)
 
     try:
-        pattern = Pattern.objects.get(domain=domain)
+        from .models import ExtractorVersion
+
+        # Check if there's an active extractor for this domain
+        extractor = ExtractorVersion.objects.filter(domain=domain, is_active=True).first()
+
+        if not extractor:
+            return JsonResponse(
+                {"error": f"No active extractor found for {domain}"},
+                status=404
+            )
 
         # Find sample listing for this domain
         sample_listing = ProductListing.objects.filter(store__domain=domain).first()
@@ -1781,8 +1789,5 @@ def api_regenerate_pattern(request):
                 "message": f"Pattern regeneration started (Task ID: {task.id})",
             }
         )
-
-    except Pattern.DoesNotExist:
-        return JsonResponse({"error": f"Pattern for {domain} not found"}, status=404)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
