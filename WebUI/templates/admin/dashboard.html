@@ -90,14 +90,14 @@
             Pattern Management
         </h2>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <!-- Patterns -->
-            <a href="{% url 'pattern_list' %}"
+            <!-- Patterns (Legacy View) -->
+            <a href="{% url 'patterns_status' %}"
                class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow">
                 <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
                     Extraction Patterns
                 </h3>
                 <p class="text-gray-600 dark:text-gray-400 mb-4">
-                    Manage, test, and validate extraction patterns
+                    View pattern status (legacy view)
                 </p>
                 {% if pattern_stats %}
                 <div class="text-sm text-gray-700 dark:text-gray-300">
@@ -171,6 +171,43 @@
                 <p class="text-gray-600 dark:text-gray-400">
                     View logs sorted by task type (price fetches, patterns, etc.)
                 </p>
+            </a>
+
+            <!-- Operation Analytics -->
+            <a href="{% url 'operation_log_analytics' %}"
+               class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow">
+                <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                    Operation Analytics
+                </h3>
+                <p class="text-gray-600 dark:text-gray-400">
+                    Comprehensive statistics, timeline analysis, and failure reporting
+                </p>
+            </a>
+
+            <!-- Service Health -->
+            <a href="{% url 'operation_log_health' %}"
+               class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow">
+                <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                    Service Health
+                </h3>
+                <p class="text-gray-600 dark:text-gray-400 mb-4">
+                    Real-time health monitoring for all services
+                </p>
+                {% if operation_health %}
+                <div class="text-sm space-y-1">
+                    {% for service, health in operation_health.services.items %}
+                    <div class="flex justify-between items-center">
+                        <span class="capitalize">{{ service }}:</span>
+                        <span class="px-2 py-0.5 rounded text-xs font-semibold
+                            {% if health.status == 'healthy' %}bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200
+                            {% elif health.status == 'degraded' %}bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200
+                            {% else %}bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200{% endif %}">
+                            {{ health.status }}
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
             </a>
 
             <!-- Celery Monitor -->

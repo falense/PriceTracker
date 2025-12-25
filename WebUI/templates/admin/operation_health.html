@@ -1,0 +1,176 @@
+{% extends 'base.html' %}
+
+{% block title %}Service Health - PriceTracker{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            Service Health Dashboard
+        </h1>
+        <p class="text-gray-600 dark:text-gray-400">
+            Real-time health monitoring for all services (last {{ health_summary.period_hours }} hours)
+        </p>
+        <p class="text-sm text-gray-500 dark:text-gray-500 mt-1">
+            Last updated: {{ health_summary.timestamp|date:"M d, Y H:i:s" }}
+        </p>
+    </div>
+
+    {% if health_summary %}
+    <!-- Service Health Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        {% for service, health in health_summary.services.items %}
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border-2
+            {% if health.status == 'healthy' %}border-green-500
+            {% elif health.status == 'degraded' %}border-yellow-500
+            {% else %}border-red-500{% endif %} p-6">
+
+            <!-- Status Badge -->
+            <div class="flex justify-between items-start mb-4">
+                <h2 class="text-2xl font-bold text-gray-900 dark:text-white capitalize">
+                    {{ service }}
+                </h2>
+                <span class="px-3 py-1 rounded-full text-sm font-semibold
+                    {% if health.status == 'healthy' %}bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200
+                    {% elif health.status == 'degraded' %}bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200
+                    {% else %}bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200{% endif %}">
+                    {{ health.status|upper }}
+                </span>
+            </div>
+
+            <!-- Health Score -->
+            <div class="mb-4">
+                <div class="flex justify-between items-end mb-2">
+                    <span class="text-sm text-gray-600 dark:text-gray-400">Health Score</span>
+                    <span class="text-3xl font-bold
+                        {% if health.health_score >= 90 %}text-green-600 dark:text-green-400
+                        {% elif health.health_score >= 70 %}text-yellow-600 dark:text-yellow-400
+                        {% else %}text-red-600 dark:text-red-400{% endif %}">
+                        {{ health.health_score }}%
+                    </span>
+                </div>
+                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div class="h-2 rounded-full
+                        {% if health.health_score >= 90 %}bg-green-500
+                        {% elif health.health_score >= 70 %}bg-yellow-500
+                        {% else %}bg-red-500{% endif %}"
+                        style="width: {{ health.health_score }}%">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Metrics -->
+            <div class="space-y-3">
+                <div class="flex justify-between items-center">
+                    <span class="text-sm text-gray-600 dark:text-gray-400">Total Logs</span>
+                    <span class="font-semibold text-gray-900 dark:text-white">{{ health.total_logs }}</span>
+                </div>
+
+                <div class="flex justify-between items-center">
+                    <span class="text-sm text-gray-600 dark:text-gray-400">Error Count</span>
+                    <span class="font-semibold text-red-600 dark:text-red-400">{{ health.error_count }}</span>
+                </div>
+
+                <div class="flex justify-between items-center">
+                    <span class="text-sm text-gray-600 dark:text-gray-400">Error Rate</span>
+                    <span class="font-semibold
+                        {% if health.error_rate < 5 %}text-green-600 dark:text-green-400
+                        {% elif health.error_rate < 15 %}text-yellow-600 dark:text-yellow-400
+                        {% else %}text-red-600 dark:text-red-400{% endif %}">
+                        {{ health.error_rate }}%
+                    </span>
+                </div>
+
+                <div class="flex justify-between items-center">
+                    <span class="text-sm text-gray-600 dark:text-gray-400">Success Rate</span>
+                    <span class="font-semibold text-green-600 dark:text-green-400">{{ health.success_rate }}%</span>
+                </div>
+
+                {% if health.avg_duration_ms %}
+                <div class="flex justify-between items-center pt-2 border-t border-gray-200 dark:border-gray-700">
+                    <span class="text-sm text-gray-600 dark:text-gray-400">Avg Duration</span>
+                    <span class="font-mono text-sm text-gray-900 dark:text-white">{{ health.avg_duration_ms|floatformat:0 }}ms</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Overall System Status -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+            Overall System Status
+        </h2>
+
+        {% with healthy_count=0 degraded_count=0 unhealthy_count=0 %}
+            {% for service, health in health_summary.services.items %}
+                {% if health.status == 'healthy' %}
+                    {% with healthy_count=healthy_count|add:1 %}{% endwith %}
+                {% elif health.status == 'degraded' %}
+                    {% with degraded_count=degraded_count|add:1 %}{% endwith %}
+                {% else %}
+                    {% with unhealthy_count=unhealthy_count|add:1 %}{% endwith %}
+                {% endif %}
+            {% endfor %}
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="text-center">
+                    <div class="text-4xl font-bold text-green-600 dark:text-green-400 mb-2">
+                        {{ health_summary.services|length }}
+                    </div>
+                    <div class="text-sm text-gray-600 dark:text-gray-400">Services Monitored</div>
+                </div>
+
+                <div class="text-center">
+                    <div class="text-4xl font-bold
+                        {% if health_summary.services|length == 3 %}text-green-600 dark:text-green-400
+                        {% else %}text-yellow-600 dark:text-yellow-400{% endif %} mb-2">
+                        ✓
+                    </div>
+                    <div class="text-sm text-gray-600 dark:text-gray-400">
+                        {% if health_summary.services|length == 3 %}
+                            All Services Operational
+                        {% else %}
+                            Some Services Degraded
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="text-center">
+                    <div class="text-sm text-gray-600 dark:text-gray-400 mb-2">Last Check</div>
+                    <div class="text-lg font-semibold text-gray-900 dark:text-white">
+                        {{ health_summary.timestamp|date:"H:i:s" }}
+                    </div>
+                </div>
+            </div>
+        {% endwith %}
+
+        <!-- Quick Actions -->
+        <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">Quick Actions</h3>
+            <div class="flex gap-4">
+                <a href="{% url 'operation_log_analytics' %}"
+                   class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
+                    View Detailed Analytics
+                </a>
+                <a href="{% url 'admin_logs' %}"
+                   class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg">
+                    View Logs
+                </a>
+                <button onclick="location.reload()"
+                        class="px-4 py-2 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg">
+                    Refresh
+                </button>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-6">
+        <p class="text-yellow-800 dark:text-yellow-200">
+            No health data available. This could indicate that the OperationLog system is not yet active or there are no logs in the last 24 hours.
+        </p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

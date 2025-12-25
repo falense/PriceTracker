@@ -1214,7 +1214,7 @@ def admin_dashboard(request):
 
     from .version_services import VersionAnalyticsService
     from .pattern_services import PatternManagementService
-    from .models import ExtractorVersion, PatternHistory
+    from .models import ExtractorVersion
     from datetime import timedelta
     from django.utils import timezone
 
@@ -1227,10 +1227,8 @@ def admin_dashboard(request):
     # Get recent version activity
     recent_versions = ExtractorVersion.objects.all().order_by('-created_at')[:5]
 
-    # Get recent pattern changes
-    recent_pattern_changes = PatternHistory.objects.select_related(
-        'pattern', 'changed_by'
-    ).order_by('-created_at')[:10]
+    # PatternHistory was removed - use ExtractorVersion for change tracking
+    recent_pattern_changes = []
 
     # Get pattern health stats (reuse existing logic)
     pattern_result = PatternManagementService.get_all_patterns(with_stats=True)
@@ -1246,6 +1244,14 @@ def admin_dashboard(request):
     except Exception:
         celery_stats = None
 
+    # OperationLog health summary
+    try:
+        from .operation_log_services import OperationLogAnalyticsService
+        operation_health = OperationLogAnalyticsService.get_service_health_summary()
+    except Exception as e:
+        logger.warning(f"Error getting operation log health: {e}")
+        operation_health = None
+
     context = {
         'adoption_stats': adoption_stats,
         'module_stats': module_stats,
@@ -1254,6 +1260,7 @@ def admin_dashboard(request):
         'pattern_stats': pattern_stats,
         'contribution_stats': contribution_stats,
         'celery_stats': celery_stats,
+        'operation_health': operation_health,
     }
 
     return render(request, "admin/dashboard.html", context)
@@ -1369,29 +1376,18 @@ def admin_logs(request):
     recent_fetch_logs = fetch_logs_query[:100] if task_type in ["all", "fetch"] else []
 
     # ========== PATTERN HISTORY ==========
-    from .models import PatternHistory
-
-    pattern_history_query = PatternHistory.objects.select_related(
-        "pattern", "changed_by"
-    ).order_by("-created_at")
-
-    if time_since:
-        pattern_history_query = pattern_history_query.filter(created_at__gte=time_since)
+    # PatternHistory model was removed - use ExtractorVersion for tracking
 
     # Get pattern history statistics
     pattern_stats = {
-        "total": pattern_history_query.count(),
-        "auto_generated": pattern_history_query.filter(
-            change_type="auto_generated"
-        ).count(),
-        "manual_edit": pattern_history_query.filter(change_type="manual_edit").count(),
-        "rollback": pattern_history_query.filter(change_type="rollback").count(),
+        "total": 0,
+        "auto_generated": 0,
+        "manual_edit": 0,
+        "rollback": 0,
     }
 
-    # Get recent pattern changes
-    recent_pattern_changes = (
-        pattern_history_query[:50] if task_type in ["all", "pattern"] else []
-    )
+    # Get recent pattern changes (now empty, since PatternHistory was removed)
+    recent_pattern_changes = []
 
     # ========== ADMIN FLAGS ==========
     from .models import AdminFlag
@@ -1477,6 +1473,115 @@ def admin_logs(request):
     }
 
     return render(request, "admin/logs.html", context)
+
+
+@login_required
+def operation_log_analytics(request):
+    """Operation log analytics dashboard with comprehensive statistics."""
+    if not request.user.is_staff:
+        messages.error(request, "Access denied.")
+        return redirect("dashboard")
+
+    from .operation_log_services import OperationLogAnalyticsService
+    from datetime import timedelta
+    from django.utils import timezone
+
+    # Get filter parameters
+    service = request.GET.get('service', None)
+    time_range = request.GET.get('range', '24h')
+
+    # Calculate time filter
+    now = timezone.now()
+    time_filters = {
+        '1h': now - timedelta(hours=1),
+        '24h': now - timedelta(hours=24),
+        '7d': now - timedelta(days=7),
+        '30d': now - timedelta(days=30),
+        'all': None,
+    }
+    time_since = time_filters.get(time_range)
+
+    # Get comprehensive statistics
+    statistics = OperationLogAnalyticsService.get_statistics(
+        service=service,
+        time_since=time_since
+    )
+
+    # Get failure analysis
+    failure_analysis = OperationLogAnalyticsService.get_failure_analysis(
+        service=service,
+        time_since=time_since,
+        limit=20
+    )
+
+    # Get performance metrics
+    performance_metrics = OperationLogAnalyticsService.get_performance_metrics(
+        service=service,
+        time_since=time_since
+    )
+
+    # Get timeline analysis (hourly for 24h, daily for longer)
+    bucket_size = 'hour' if time_range in ['1h', '24h'] else 'day'
+    timeline_analysis = OperationLogAnalyticsService.get_timeline_analysis(
+        time_since=time_since,
+        bucket_size=bucket_size
+    )
+
+    context = {
+        'service': service,
+        'time_range': time_range,
+        'statistics': statistics,
+        'failure_analysis': failure_analysis,
+        'performance_metrics': performance_metrics,
+        'timeline_analysis': timeline_analysis,
+    }
+
+    return render(request, "admin/operation_analytics.html", context)
+
+
+@login_required
+def task_timeline(request, task_id):
+    """View detailed timeline for a specific task."""
+    if not request.user.is_staff:
+        messages.error(request, "Access denied.")
+        return redirect("dashboard")
+
+    from .operation_log_services import OperationLogService
+
+    # Get timeline for this task
+    timeline = OperationLogService.get_task_timeline(task_id)
+
+    if not timeline:
+        messages.warning(request, f"No logs found for task {task_id}")
+        return redirect("admin_logs")
+
+    context = {
+        'task_id': task_id,
+        'timeline': timeline,
+        'total_events': len(timeline),
+        'total_duration_ms': timeline[-1]['elapsed_ms'] if timeline else 0,
+    }
+
+    return render(request, "admin/task_timeline.html", context)
+
+
+@login_required
+def operation_log_health(request):
+    """Service health summary dashboard."""
+    if not request.user.is_staff:
+        messages.error(request, "Access denied.")
+        return redirect("dashboard")
+
+    from .operation_log_services import OperationLogAnalyticsService
+
+    # Get service health summary
+    health_summary = OperationLogAnalyticsService.get_service_health_summary()
+
+    context = {
+        'health_summary': health_summary,
+    }
+
+    return render(request, "admin/operation_health.html", context)
 
 
 @login_required
