@@ -93,43 +93,6 @@
                 </div>
                 {% endif %}
             </a>
-
-            <!-- Recent Pattern Changes -->
-            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
-                    Recent Changes
-                </h3>
-                <p class="text-gray-600 dark:text-gray-400 mb-4">
-                    Latest pattern modifications
-                </p>
-                {% if recent_pattern_changes %}
-                <div class="text-xs space-y-2">
-                    {% for change in recent_pattern_changes|slice:":5" %}
-                    <div class="border-l-2 border-gray-300 dark:border-gray-600 pl-2">
-                        <div class="font-medium text-gray-900 dark:text-white truncate">
-                            {{ change.domain }}
-                        </div>
-                        <div class="text-gray-600 dark:text-gray-400">
-                            v{{ change.version_number }} • {{ change.get_change_type_display }}
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% else %}
-                <p class="text-sm text-gray-500 dark:text-gray-400">No recent changes</p>
-                {% endif %}
-            </div>
-
-            <!-- Admin Flags -->
-            <a href="{% url 'admin_flags_list' %}"
-               class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow">
-                <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
-                    Admin Flags
-                </h3>
-                <p class="text-gray-600 dark:text-gray-400">
-                    Review issues requiring attention
-                </p>
-            </a>
         </div>
     </section>
 
