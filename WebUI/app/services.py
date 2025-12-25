@@ -9,7 +9,6 @@ from .models import (
     Store,
     ProductListing,
     UserSubscription,
-    Pattern,
     Notification,
     PriceHistory,
     AdminFlag,
@@ -169,9 +168,10 @@ class ProductService:
         product.subscriber_count = product.subscriptions.filter(active=True).count()
         product.save()
 
-        # Step 6: Ensure pattern exists
-        if not Pattern.objects.filter(domain=domain).exists():
-            logger.info(f"No pattern found for {domain}, triggering generation")
+        # Step 6: Ensure extractor exists
+        from .models import ExtractorVersion
+        if not ExtractorVersion.objects.filter(domain=domain, is_active=True).exists():
+            logger.info(f"No active extractor found for {domain}, triggering generation")
             ProductService._trigger_pattern_generation(url, domain, str(listing.id))
         else:
             ProductService._trigger_fetch_listing(str(listing.id))
