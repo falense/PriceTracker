@@ -61,62 +61,31 @@ def generate_pattern(self, url: str, domain: str, listing_id: str = None):
 async def _generate_pattern_async(
     task_self, url: str, domain: str, listing_id: str = None
 ):
-    """Async implementation of generate_pattern."""
-    from app.models import Pattern
-    from ExtractorPatternAgent import PatternGenerator
-    from asgiref.sync import sync_to_async
+    """
+    Deprecated: JSON pattern generation is no longer supported.
+    The system now uses Python extractor modules tracked by git.
+    """
+    logger.warning(
+        f"Pattern generation called for {domain} but JSON patterns are deprecated. "
+        f"Please use Python extractor modules instead."
+    )
 
-    try:
-        logger.info(f"Generating pattern for {domain}: {url}")
+    # Queue fetch task if listing_id provided (extractor should already exist)
+    fetch_task_id = None
+    if listing_id:
+        try:
+            fetch_task = fetch_listing_price.delay(listing_id)
+            fetch_task_id = fetch_task.id
+            logger.info(f"Queued price fetch task {fetch_task_id} for listing {listing_id}")
+        except Exception as e:
+            logger.error(f"Failed to queue price fetch for listing {listing_id}: {e}")
 
-        # Create generator and run pattern generation
-        generator = PatternGenerator()
-        pattern_data = await generator.generate(url, domain)
-
-        # Save to database (wrap Django ORM call with sync_to_async)
-        def save_pattern():
-            pattern, created = Pattern.objects.update_or_create(
-                domain=domain,
-                defaults={
-                    "pattern_json": pattern_data,
-                    "extractor_module": pattern_data.get("extractor_module"),
-                    "last_validated": timezone.now(),
-                },
-            )
-            return pattern, created
-
-        pattern, created = await sync_to_async(save_pattern)()
-        action = "Created" if created else "Updated"
-        logger.info(f"{action} pattern in database for {domain}")
-
-        # Queue fetch task if listing_id provided
-        fetch_task_id = None
-        if listing_id:
-            try:
-                fetch_task = fetch_listing_price.delay(listing_id)
-                fetch_task_id = fetch_task.id
-                logger.info(
-                    f"Queued price fetch task {fetch_task_id} after pattern generation "
-                    f"for listing {listing_id}"
-                )
-            except Exception as e:
-                logger.error(
-                    f"Failed to queue price fetch after pattern generation for listing "
-                    f"{listing_id}: {e}"
-                )
-
-        return {
-            "status": "success",
-            "domain": domain,
-            "action": action,
-            "fields_found": pattern_data.get("metadata", {}).get("fields_found", 0),
-            "confidence": pattern_data.get("metadata", {}).get("overall_confidence", 0),
-            "fetch_task_id": fetch_task_id,
-        }
-
-    except Exception as e:
-        logger.exception(f"Pattern generation error for {domain}")
-        return {"status": "error", "domain": domain, "error": str(e)}
+    return {
+        "status": "deprecated",
+        "domain": domain,
+        "message": "JSON pattern generation is deprecated. Use Python extractor modules.",
+        "fetch_task_id": fetch_task_id,
+    }
 
 
 @shared_task(
@@ -287,20 +256,21 @@ def fetch_prices_by_aggregated_priority():
 @shared_task
 def check_pattern_health():
     """
-    Daily task to check pattern success rates and flag low performers.
+    Daily task to check extractor success rates and flag low performers.
     """
-    from app.models import Pattern, AdminFlag
+    from app.models import ExtractorVersion, AdminFlag
 
     MIN_SUCCESS_RATE = 0.6
 
-    patterns = Pattern.objects.filter(total_attempts__gte=10)
+    # Check active extractors with at least 10 attempts
+    extractors = ExtractorVersion.objects.filter(is_active=True, total_attempts__gte=10)
 
     flagged = 0
-    for pattern in patterns:
-        if pattern.success_rate < MIN_SUCCESS_RATE:
+    for extractor in extractors:
+        if extractor.success_rate < MIN_SUCCESS_RATE:
             # Check if already flagged
             existing_flag = AdminFlag.objects.filter(
-                domain=pattern.domain,
+                domain=extractor.domain,
                 flag_type="pattern_low_confidence",
                 status="pending",
             ).exists()
@@ -308,17 +278,17 @@ def check_pattern_health():
             if not existing_flag:
                 AdminFlag.objects.create(
                     flag_type="pattern_low_confidence",
-                    domain=pattern.domain,
-                    url=f"Pattern for {pattern.domain}",
-                    error_message=f"Success rate: {pattern.success_rate:.1%} ({pattern.successful_attempts}/{pattern.total_attempts})",
+                    domain=extractor.domain,
+                    url=f"Extractor for {extractor.domain}",
+                    error_message=f"Success rate: {extractor.success_rate:.1%} ({extractor.successful_attempts}/{extractor.total_attempts})",
                     status="pending",
                 )
                 flagged += 1
                 logger.warning(
-                    f"Flagged low-confidence pattern: {pattern.domain} ({pattern.success_rate:.1%})"
+                    f"Flagged low-confidence extractor: {extractor.domain} ({extractor.success_rate:.1%})"
                 )
 
-    logger.info(f"Pattern health check complete. Flagged {flagged} patterns.")
+    logger.info(f"Extractor health check complete. Flagged {flagged} extractors.")
     return {"flagged": flagged}
 
 
