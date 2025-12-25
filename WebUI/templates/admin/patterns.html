@@ -1,23 +1,282 @@
 {% extends 'base.html' %}
 
-{% block title %}Pattern Management - PriceTracker{% endblock %}
+{% block title %}Extractor Health - PriceTracker{% endblock %}
 
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Back Button -->
     <div class="mb-6">
+        {% if view_mode == 'detail' %}
+        <a href="{% url 'patterns_status' %}" class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">
+            ← Back to Extractor Overview
+        </a>
+        {% else %}
         <a href="{% url 'admin_dashboard' %}" class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">
             ← Back to Admin Dashboard
         </a>
+        {% endif %}
     </div>
 
-    <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-8">
-        Extraction Patterns
-    </h1>
-
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-        <p class="text-gray-500 dark:text-gray-400 text-center py-8">
-            Pattern management will be implemented in Phase 2
+    {% if view_mode == 'overview' %}
+    <!-- OVERVIEW MODE -->
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            Extractor Health Overview
+        </h1>
+        <p class="text-gray-600 dark:text-gray-400">
+            Monitor active extractor modules and their health metrics
         </p>
     </div>
+
+    <!-- Summary Stats Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+        <!-- Total Modules -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div class="text-sm text-gray-600 dark:text-gray-400 mb-1">Total Modules</div>
+            <div class="text-3xl font-bold text-gray-900 dark:text-white">{{ summary_stats.total_modules }}</div>
+        </div>
+
+        <!-- Healthy -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border-2 border-green-500 p-6">
+            <div class="text-sm text-gray-600 dark:text-gray-400 mb-1">Healthy</div>
+            <div class="text-3xl font-bold text-green-600 dark:text-green-400">{{ summary_stats.healthy_modules }}</div>
+            <div class="text-xs text-gray-500 dark:text-gray-500 mt-1">≥80% success rate</div>
+        </div>
+
+        <!-- Warning -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border-2 border-yellow-500 p-6">
+            <div class="text-sm text-gray-600 dark:text-gray-400 mb-1">Warning</div>
+            <div class="text-3xl font-bold text-yellow-600 dark:text-yellow-400">{{ summary_stats.warning_modules }}</div>
+            <div class="text-xs text-gray-500 dark:text-gray-500 mt-1">60-80% success rate</div>
+        </div>
+
+        <!-- Failing -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border-2 border-red-500 p-6">
+            <div class="text-sm text-gray-600 dark:text-gray-400 mb-1">Failing</div>
+            <div class="text-3xl font-bold text-red-600 dark:text-red-400">{{ summary_stats.failing_modules }}</div>
+            <div class="text-xs text-gray-500 dark:text-gray-500 mt-1">&lt;60% success rate</div>
+        </div>
+
+        <!-- Pending -->
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border-2 border-gray-400 p-6">
+            <div class="text-sm text-gray-600 dark:text-gray-400 mb-1">Pending</div>
+            <div class="text-3xl font-bold text-gray-600 dark:text-gray-400">{{ summary_stats.pending_modules }}</div>
+            <div class="text-xs text-gray-500 dark:text-gray-500 mt-1">No attempts yet</div>
+        </div>
+    </div>
+
+    <!-- Modules Table -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Active Extractors</h2>
+        </div>
+
+        {% if modules %}
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Domain</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Module</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Current Version</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Commit Message</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Health</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Listings</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Versions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                    {% for module in modules %}
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-750">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="font-medium text-gray-900 dark:text-white">{{ module.domain }}</div>
+                        </td>
+                        <td class="px-6 py-4">
+                            <a href="?module={{ module.module_name }}" class="text-blue-600 dark:text-blue-400 hover:underline font-mono text-sm">
+                                {{ module.module_name|slice:":40" }}{% if module.module_name|length > 40 %}...{% endif %}
+                            </a>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm">
+                                <div class="font-mono text-gray-900 dark:text-white">{{ module.commit_short }}</div>
+                                {% if module.commit_date %}
+                                <div class="text-xs text-gray-500 dark:text-gray-500">{{ module.commit_date|date:"M d, Y" }}</div>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="text-sm text-gray-600 dark:text-gray-400 max-w-xs truncate" title="{{ module.commit_message }}">
+                                {{ module.commit_message|truncatechars:60 }}
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center space-x-2">
+                                <span class="px-2 py-1 text-xs font-semibold rounded-full
+                                    {% if module.health.status == 'healthy' %}bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200
+                                    {% elif module.health.status == 'warning' %}bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200
+                                    {% elif module.health.status == 'failing' %}bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200
+                                    {% else %}bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200{% endif %}">
+                                    {{ module.health.status|upper }}
+                                </span>
+                                <span class="text-sm font-semibold
+                                    {% if module.health.status == 'healthy' %}text-green-600 dark:text-green-400
+                                    {% elif module.health.status == 'warning' %}text-yellow-600 dark:text-yellow-400
+                                    {% elif module.health.status == 'failing' %}text-red-600 dark:text-red-400
+                                    {% else %}text-gray-600 dark:text-gray-400{% endif %}">
+                                    {{ module.health.success_rate|floatformat:1 }}%
+                                </span>
+                            </div>
+                            <div class="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                                {{ module.health.successful_attempts }}/{{ module.health.total_attempts }} attempts
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                            {{ module.listing_count }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                            {{ module.version_count }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="px-6 py-12 text-center">
+            <p class="text-gray-500 dark:text-gray-400">No active extractors found</p>
+        </div>
+        {% endif %}
+    </div>
+
+    {% else %}
+    <!-- DETAIL MODE -->
+    {% if module_data.error %}
+    <div class="bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800 rounded-lg p-6">
+        <h2 class="text-xl font-semibold text-red-800 dark:text-red-200 mb-2">Module Not Found</h2>
+        <p class="text-red-600 dark:text-red-400">{{ module_data.error }}</p>
+    </div>
+    {% else %}
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            {{ module_data.domain }}
+        </h1>
+        <p class="text-gray-600 dark:text-gray-400 font-mono text-sm">
+            {{ module_data.module_name }}
+        </p>
+    </div>
+
+    <!-- Current Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border-2
+            {% if module_data.current_stats.status == 'healthy' %}border-green-500
+            {% elif module_data.current_stats.status == 'warning' %}border-yellow-500
+            {% elif module_data.current_stats.status == 'failing' %}border-red-500
+            {% else %}border-gray-400{% endif %} p-6">
+            <div class="text-sm text-gray-600 dark:text-gray-400 mb-1">Status</div>
+            <div class="text-2xl font-bold
+                {% if module_data.current_stats.status == 'healthy' %}text-green-600 dark:text-green-400
+                {% elif module_data.current_stats.status == 'warning' %}text-yellow-600 dark:text-yellow-400
+                {% elif module_data.current_stats.status == 'failing' %}text-red-600 dark:text-red-400
+                {% else %}text-gray-600 dark:text-gray-400{% endif %}">
+                {{ module_data.current_stats.status|upper }}
+            </div>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div class="text-sm text-gray-600 dark:text-gray-400 mb-1">Success Rate</div>
+            <div class="text-2xl font-bold text-gray-900 dark:text-white">
+                {{ module_data.current_stats.success_rate|floatformat:1 }}%
+            </div>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div class="text-sm text-gray-600 dark:text-gray-400 mb-1">Successful</div>
+            <div class="text-2xl font-bold text-green-600 dark:text-green-400">
+                {{ module_data.current_stats.successful_attempts }}
+            </div>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div class="text-sm text-gray-600 dark:text-gray-400 mb-1">Total Attempts</div>
+            <div class="text-2xl font-bold text-gray-900 dark:text-white">
+                {{ module_data.current_stats.total_attempts }}
+            </div>
+        </div>
+    </div>
+
+    <!-- Version History -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Version History</h2>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">Git commit history for this extractor module</p>
+        </div>
+
+        {% if module_data.version_history %}
+        <div class="divide-y divide-gray-200 dark:divide-gray-700">
+            {% for version in module_data.version_history %}
+            <div class="px-6 py-4 {% if version.is_active %}bg-blue-50 dark:bg-blue-900/20{% else %}hover:bg-gray-50 dark:hover:bg-gray-750{% endif %}">
+                <div class="flex items-start justify-between">
+                    <div class="flex-1">
+                        <!-- Commit Info -->
+                        <div class="flex items-center space-x-3 mb-2">
+                            <span class="font-mono text-sm font-semibold text-gray-900 dark:text-white">
+                                {{ version.commit_short }}
+                            </span>
+                            {% if version.is_active %}
+                            <span class="px-2 py-1 bg-blue-600 text-white text-xs font-semibold rounded uppercase">
+                                Current
+                            </span>
+                            {% endif %}
+                            {% if version.commit_date %}
+                            <span class="text-sm text-gray-500 dark:text-gray-500">
+                                {{ version.commit_date|date:"M d, Y H:i" }}
+                            </span>
+                            {% endif %}
+                        </div>
+
+                        <!-- Commit Message -->
+                        <p class="text-sm text-gray-700 dark:text-gray-300 mb-2">
+                            {{ version.commit_message }}
+                        </p>
+
+                        <!-- Author -->
+                        {% if version.commit_author %}
+                        <p class="text-xs text-gray-500 dark:text-gray-500">
+                            by {{ version.commit_author }}
+                        </p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Stats -->
+                    <div class="ml-6 flex flex-col items-end space-y-1">
+                        <div class="text-sm">
+                            <span class="text-gray-600 dark:text-gray-400">Success Rate:</span>
+                            <span class="font-semibold
+                                {% if version.total_attempts == 0 %}text-gray-500 dark:text-gray-500
+                                {% elif version.success_rate >= 80 %}text-green-600 dark:text-green-400
+                                {% elif version.success_rate >= 60 %}text-yellow-600 dark:text-yellow-400
+                                {% else %}text-red-600 dark:text-red-400{% endif %}">
+                                {% if version.total_attempts == 0 %}N/A{% else %}{{ version.success_rate|floatformat:1 }}%{% endif %}
+                            </span>
+                        </div>
+                        <div class="text-xs text-gray-500 dark:text-gray-500">
+                            {{ version.total_attempts }} attempts
+                        </div>
+                        <div class="text-xs text-gray-500 dark:text-gray-500">
+                            {{ version.listing_count }} listings
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="px-6 py-12 text-center">
+            <p class="text-gray-500 dark:text-gray-400">No version history available</p>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+    {% endif %}
 </div>
 {% endblock %}
