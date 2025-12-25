@@ -58,23 +58,14 @@
                 {% endif %}
             </a>
 
-        </div>
-    </section>
-
-    <!-- Pattern Management Section -->
-    <section class="mb-12">
-        <h2 class="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-4">
-            Pattern Management
-        </h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <!-- Patterns (Legacy View) -->
+            <!-- Extraction Patterns -->
             <a href="{% url 'patterns_status' %}"
                class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow">
                 <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
                     Extraction Patterns
                 </h3>
                 <p class="text-gray-600 dark:text-gray-400 mb-4">
-                    View pattern status (legacy view)
+                    View pattern status and health metrics
                 </p>
                 {% if pattern_stats %}
                 <div class="text-sm text-gray-700 dark:text-gray-300">
