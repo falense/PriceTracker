@@ -42,15 +42,15 @@ class Extractor:
             # Normalize domain (remove www.)
             normalized_domain = domain.lower().replace("www.", "")
 
-            # Determine which module will be used
-            # Convert domain to module name (e.g., "komplett.no" -> "komplett_no")
-            module_name = normalized_domain.replace(".", "_").replace("-", "_")
-
             # Check if parser exists for this domain
             parser_module = get_parser(normalized_domain)
             if parser_module is None:
-                logger.warning("no_extractor_found", domain=domain, extractor_module=module_name)
+                logger.warning("no_extractor_found", domain=domain)
                 return self._empty_result(errors=["No extractor found for domain"]), None
+
+            # Get the actual module name from the parser module
+            # e.g., "ExtractorPatternAgent.generated_extractors.www_sinful_no" -> "www_sinful_no"
+            module_name = parser_module.__name__.split(".")[-1]
 
             # Extract using Python module
             result = extract_from_html(normalized_domain, html)
