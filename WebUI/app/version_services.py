@@ -500,3 +500,85 @@ class VersionAnalyticsService:
             'change_type_breakdown': [],
             'note': 'PatternHistory model removed - use ExtractorVersion for tracking'
         }
+
+    @staticmethod
+    def get_module_health_overview() -> Dict[str, Any]:
+        """
+        Get health data for all active extractor versions.
+
+        Returns comprehensive health overview with one entry per domain.
+        Each domain has exactly one active ExtractorVersion.
+
+        Returns:
+            Dict with modules list and summary statistics
+        """
+        from django.db.models import Count
+
+        # Get all active extractor versions (one per domain)
+        active_versions = ExtractorVersion.objects.filter(
+            is_active=True
+        ).select_related('store').order_by('domain')
+
+        modules = []
+        healthy_count = 0
+        warning_count = 0
+        failing_count = 0
+        pending_count = 0
+
+        for version in active_versions:
+            # Calculate health status
+            if version.total_attempts == 0:
+                status = 'pending'
+                pending_count += 1
+            elif version.success_rate >= 0.8:
+                status = 'healthy'
+                healthy_count += 1
+            elif version.success_rate >= 0.6:
+                status = 'warning'
+                warning_count += 1
+            else:
+                status = 'failing'
+                failing_count += 1
+
+            # Count listings using this version
+            listing_count = version.listings.count()
+
+            # Count total versions for this module
+            version_count = ExtractorVersion.objects.filter(
+                extractor_module=version.extractor_module
+            ).count()
+
+            # Truncate commit message
+            commit_message = version.commit_message[:100] if version.commit_message else ''
+            if len(version.commit_message or '') > 100:
+                commit_message += '...'
+
+            modules.append({
+                'version': version,
+                'domain': version.domain,
+                'module_name': version.extractor_module,
+                'commit_hash': version.commit_hash,
+                'commit_short': version.commit_hash[:7] if version.commit_hash else '',
+                'commit_message': commit_message,
+                'commit_date': version.commit_date,
+                'commit_author': version.commit_author,
+                'health': {
+                    'success_rate': version.success_rate * 100,  # Convert 0-1 to 0-100
+                    'status': status,
+                    'total_attempts': version.total_attempts,
+                    'successful_attempts': version.successful_attempts,
+                },
+                'listing_count': listing_count,
+                'version_count': version_count,
+            })
+
+        return {
+            'modules': modules,
+            'summary_stats': {
+                'total_modules': len(modules),
+                'healthy_modules': healthy_count,
+                'warning_modules': warning_count,
+                'failing_modules': failing_count,
+                'pending_modules': pending_count,
+            }
+        }
