@@ -85,6 +85,12 @@
     "version": "1.1"
   },
   "hismith_com": {
+    "commit_author": "Sondre Engebraten",
+    "commit_date": "2025-12-26T20:58:29+01:00",
+    "commit_email": "sondre.engebraten@gmail.com",
+    "commit_hash": "c8a2f88ae38725c9d9dc56d0c7cba3786f1ecd47",
+    "commit_hash_short": "c8a2f88",
+    "commit_message": "feat: Create extraction pattern for hismith.com products",
     "confidence": 0.95,
     "domain": "hismith.com",
     "generated_at": "2025-12-26T20:56:34",
@@ -194,6 +200,13 @@
     "generated_at": "2025-12-22T21:03:19",
     "module": "proshop_no",
     "version": "1.0"
+  },
+  "store_steampowered_com": {
+    "confidence": 0.95,
+    "domain": "store.steampowered.com",
+    "generated_at": "2025-12-26T21:01:42",
+    "module": "store_steampowered_com",
+    "version": "1.1"
   },
   "www_blivakker_no": {
     "commit_author": "Copilot",
