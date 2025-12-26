@@ -6,12 +6,14 @@ Usage:
     python scripts/fetch_sample.py https://www.komplett.no/product/1310167
     python scripts/fetch_sample.py <url> --domain komplett.no
     python scripts/fetch_sample.py <url> --quiet
+    python scripts/fetch_sample.py <url> --no-headless  # For sites with strong bot detection
 """
 
 import asyncio
 import sys
 import argparse
 import json
+import random
 from pathlib import Path
 from urllib.parse import urlparse
 from datetime import datetime
@@ -101,6 +103,93 @@ async def handle_cookie_dialog(page, quiet: bool = False):
             continue
 
 
+async def simulate_human_behavior(page, quiet: bool = False):
+    """
+    Simulate human-like behavior to avoid bot detection.
+    
+    - Random mouse movements
+    - Scrolling behavior
+    - Natural timing delays
+    
+    Args:
+        page: Playwright page object
+        quiet: Suppress output
+    """
+    try:
+        # Random small mouse movements
+        viewport = page.viewport_size
+        if viewport:
+            for _ in range(3):
+                x = random.randint(100, viewport['width'] - 100)
+                y = random.randint(100, viewport['height'] - 100)
+                await page.mouse.move(x, y)
+                await page.wait_for_timeout(random.randint(100, 300))
+        
+        # Simulate scrolling behavior
+        await page.evaluate("""
+            () => {
+                window.scrollTo({
+                    top: Math.random() * 500,
+                    behavior: 'smooth'
+                });
+            }
+        """)
+        await page.wait_for_timeout(random.randint(500, 1000))
+        
+        # Scroll back up
+        await page.evaluate("() => window.scrollTo({top: 0, behavior: 'smooth'})")
+        await page.wait_for_timeout(random.randint(300, 600))
+        
+        if not quiet:
+            print("✓ Human behavior simulated")
+            
+    except Exception as e:
+        # Non-critical, continue even if simulation fails
+        if not quiet:
+            print(f"⚠ Human behavior simulation failed: {e}")
+
+
+async def check_for_captcha(page, quiet: bool = False):
+    """
+    Check if page contains a CAPTCHA or bot detection.
+    
+    Returns:
+        bool: True if CAPTCHA detected, False otherwise
+    """
+    captcha_indicators = [
+        "captcha",
+        "robot",
+        "unusual traffic",
+        "verify you are human",
+        "security check",
+        "punish",  # AliExpress uses this
+        "slider verification",
+    ]
+    
+    try:
+        page_content = await page.content()
+        page_text = (await page.inner_text("body")).lower()
+        
+        for indicator in captcha_indicators:
+            if indicator in page_text.lower() or indicator in page_content.lower():
+                if not quiet:
+                    print(f"⚠ CAPTCHA/bot detection detected ('{indicator}' found)")
+                return True
+        
+        # Check page title
+        title = await page.title()
+        if any(indicator in title.lower() for indicator in captcha_indicators):
+            if not quiet:
+                print(f"⚠ CAPTCHA/bot detection in title: {title}")
+            return True
+            
+    except Exception as e:
+        if not quiet:
+            print(f"⚠ Error checking for CAPTCHA: {e}")
+    
+    return False
+
+
 class SampleFetcher:
     """Fetches and stores web page samples for extractor development."""
 
@@ -118,7 +207,7 @@ class SampleFetcher:
             self.base_dir = Path(base_dir)
 
     async def fetch_sample(
-        self, url: str, domain: str = None, quiet: bool = False
+        self, url: str, domain: str = None, quiet: bool = False, headless: bool = True
     ) -> Path:
         """
         Fetch HTML and screenshot, save to test_data/{domain}/sample_{timestamp}/.
@@ -127,6 +216,8 @@ class SampleFetcher:
             url: URL to fetch
             domain: Domain name (auto-detected from URL if not provided)
             quiet: Suppress verbose output
+            headless: Run browser in headless mode (default: True)
+                     Set to False for sites with strong bot detection
 
         Returns:
             Path to sample directory
@@ -151,25 +242,63 @@ class SampleFetcher:
         if not quiet:
             print(f"Fetching: {url}")
             print(f"Saving to: {sample_dir}")
+            if not headless:
+                print("⚠ Running in non-headless mode (visible browser)")
 
         # Fetch with Playwright
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True, args=STEALTH_ARGS)
+            # Launch browser with stealth args
+            browser = await p.chromium.launch(
+                headless=headless,
+                args=STEALTH_ARGS
+            )
 
             try:
                 context = await browser.new_context(**get_stealth_context_options())
                 page = await context.new_page()
                 await apply_stealth(page)
 
-                # Navigate to page
-                start_time = datetime.now()
-                await page.goto(url, wait_until="load", timeout=60000)
+                # Add random initial delay to appear more human-like
+                await page.wait_for_timeout(random.randint(500, 1500))
 
-                # Wait for dynamic content to load
-                await page.wait_for_timeout(2000)
+                # Navigate to page with longer timeout for slow sites
+                start_time = datetime.now()
+                try:
+                    await page.goto(url, wait_until="domcontentloaded", timeout=90000)
+                except PlaywrightTimeoutError:
+                    if not quiet:
+                        print("⚠ Page load timeout, continuing anyway...")
+
+                # Wait for dynamic content with random delay
+                await page.wait_for_timeout(random.randint(3000, 5000))
+
+                # Simulate human behavior (mouse movement, scrolling)
+                await simulate_human_behavior(page, quiet)
 
                 # Try to handle cookie consent dialogs
                 await handle_cookie_dialog(page, quiet)
+
+                # Additional wait after cookie dialog
+                await page.wait_for_timeout(random.randint(1000, 2000))
+
+                # Check for CAPTCHA
+                has_captcha = await check_for_captcha(page, quiet)
+                if has_captcha and not headless:
+                    if not quiet:
+                        print("⚠ CAPTCHA detected! Waiting 30 seconds for manual solving...")
+                        print("  Please solve the CAPTCHA in the browser window.")
+                    await page.wait_for_timeout(30000)  # Wait 30 seconds
+                    
+                    # Re-check after waiting
+                    has_captcha = await check_for_captcha(page, quiet)
+                    if has_captcha and not quiet:
+                        print("⚠ CAPTCHA still present after waiting")
+
+                # Wait for network to be idle
+                try:
+                    await page.wait_for_load_state("networkidle", timeout=10000)
+                except:
+                    pass  # Non-critical
 
                 # Calculate fetch duration
                 fetch_duration = (datetime.now() - start_time).total_seconds()
@@ -205,6 +334,8 @@ class SampleFetcher:
             "html_size": len(html),
             "screenshot_size": len(screenshot_bytes),
             "fetch_duration_seconds": round(fetch_duration, 2),
+            "headless": headless,
+            "captcha_detected": has_captcha,
         }
 
         metadata_path = sample_dir / "metadata.json"
@@ -262,6 +393,7 @@ Examples:
   %(prog)s https://www.komplett.no/product/1310167
   %(prog)s https://example.com --domain example.com
   %(prog)s https://example.com --quiet
+  %(prog)s https://www.aliexpress.com/item/123456.html --no-headless
         """,
     )
 
@@ -273,6 +405,12 @@ Examples:
 
     parser.add_argument(
         "-q", "--quiet", action="store_true", help="Suppress verbose output"
+    )
+
+    parser.add_argument(
+        "--no-headless",
+        action="store_true",
+        help="Run browser in visible mode (recommended for sites with strong bot detection like AliExpress)",
     )
 
     parser.add_argument(
@@ -291,7 +429,12 @@ Examples:
     try:
         fetcher = SampleFetcher()
         sample_dir = asyncio.run(
-            fetcher.fetch_sample(args.url, args.domain, args.quiet)
+            fetcher.fetch_sample(
+                args.url, 
+                args.domain, 
+                args.quiet,
+                headless=not args.no_headless
+            )
         )
 
         # Output sample directory path for easy parsing by subprocess callers
@@ -301,7 +444,7 @@ Examples:
         sys.exit(0)
 
     except PlaywrightTimeoutError:
-        print("Error: Page load timeout (60s)", file=sys.stderr)
+        print("Error: Page load timeout (90s)", file=sys.stderr)
         sys.exit(2)
 
     except PermissionError as e:

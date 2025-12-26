@@ -2,18 +2,123 @@
 
 ## Overview
 
-The AliExpress extractor (`aliexpress_com.py`) has been created but cannot be fully tested via automated fetching due to AliExpress's strong anti-bot protection (CAPTCHA).
+The AliExpress extractor (`aliexpress_com.py`) has been created and tested with mock data. AliExpress has strong anti-bot protection, but the **enhanced fetcher now includes multiple anti-detection measures** to improve success rates.
 
-## The Challenge
+## Enhanced Fetcher Features
 
-When attempting to fetch AliExpress product pages programmatically, you will encounter:
-- CAPTCHA challenges
-- "Unusual traffic" detection
-- Slider verification requirements
+The fetch_sample.py script now includes multiple anti-detection measures:
 
-## Extractor Implementation
+✅ **Human-like behavior simulation**
+- Random mouse movements
+- Natural scrolling patterns
+- Variable timing delays (3-5 seconds for page load)
 
-The extractor has been designed based on AliExpress's known HTML structure:
+✅ **CAPTCHA detection and handling**
+- Automatic detection of CAPTCHA and bot-blocking pages
+- Manual solving support with non-headless mode
+- 30-second wait for user interaction when CAPTCHA detected
+
+✅ **Improved stealth**
+- Longer page load times (90s timeout)
+- Network idle waiting
+- Random delays between actions (500-1500ms initial, 1000-2000ms between steps)
+
+✅ **Non-headless mode**
+- Run with visible browser for sites that detect headless mode
+- Allows manual CAPTCHA solving and interaction
+
+## Limitations
+
+Despite these enhancements, AliExpress employs very aggressive bot detection:
+
+⚠️ **Geographic/IP-based blocking**
+- Data center IPs are often blocked immediately
+- Some product URLs may not be accessible from certain regions
+- Products may show 404 errors even when valid
+
+⚠️ **Advanced fingerprinting**
+- Detects automated browsers through multiple signals
+- Canvas fingerprinting, WebGL, and audio context checks
+- Timing analysis and behavioral patterns
+
+⚠️ **Session-based restrictions**
+- Requires cookies from authenticated sessions
+- First-time visits are heavily scrutinized
+
+## Recommended Approach
+
+### Option 1: Non-Headless Mode with Manual Intervention (Best Success Rate)
+
+```bash
+cd ExtractorPatternAgent
+
+# Run with visible browser
+uv run scripts/fetch_sample.py https://www.aliexpress.com/item/1005003413514494.html --no-headless
+```
+
+**What to do when the browser opens:**
+1. Wait for page to load
+2. If CAPTCHA appears: Solve it manually within 30 seconds
+3. If 404 error: The product may be unavailable or geo-blocked
+4. Script will automatically capture the page after waiting
+
+### Option 2: Use Different Product URLs
+
+Try multiple product URLs as some may be less restricted:
+
+```bash
+# Try different products
+uv run scripts/fetch_sample.py https://www.aliexpress.com/item/32854221866.html --no-headless
+uv run scripts/fetch_sample.py https://www.aliexpress.com/item/4000055907920.html --no-headless
+```
+
+### Option 3: Authenticated Session (Most Reliable)
+
+For production use, the most reliable approach is:
+
+1. **Create an AliExpress account** and log in via regular browser
+2. **Export cookies** from your browser session
+3. **Inject cookies** into the fetcher (requires code modification)
+4. **Use residential proxies** to avoid IP-based blocking
+
+### Option 4: Manual HTML Capture (When All Else Fails)
+
+If automated fetching continues to fail:
+
+1. Open the product page in a regular browser
+2. Solve any CAPTCHAs manually
+3. Open Developer Tools (F12)
+4. Run: `copy(document.documentElement.outerHTML)`
+5. Save to `test_data/aliexpress_com/sample_manual/page.html`
+6. Test extractor: `uv run scripts/test_extractor.py aliexpress.com --sample sample_manual`
+
+## Testing the Extractor
+
+Once you have real HTML (from enhanced fetcher or manual capture):
+
+```bash
+cd ExtractorPatternAgent
+uv run scripts/test_extractor.py aliexpress.com
+```
+
+Expected output with real HTML:
+```
+Testing: aliexpress.com
+Sample: sample_TIMESTAMP
+┏━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Field            ┃ Status    ┃ Extracted Value         ┃
+┡━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ price            │ ✓ PASS    │ 29.99                   │
+│ title            │ ✓ PASS    │ Product Name Here       │
+│ image            │ ✓ PASS    │ https://...             │
+│ availability     │ ✓ PASS    │ 100+                    │
+│ article_number   │ ✓ PASS    │ 1005003413514494        │
+│ model_number     │ ✓ PASS    │ MODEL-123               │
+└──────────────────┴───────────┴─────────────────────────┘
+
+Summary: 6/6 fields extracted (100.0%)
+Critical fields: ✓ Price, ✓ Title
+```
 
 ### Primary Extraction Method: window.runParams
 AliExpress stores all product data in a JavaScript object called `window.runParams`. This is the most reliable extraction source.
