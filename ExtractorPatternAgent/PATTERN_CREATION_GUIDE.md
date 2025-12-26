@@ -2,6 +2,18 @@
 
 This guide provides step-by-step instructions for creating new extraction patterns or updating existing ones for the PriceTracker system.
 
+## ⚠️ CRITICAL REQUIREMENT: Test Data Availability
+
+**If test data cannot be fetched or is unavailable (e.g., due to anti-bot measures, CAPTCHA, IP blocking, authentication requirements), you MUST immediately fail and report that the task cannot be completed.**
+
+Do NOT attempt to:
+- Create patterns without valid test data
+- Use placeholder or mock data
+- Work around anti-bot protections
+- Proceed with incomplete or invalid samples
+
+**Report clearly:** "Cannot complete pattern creation/update: Unable to fetch test data from [domain]. The site appears to be blocking automated access via [specific reason: CAPTCHA/IP blocking/authentication/rate limiting/etc.]."
+
 ## Table of Contents
 1. [Overview](#overview)
 2. [Prerequisites](#prerequisites)
@@ -87,6 +99,23 @@ This creates:
 - `test_data/<domain>/sample_<timestamp>/page.html` - Full HTML
 - `test_data/<domain>/sample_<timestamp>/page.png` - Screenshot
 - `test_data/<domain>/sample_<timestamp>/metadata.json` - Metadata
+
+**⚠️ CRITICAL: Validate the Fetch Was Successful**
+
+Before proceeding, you MUST verify:
+1. The `page.html` file contains actual product page content
+2. The file is not a CAPTCHA page, error page, or login redirect
+3. The screenshot shows the expected product page (not a block/error page)
+
+**Common blocking indicators:**
+- CAPTCHA challenges (reCAPTCHA, hCaptcha, etc.)
+- "Access Denied" or "403 Forbidden" messages
+- Login/authentication requirements
+- Rate limiting or "Too Many Requests" errors
+- Empty or minimal HTML content
+- JavaScript-only pages with no server-side rendered content
+
+**If any blocking is detected:** STOP immediately and report: "Cannot fetch valid test data from [domain]. Site is blocking automated access: [specific issue]. Pattern creation cannot proceed."
 
 **Tip**: Fetch multiple samples to ensure pattern works across different products.
 
@@ -397,6 +426,15 @@ Capture a new sample to analyze:
 ```bash
 uv run scripts/fetch_sample.py https://example.com/product/12345
 ```
+
+**⚠️ CRITICAL: Validate the Sample**
+
+Before proceeding with the update, verify the fetched sample is valid:
+- Not a CAPTCHA or error page
+- Contains actual product data
+- Screenshot shows expected content
+
+**If the sample is invalid or blocked:** Report immediately: "Cannot update pattern - unable to fetch valid test data. Site appears to be blocking access: [reason]. Update cannot proceed."
 
 ### Step 3: Analyze What Changed or Was Missing
 
@@ -711,12 +749,32 @@ elif "out of stock" in value.lower():
 return value
 ```
 
+### 7. Working Without Valid Test Data
+
+❌ **Bad:**
+```python
+# Proceeding when fetch_sample.py returned a CAPTCHA page
+# Creating patterns based on assumptions
+# Using old/cached samples when fresh ones fail
+```
+
+✅ **Good:**
+```python
+# STOP and report:
+# "Cannot proceed: Test data fetch blocked by CAPTCHA."
+# "Site is using anti-bot protection - pattern creation not possible."
+# "Unable to access [domain] - returns 403 Forbidden."
+```
+
+**Never attempt pattern creation or updates without valid, current test data.** Blocked or invalid samples will result in non-functional patterns.
+
 ---
 
 ## Testing Checklist
 
 Before considering a pattern complete:
 
+- [ ] **Test data was successfully fetched and validated (not CAPTCHA/error/blocked page)**
 - [ ] All 6 fields extract successfully (or return `None` gracefully)
 - [ ] Price returns a `Decimal` number without currency symbols
 - [ ] Title is clean (no category suffixes, excess whitespace)
@@ -785,11 +843,15 @@ Study this pattern as a reference implementation.
 
 If you encounter issues:
 
-1. Check the HTML structure hasn't changed
-2. Verify selectors are still valid
-3. Review error messages from test output
-4. Compare with working patterns (e.g., `komplett_no.py`)
-5. Test with fresh samples from the live site
+1. **Verify test data is valid** - Check that fetched samples are not CAPTCHA/error pages
+2. **If data fetching is blocked** - Report immediately and stop; do not attempt workarounds
+3. Check the HTML structure hasn't changed
+4. Verify selectors are still valid
+5. Review error messages from test output
+6. Compare with working patterns (e.g., `komplett_no.py`)
+7. Test with fresh samples from the live site
+
+**Remember:** If you cannot fetch valid test data due to anti-bot measures, you MUST report this and terminate the task. Do not proceed with pattern creation or updates.
 
 ---
 

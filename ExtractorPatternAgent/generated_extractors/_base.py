@@ -66,7 +66,8 @@ class BaseExtractor:
 
         # Remove common currency symbols and whitespace
         text = str(text).strip()
-        text = text.replace(" ", "").replace("kr", "").replace("$", "")
+        # Remove both regular spaces and non-breaking spaces (U+00A0)
+        text = text.replace(" ", "").replace("\xa0", "").replace("kr", "").replace("$", "")
         text = text.replace("€", "").replace("£", "").replace(",-", "")
 
         # Handle different decimal separators
