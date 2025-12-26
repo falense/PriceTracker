@@ -199,22 +199,35 @@ docker compose exec celery python test_docker_integration.py
 docker compose exec web pytest
 ```
 
-### Local Development (without Docker)
+### Autonomous Extractor Generation
+
+For creating new web scraping extractors, use the autonomous generator script:
 
 ```bash
-# WebUI
-cd WebUI
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-python manage.py runserver
-
-# Celery Worker
-celery -A config worker -l info
-
-# Celery Beat
-celery -A config beat -l info
+# Generate a new extractor for any product URL
+cd ExtractorPatternAgent
+uv run generate_pattern.py https://www.komplett.no/product/1310167
 ```
+
+**What it does**:
+1. Fetches HTML sample using Playwright with stealth
+2. Validates sample (detects CAPTCHA/blocking)
+3. Analyzes HTML structure (JSON-LD, OpenGraph, CSS selectors)
+4. Generates Python extractor module with 7 extraction functions
+5. Tests extractor against the sample
+6. Iterates on failures until tests pass
+7. Commits the result to git
+
+**Features**:
+- Fully autonomous (no human intervention required)
+- Fail-fast on site blocking (CAPTCHA, 403, etc.)
+- Uses Claude Agent SDK for intelligent extraction
+- Follows PATTERN_CREATION_GUIDE.md best practices
+- Auto-commits successful extractors
+
+**Requirements**:
+- Claude Code CLI: `npm install -g @anthropic-ai/claude-code`
+- Python 3.11+: Managed by uv
 
 ## 📚 Documentation
 
@@ -225,59 +238,8 @@ celery -A config beat -l info
   - [ExtractorPatternAgent/README.md](ExtractorPatternAgent/README.md)
   - [PriceFetcher/README.md](PriceFetcher/README.md)
 
-## 🔮 Roadmap
-
-### Completed ✅
-- [x] Django WebUI with user authentication
-- [x] Multi-store product tracking with user subscriptions
-- [x] Aggregated priority scheduling
-- [x] Celery task queue with periodic scheduling
-- [x] ExtractorPatternAgent with headless browser
-- [x] PriceFetcher with retry logic
-- [x] Docker deployment
-- [x] Notification system
-- [x] Django admin interface
-- [x] Pattern version history with rollback
-
-### Future Enhancements
-- [ ] Add health check endpoints
-- [ ] Implement email notifications
-- [ ] Add price history charts
-- [ ] PostgreSQL migration guide
-- [ ] Support for more e-commerce platforms
-- [ ] Browser extension
-- [ ] Advanced analytics dashboard
-- [ ] Multi-currency support
-- [ ] Webhook integrations
-
-## 🤝 Contributing
-
-Contributions welcome! Please read our contributing guidelines (TODO: add CONTRIBUTING.md).
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📄 License
-
-[Add License Here]
-
 ## 🙏 Acknowledgments
 
 - Built with Django, Celery, Playwright, and Claude AI
 - Icons from Heroicons
 - UI framework: Tailwind CSS
-
-## 📞 Support
-
-For issues and questions:
-- **GitHub Issues**: [Repository Issues](link-to-issues)
-- **Documentation**: See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)
-
----
-
-**Status**: Production Ready (95% complete)
-**Last Updated**: 2025-12-14
-**Version**: 1.0.0-rc1

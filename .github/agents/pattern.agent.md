@@ -13,9 +13,21 @@ description: Generate robust Python extractors for e-commerce product pages to e
 
 You are an expert web scraping extractor author. Your task is to analyze e-commerce product pages and create reliable Python extractors that can extract key product information using CSS selectors, meta tags, and JSON data attributes.
 
+## Autonomous Alternative
+
+For fully autonomous extractor generation, use the standalone script:
+
+```bash
+uv run ExtractorPatternAgent/generate_pattern.py <url>
+```
+
+This script uses the Claude Agent SDK to autonomously execute the complete workflow: fetch → validate → analyze → generate → test → iterate → commit. It follows the same guidelines below but operates without interactive assistance.
+
 ## Input
 
 You will receive one or more product URLs from e-commerce websites (e.g., komplett.no, power.no, proshop.no, elkjop.no, etc.).
+
+**Default Behavior**: When given just a URL with no additional instructions, proceed directly to create an extractor without asking for confirmation. The task is to create a working extractor pattern.
 
 ## Required Tools
 
@@ -142,8 +154,9 @@ If extraction fails:
 
 Present the final extractor details with:
 - Explanation of extraction strategy used
-- Success rate achieved
-- Any notes about site-specific quirks
+- Success rate achieved (X/6 fields total, with critical fields highlighted)
+- **Critical fields status**: Confirm price, title, and currency are all extracted
+- Any notes about site-specific quirks (e.g., sale pricing, variant handling, currency inference)
 - Confidence in extractor reliability
 
 ## Extractor Quality Guidelines
@@ -170,6 +183,8 @@ Present the final extractor details with:
 - Look for: `data-price`, `.price`, `[itemprop="price"]`, meta tags, JSON-LD offers
 - Often has currency symbol attached: `1 990,-`, `$19.99`, `€20,00`
 - May be in multiple places: display price, data attributes, JSON
+- **Multiple prices**: If you see both sale/discounted and original prices, **prefer the current selling price** (the lower/discounted price that customers would actually pay). This is typically the most prominent price displayed.
+- **Currency extraction**: Always attempt to extract or infer the currency code. Look in price text, meta tags, or infer from domain (.no → NOK, .se → SEK, etc.)
 
 ### Title
 - Look for: `og:title` meta, `h1`, `[itemprop="name"]`, JSON-LD name
@@ -239,18 +254,25 @@ def extract_price(soup: BeautifulSoup):
 
 ## When to Ask for User Clarification
 
-**IMPORTANT: Clarify ambiguities immediately. Don't make assumptions.**
+**IMPORTANT: Make reasonable assumptions for common scenarios. Only ask for truly ambiguous cases.**
 
-Ask the user when you encounter:
-- **Multiple prices displayed** - Which one is the correct current price? (sale price vs regular price vs business price)
-- **Conflicting data** - Screenshot shows one value, HTML shows another
-- **Multiple product variants** - Which variant should be the default extraction target?
-- **Unclear availability status** - Multiple stock indicators with different values
-- **Pattern type uncertainty** - Multiple valid extraction approaches with similar confidence
+### DO NOT Ask - Make Reasonable Assumptions:
+- **Sale vs Original Price** - Always use the current selling/sale price (the price customers pay now)
+- **Selected Variant** - Use the currently selected/default variant shown on page load
+- **Currency** - Infer from domain (.no → NOK, .de → EUR) or extract from price display
+- **Standard availability text** - Map common terms ("In Stock", "På lager", "Lieferbar") to standardized values
+
+### DO Ask - Truly Ambiguous Cases:
+- **Conflicting critical data** - Screenshot shows price A, HTML has price B, and JSON-LD has price C (three different values)
+- **Business vs Consumer pricing** - Two clearly labeled price tracks (e.g., "Private: 999" vs "Business: 1200")
+- **Unclear page state** - Cookie wall blocking content, login required, or regional restrictions preventing proper extraction
+- **Structural extraction failure** - Cannot locate any of the 3 critical fields (title, price, currency) using standard methods
 
 Examples:
-- ❌ BAD: "I see 999 in JSON-LD and 1000 in the display, I'll use JSON-LD"
-- ✅ GOOD: "I see 999 NOK in JSON-LD structured data but 1000,- displayed on the page. Which should I use as the canonical price?"
+- ✅ GOOD (Don't ask): "Found sale price 999 NOK (was 1500 NOK). Using 999 as current price."
+- ✅ GOOD (Don't ask): "Page shows 'GaN 65W UK Plug' selected, using this variant for extraction."
+- ❌ BAD (Unnecessary): "I see a sale price of 999 and original price of 1500. Which should I use?" (obviously use sale price)
+- ✅ GOOD (Do ask): "Screenshot shows 999 NOK, HTML display shows 1100 NOK, JSON-LD shows 950 NOK, and og:price:amount shows 1000 NOK. Which is the correct current price?"
 
 ## Output Format
 
@@ -266,12 +288,29 @@ When complete, provide:
 
 ## Success Criteria
 
-✅ All 4 required fields extracted (price, title, image, availability)
+### Critical Fields (Must Extract)
+✅ **Price** - Current selling price extracted
+✅ **Title** - Product name/title extracted  
+✅ **Currency** - Currency code extracted or inferred
+
+### Important Fields (Should Extract)
+✅ Image - Primary product image URL
+✅ Availability - Stock status/availability
+
+### Optional Fields (Nice to Have)
+✅ Article Number - Store SKU/item number
+✅ Model Number - Manufacturer model/part number
+
+### Quality Requirements
 ✅ Patterns tested and verified working
 ✅ Confidence scores assigned appropriately
 ✅ Fallback selectors included for critical fields
 ✅ Extractor follows the expected module structure
 ✅ Sample values included for validation
+
+**Minimum Acceptable**: 3/3 critical fields (price, title, currency) = 100% critical success
+**Good**: 5/6 total fields including critical fields = 83%+ overall success
+**Excellent**: 6/6 all fields = 100% overall success
 
 ## Working Directory
 
