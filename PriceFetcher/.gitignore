@@ -50,6 +50,7 @@ Thumbs.db
 .coverage
 htmlcov/
 .tox/
+*.html  # Test output files
 
 # uv
 .uv/
