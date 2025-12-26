@@ -1,0 +1,48 @@
+<div class="space-y-4">
+    <!-- Target Price -->
+    <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Target Price
+        </label>
+        <input type="number"
+               name="target_price"
+               step="0.01"
+               value="{{ subscription.target_price|default:'' }}"
+               placeholder="Set target"
+               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+    </div>
+
+    <!-- Notification Settings -->
+    <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Notifications
+        </label>
+        <div class="space-y-2">
+            <label class="flex items-center">
+                <input type="checkbox" name="notify_on_drop" {% if subscription.notify_on_drop %}checked{% endif %}
+                       class="rounded border-gray-300 text-primary-600 focus:ring-primary-500">
+                <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Price drops</span>
+            </label>
+            <label class="flex items-center">
+                <input type="checkbox" name="notify_on_restock" {% if subscription.notify_on_restock %}checked{% endif %}
+                       class="rounded border-gray-300 text-primary-600 focus:ring-primary-500">
+                <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Back in stock</span>
+            </label>
+        </div>
+    </div>
+
+    <!-- Check Frequency -->
+    <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Check Frequency
+        </label>
+        <select name="priority" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+            <option value="normal" {% if subscription.priority == 2 %}selected{% endif %}>Every hour</option>
+            <option value="low" {% if subscription.priority == 1 %}selected{% endif %}>Daily</option>
+        </select>
+    </div>
+
+    <button type="submit" class="w-full px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium">
+        Save Settings
+    </button>
+</div>

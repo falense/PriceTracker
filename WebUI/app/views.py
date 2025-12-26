@@ -10,6 +10,7 @@ from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib import messages
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_http_methods
+from django.db.models import Min, Count, Avg, Q
 from .models import (
     Product,
     ProductListing,
@@ -76,8 +77,6 @@ def logout_view(request):
 def dashboard(request):
     """Main dashboard view - accessible to everyone."""
     if request.user.is_authenticated:
-        from django.db.models import Min, Count
-
         # Get user's active subscriptions with product and best price info
         subscriptions = (
             UserSubscription.objects.filter(user=request.user, active=True)
@@ -133,8 +132,6 @@ def dashboard(request):
 @login_required
 def product_list(request):
     """List all user subscriptions."""
-    from django.db.models import Min, Count
-
     # Get user's active subscriptions
     subscriptions = (
         UserSubscription.objects.filter(user=request.user, active=True)
@@ -285,8 +282,6 @@ def subscription_detail(request, subscription_id):
                 job_summaries = job_summaries[:50]
 
             except Exception as e:
-                import logging
-                logger = logging.getLogger(__name__)
                 logger.error(f"Error grouping operation logs: {e}", exc_info=True)
                 job_summaries = []
                 ungrouped_logs = logs_list
@@ -476,9 +471,6 @@ def subscription_detail(request, subscription_id):
 
         except Exception as e:
             # Fallback to ungrouped view on error
-            import logging
-
-            logger = logging.getLogger(__name__)
             logger.error(f"Error grouping operation logs: {e}", exc_info=True)
             job_summaries = []
             ungrouped_logs = logs_list
@@ -637,8 +629,6 @@ def subscription_status(request, subscription_id):
                 job_summaries = job_summaries[:50]
 
             except Exception as e:
-                import logging
-                logger = logging.getLogger(__name__)
                 logger.error(f"Error grouping operation logs: {e}", exc_info=True)
                 job_summaries = []
                 ungrouped_logs = logs_list
@@ -993,8 +983,6 @@ def search_product(request):
         # Query is a product name - search for existing products
         if request.user.is_authenticated:
             # Authenticated user - search their subscriptions
-            from django.db.models import Min
-
             subscriptions = (
                 UserSubscription.objects.filter(
                     user=request.user, active=True, product__name__icontains=query
@@ -1037,9 +1025,13 @@ def search_autocomplete(request):
     if len(query) < 3:
         return HttpResponse("")
 
-    products = Product.objects.filter(
-        user=request.user, active=True, name__icontains=query
-    ).order_by("-last_viewed")[:5]
+    # Query user's active subscriptions with matching product names
+    subscriptions = UserSubscription.objects.filter(
+        user=request.user, active=True, product__name__icontains=query
+    ).select_related("product").order_by("-last_viewed")[:5]
+
+    # Extract unique products from subscriptions
+    products = [sub.product for sub in subscriptions]
 
     return render(request, "search/autocomplete.html", {"products": products})
 
@@ -1268,7 +1260,6 @@ def admin_logs(request):
         messages.error(request, "Access denied.")
         return redirect("dashboard")
 
-    from django.db.models import Count, Avg, Q
     from datetime import timedelta
     from django.utils import timezone
 
@@ -1612,8 +1603,6 @@ def user_settings(request):
     ).count()
 
     # Get total stores tracked (distinct stores across all user's subscriptions)
-    from django.db.models import Count
-
     stores_tracked = (
         ProductListing.objects.filter(
             product__subscriptions__user=request.user,
