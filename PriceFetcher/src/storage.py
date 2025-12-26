@@ -981,43 +981,6 @@ class PriceStorage:
         finally:
             conn.close()
 
-    def get_pattern_success_stats(self, domain: str) -> Dict[str, Any]:
-        """
-        Get extractor version success statistics for a domain.
-
-        Retrieves stats from the active ExtractorVersion for the domain.
-
-        Args:
-            domain: Domain name (e.g., "amazon.com")
-
-        Returns:
-            Dict with success_rate, total_attempts, successful_attempts
-        """
-        conn = self._get_connection()
-        cursor = conn.cursor()
-
-        try:
-            cursor.execute(
-                """
-                SELECT success_rate, total_attempts, successful_attempts
-                FROM app_extractorversion
-                WHERE domain = ? AND is_active = 1
-                """,
-                (domain,),
-            )
-
-            row = cursor.fetchone()
-            if row:
-                return {
-                    "success_rate": row["success_rate"],
-                    "total_attempts": row["total_attempts"],
-                    "successful_attempts": row["successful_attempts"],
-                }
-
-            return {"success_rate": 0.0, "total_attempts": 0, "successful_attempts": 0}
-
-        finally:
-            conn.close()
 
     def update_last_checked(self, listing_id: str) -> None:
         """
@@ -1059,37 +1022,3 @@ class PriceStorage:
             logger.error("update_last_checked_failed", listing_id=listing_id, error=str(e))
             raise
 
-    def update_pattern_stats(self, domain: str, success: bool) -> None:
-        """
-        Update extractor version usage statistics.
-
-        Finds the active ExtractorVersion for the domain and updates its success metrics.
-
-        Args:
-            domain: Domain name
-            success: Whether extraction succeeded
-        """
-        conn = self._get_connection()
-        cursor = conn.cursor()
-
-        try:
-            cursor.execute(
-                """
-                UPDATE app_extractorversion
-                SET total_attempts = total_attempts + 1,
-                    successful_attempts = successful_attempts + ?,
-                    success_rate = CAST(successful_attempts + ? AS REAL) /
-                                   (total_attempts + 1)
-                WHERE domain = ? AND is_active = 1
-                """,
-                (1 if success else 0, 1 if success else 0, domain),
-            )
-
-            conn.commit()
-            logger.debug("extractor_version_stats_updated", domain=domain, success=success)
-
-        except Exception as e:
-            conn.rollback()
-            logger.exception("extractor_version_stats_update_failed", domain=domain, error=str(e))
-        finally:
-            conn.close()

@@ -1,6 +1,6 @@
 # Extraction Fields Guide
 
-The pattern generator now extracts **6 fields** from e-commerce product pages:
+Each extractor should extract up to **6 fields** from e-commerce product pages:
 
 ## Fields Extracted
 

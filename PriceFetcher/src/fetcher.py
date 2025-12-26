@@ -255,12 +255,10 @@ class PriceFetcher:
                     listing_id=product.listing_id,
                     extractor_module=extractor_module
                 )
-                self.storage.update_pattern_stats(product.domain, success=True)
             else:
                 # Update last_checked even on validation failure to prevent infinite retries
                 if product.listing_id:
                     self.storage.update_last_checked(product.listing_id)
-                self.storage.update_pattern_stats(product.domain, success=False)
 
             # Duration tracking for logging
             duration_ms = int((time.time() - start_time) * 1000)
@@ -309,12 +307,6 @@ class PriceFetcher:
                     self.storage.update_last_checked(product.listing_id)
                 except Exception:
                     pass
-
-            # Update pattern stats on failure
-            try:
-                self.storage.update_pattern_stats(product.domain, success=False)
-            except Exception:
-                pass
 
             return FetchResult(
                 product_id=product_id,

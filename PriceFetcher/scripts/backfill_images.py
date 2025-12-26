@@ -19,7 +19,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.extractor import Extractor
 from src.fetcher import PriceFetcher
-from src.pattern_loader import PatternLoader
 from src.storage import PriceStorage
 from src.models import Product
 
@@ -39,7 +38,6 @@ class ImageBackfiller:
         max_retries: int = 3,
     ):
         self.storage = PriceStorage(db_path)
-        self.pattern_loader = PatternLoader(db_path)
         self.extractor = Extractor()
         self.request_delay = request_delay
         self.timeout = timeout
@@ -58,7 +56,7 @@ class ImageBackfiller:
             "success": 0,
             "failed": 0,
             "skipped": 0,
-            "no_pattern": 0,
+            "no_extractor": 0,
         }
 
     def group_by_domain(self, products: List[Product]) -> Dict[str, List[Product]]:
@@ -69,28 +67,18 @@ class ImageBackfiller:
         return grouped
 
     async def backfill_product(
-        self, product: Product, pattern: object
+        self, product: Product
     ) -> bool:
         """
         Fetch and update image for a single product.
 
         Args:
             product: Product to fetch image for
-            pattern: Extraction pattern for the domain
 
         Returns:
             True if successful, False otherwise
         """
         try:
-            # Check if pattern has image field
-            if "image" not in pattern.patterns:
-                logger.warning(
-                    "pattern_missing_image_field",
-                    domain=product.domain,
-                    product_id=product.product_id,
-                )
-                return False
-
             # Fetch HTML
             logger.info(
                 "fetching_image",
@@ -99,14 +87,15 @@ class ImageBackfiller:
             )
             html = await self.fetcher._fetch_html(product.url)
 
-            # Extract ONLY image field
-            image_field = self.extractor._extract_field(
-                html, pattern.patterns["image"]
+            # Extract using Python extractor
+            extraction_result, extractor_module = self.extractor.extract_with_domain(
+                html, product.domain
             )
 
-            if image_field.value:
+            # Check if image was extracted
+            if extraction_result.image and extraction_result.image.value:
                 # Normalize relative URLs
-                image_url = image_field.value.strip()
+                image_url = extraction_result.image.value.strip()
                 if image_url and not image_url.startswith(('http://', 'https://')):
                     from urllib.parse import urljoin, urlparse
                     parsed = urlparse(product.url)
@@ -122,8 +111,9 @@ class ImageBackfiller:
                     "image_extracted",
                     product_id=product.product_id,
                     image_url=image_url,
-                    method=image_field.method,
-                    confidence=image_field.confidence,
+                    method=extraction_result.image.method,
+                    confidence=extraction_result.image.confidence,
+                    extractor_module=extractor_module,
                 )
                 return True
             else:
@@ -159,34 +149,14 @@ class ImageBackfiller:
             product_count=len(products),
         )
 
-        # Load pattern
-        try:
-            pattern = self.pattern_loader.load_pattern(domain)
-            if not pattern:
-                logger.warning("no_pattern_found", domain=domain)
-                self.stats["no_pattern"] += len(products)
-                self.stats["skipped"] += len(products)
-                return
-
-            if "image" not in pattern.patterns:
-                logger.warning("pattern_missing_image", domain=domain)
-                self.stats["no_pattern"] += len(products)
-                self.stats["skipped"] += len(products)
-                return
-
-        except Exception as e:
-            logger.error("pattern_load_error", domain=domain, error=str(e))
-            self.stats["skipped"] += len(products)
-            return
-
-        # Process each product
+        # Process each product (extractor availability is checked per-product now)
         for i, product in enumerate(products, 1):
             print(
                 f"  [{i}/{len(products)}] Processing {product.name or product.url[:50]}...",
                 end=" ",
             )
 
-            success = await self.backfill_product(product, pattern)
+            success = await self.backfill_product(product)
 
             if success:
                 self.stats["success"] += 1
@@ -261,7 +231,7 @@ class ImageBackfiller:
         print(f"✓ Successful:       {self.stats['success']}")
         print(f"✗ Failed:           {self.stats['failed']}")
         print(f"⊘ Skipped:          {self.stats['skipped']}")
-        print(f"  (No pattern:      {self.stats['no_pattern']})")
+        print(f"  (No extractor:    {self.stats['no_extractor']})")
         print(f"\nDuration:           {self.stats['duration_seconds']}s")
 
         if self.stats["total"] > 0:

@@ -140,9 +140,9 @@ Create `generated_extractors/example_com.py`:
 
 ```python
 """
-Auto-generated extractor for example.com
+Extractor for example.com
 
-Generated on: YYYY-MM-DD
+Created on: YYYY-MM-DD
 """
 import re
 from decimal import Decimal
@@ -154,8 +154,8 @@ from ._base import BaseExtractor
 # Metadata (required for discovery)
 PATTERN_METADATA = {
     'domain': 'example.com',
-    'generated_at': '2025-12-17T12:00:00',
-    'generator': 'manual',
+    'created_at': '2025-12-17T12:00:00',
+    'created_by': 'manual',
     'version': '1.0',
     'confidence': 0.90,
     'fields': ['price', 'title', 'image', 'availability', 'article_number', 'model_number'],
@@ -462,8 +462,8 @@ Increment the version and update fields list:
 ```python
 PATTERN_METADATA = {
     'domain': 'example.com',
-    'generated_at': '2025-12-17T12:00:00',
-    'generator': 'manual',
+    'created_at': '2025-12-17T12:00:00',
+    'created_by': 'manual',
     'version': '1.1',  # Incremented from 1.0
     'confidence': 0.95,  # Updated if improved
     'fields': ['price', 'title', 'image', 'availability', 'article_number', 'model_number'],

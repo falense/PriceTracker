@@ -7,31 +7,6 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
-class PatternSelector(BaseModel):
-    """Single pattern selector configuration."""
-
-    type: str  # "css", "xpath", "jsonld", "meta"
-    selector: str
-    attribute: Optional[str] = None
-    confidence: float = Field(ge=0.0, le=1.0)
-
-
-class FieldPattern(BaseModel):
-    """Pattern for extracting a single field."""
-
-    primary: PatternSelector
-    fallbacks: List[PatternSelector] = Field(default_factory=list)
-
-
-class ExtractionPattern(BaseModel):
-    """Complete extraction pattern for a domain."""
-
-    store_domain: str
-    patterns: Dict[str, FieldPattern]  # "price", "title", "availability", "image"
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-
-
 class Product(BaseModel):
     """Product to fetch prices for."""
 
