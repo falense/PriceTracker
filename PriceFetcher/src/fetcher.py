@@ -34,7 +34,6 @@ class PriceFetcher:
         request_delay: float = 2.0,
         timeout: float = 30.0,
         max_retries: int = 3,
-        user_agent: Optional[str] = None,
         min_confidence: float = 0.6,
         browser_timeout: float = 60.0,
         wait_for_js: bool = True,
@@ -48,7 +47,6 @@ class PriceFetcher:
             request_delay: Delay between requests (seconds)
             timeout: Browser operation timeout (seconds)
             max_retries: Maximum retry attempts
-            user_agent: Kept for backwards compatibility (not used - stealth UA applied)
             min_confidence: Minimum confidence threshold for validation
             browser_timeout: Navigation timeout for browser (seconds)
             wait_for_js: Whether to wait for JavaScript to finish rendering

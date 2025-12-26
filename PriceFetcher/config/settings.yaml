@@ -16,9 +16,6 @@ fetcher:
   # Wait for JavaScript to finish rendering
   wait_for_js: true
 
-  # User agent string (deprecated - now set by stealth utilities)
-  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-
   # Per-domain delays for difficult sites (seconds)
   domain_delays:
     amazon.com: 10.0

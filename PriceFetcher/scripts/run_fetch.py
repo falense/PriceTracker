@@ -144,7 +144,6 @@ async def main():
         request_delay=config["fetcher"]["request_delay"],
         timeout=config["fetcher"]["timeout"],
         max_retries=config["fetcher"]["max_retries"],
-        user_agent=config["fetcher"]["user_agent"],
         min_confidence=config["validation"]["min_confidence"],
         browser_timeout=config["fetcher"].get("browser_timeout", 60.0),
         wait_for_js=config["fetcher"].get("wait_for_js", True),
