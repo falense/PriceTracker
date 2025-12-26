@@ -437,6 +437,7 @@ async def generate_extractor(url: str, base_dir: Path) -> int:
     extractor_created = False
     git_committed = False
     turn_count = 0
+    final_result = None
 
     try:
         async for message in query(prompt=prompt, options=options):
@@ -451,15 +452,20 @@ async def generate_extractor(url: str, base_dir: Path) -> int:
                         else:
                             print(f"💭 {text}")
 
-                        # Detect blocking keywords
+                        # Detect ACTUAL blocking (not just mentions)
+                        # Look for phrases that indicate blocking was FOUND, not just checked
                         text_lower = text.lower()
-                        blocking_keywords = [
-                            'captcha', 'blocked', 'cannot fetch',
-                            '403', 'access denied', 'login required',
-                            'cannot complete', 'site blocking',
-                            'unable to fetch'
+                        blocking_phrases = [
+                            'cannot fetch valid test data',
+                            'site is blocking',
+                            'appears to be blocking',
+                            'detected captcha',
+                            'page shows captcha',
+                            'access is blocked',
+                            'cannot complete pattern creation',
+                            'cannot proceed',
                         ]
-                        if any(kw in text_lower for kw in blocking_keywords):
+                        if any(phrase in text_lower for phrase in blocking_phrases):
                             blocking_detected = True
                             print("⚠️  BLOCKING DETECTED")
 
@@ -505,19 +511,19 @@ async def generate_extractor(url: str, base_dir: Path) -> int:
                     print(f"💰 Cost: ${message.total_cost_usd:.4f}")
                 print("=" * 60)
 
-                # Determine success/failure
+                # Determine success/failure (don't return, just set result and break)
                 if blocking_detected:
                     print("❌ FAILED: Site blocking detected (CAPTCHA/403/etc)")
                     print("   Cannot create extractor without valid test data.")
-                    return 1
+                    final_result = 1
 
                 elif message.is_error:
                     print(f"❌ FAILED: {message.subtype}")
-                    return 1
+                    final_result = 1
 
                 elif not extractor_created:
                     print("❌ FAILED: No extractor file was created")
-                    return 1
+                    final_result = 1
 
                 else:
                     print(f"✅ SUCCESS! Extractor created for {domain}")
@@ -525,7 +531,10 @@ async def generate_extractor(url: str, base_dir: Path) -> int:
                         print("   └─ Git commit: ✅")
                     else:
                         print("   └─ Git commit: ⚠️  (may have failed, check manually)")
-                    return 0
+                    final_result = 0
+
+                # Break to allow generator to close properly
+                break
 
     except CLINotFoundError:
         print("❌ Error: Claude Code CLI not found")
@@ -546,6 +555,14 @@ async def generate_extractor(url: str, base_dir: Path) -> int:
         print(f"❌ Unexpected error: {type(e).__name__}: {e}")
         import traceback
         traceback.print_exc()
+        return 1
+
+    # Return the result after generator has closed properly
+    if final_result is not None:
+        return final_result
+    else:
+        # Should not reach here, but handle gracefully
+        print("⚠️  Warning: Task completed without definitive result")
         return 1
 
 
