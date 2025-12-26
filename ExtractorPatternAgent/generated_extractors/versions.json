@@ -1,4 +1,11 @@
 {
+  "aliexpress_com": {
+    "confidence": 0.85,
+    "domain": "aliexpress.com",
+    "generated_at": "2024-12-26T17:30:00",
+    "module": "aliexpress_com",
+    "version": "1.0"
+  },
   "amazon_com": {
     "commit_author": "Sondre Engebraten",
     "commit_date": "2025-12-21T23:37:54+01:00",
@@ -76,6 +83,13 @@
     "generated_at": "2025-12-21",
     "module": "finn_no",
     "version": "1.1"
+  },
+  "hismith_com": {
+    "confidence": 0.95,
+    "domain": "hismith.com",
+    "generated_at": "2025-12-26T20:56:34",
+    "module": "hismith_com",
+    "version": "1.0"
   },
   "komplett_no": {
     "commit_author": "Sondre Engebraten",
@@ -231,6 +245,19 @@
     "domain": "sinful.no",
     "generated_at": "2025-12-22T23:00:00",
     "module": "www_sinful_no",
+    "version": "1.0"
+  },
+  "www_uniqso_com": {
+    "commit_author": "Copilot",
+    "commit_date": "2025-12-26T13:56:14+01:00",
+    "commit_email": "198982749+Copilot@users.noreply.github.com",
+    "commit_hash": "96f2384d22d3378c0f9e761e52cafc5048a5dd06",
+    "commit_hash_short": "96f2384",
+    "commit_message": "feat: Create extraction pattern for uniqso products (#14)",
+    "confidence": 0.95,
+    "domain": "uniqso.com",
+    "generated_at": "2025-12-26T12:48:00",
+    "module": "www_uniqso_com",
     "version": "1.0"
   }
 }
