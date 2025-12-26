@@ -175,7 +175,7 @@ class StoreAdmin(admin.ModelAdmin):
 
     def has_pattern_display(self, obj):
         """Check if extraction pattern exists for this store."""
-        has_pattern = Pattern.objects.filter(domain=obj.domain).exists()
+        has_pattern = ExtractorVersion.objects.filter(domain=obj.domain, is_active=True).exists()
         if has_pattern:
             return format_html('<span style="color: green;">✓</span>')
         return format_html('<span style="color: red;">✗</span>')
@@ -534,9 +534,9 @@ class ExtractorVersionAdmin(admin.ModelAdmin):
         return False
 
     def has_delete_permission(self, request, obj=None):
-        """Allow deletion only if not referenced by patterns/listings."""
+        """Allow deletion only if not referenced by listings."""
         if obj:
-            return obj.patterns.count() == 0 and obj.listings.count() == 0
+            return obj.listings.count() == 0
         return True
 
 

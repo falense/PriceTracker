@@ -116,19 +116,20 @@ ADD COLUMN extractor_version_id INTEGER REFERENCES app_extractorversion(id);
 
 ## Backward Compatibility
 
-### FetchLog Maintained
-- All existing FetchLog writes continue unchanged
-- Parallel operation: both FetchLog and OperationLog are populated
-- No breaking changes to existing functionality
+### FetchLog Migration
+- **COMPLETED**: FetchLog has been fully replaced by OperationLog
+- All fetch logging now goes to app_operationlog
+- app_fetchlog table is no longer written to
 
 ### Migration Path
-- Can run alongside existing code (Phase 1 infrastructure already deployed)
-- Future phases will deprecate FetchLog in favor of OperationLog
+- Phase 1 infrastructure deployed
+- Phase 2 OperationLog implementation complete
+- Legacy FetchLog code removed
 
 ## Configuration
 
 ### Extractor Module Name
-Currently hardcoded as `"python_extractor"` in `save_price()`. This can be made configurable in the future if multiple extractor implementations exist.
+The `extractor_module` parameter in `save_price()` receives the actual Python extractor module name from the extraction process (e.g., "komplett_no", "amazon_com"). This is tracked in the app_extractorversion table along with git commit metadata.
 
 ### Git Repository
 - Expects to run inside a git repository
@@ -150,11 +151,20 @@ Manual verification:
 python -c "from src.git_utils import get_current_commit_hash; print(get_current_commit_hash())"
 ```
 
-## Next Steps (Phase 3)
+## Phase 2 Status
+**COMPLETED** - All Phase 2 features implemented:
+- ✅ ExtractorVersion tracking with git metadata
+- ✅ OperationLog for comprehensive logging
+- ✅ Version tracking integrated into save_price()
+- ✅ FetchLog migration complete
+
+## Future Enhancements (Phase 3+)
+Potential future work:
 - Version management UI and analytics dashboard
 - Version comparison and diff views
-- Performance metrics by version
-- Rollback capabilities
+- Performance metrics by extractor version
+- Automated rollback capabilities
+- Extractor performance analytics
 
 ## Notes
 - All UUIDs are stored without hyphens in SQLite (Django convention)

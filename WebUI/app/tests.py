@@ -3,7 +3,7 @@ from unittest.mock import patch
 from django.contrib.auth.models import User
 from django.test import TestCase
 
-from app.models import Pattern, ProductListing, Store
+from app.models import ProductListing, Store, ExtractorVersion
 from app.services import ProductService
 
 
@@ -85,7 +85,13 @@ class ProductServiceAddProductForUserTests(TestCase):
         self, mock_trigger_pattern_generation, mock_trigger_fetch_listing
     ):
         store = Store.objects.create(domain="example.com", name="Example", active=True)
-        Pattern.objects.create(domain="example.com", store=store, extractor_module="test_extractor")
+        ExtractorVersion.objects.create(
+            domain="example.com",
+            store=store,
+            extractor_module="generated_extractors.example_com",
+            commit_hash="abc123",
+            is_active=True
+        )
 
         url = "https://www.example.com/product/sku-111"
 

@@ -87,10 +87,6 @@ async def main():
         help="Fetch specific listing by ID (will fetch the associated product)",
     )
     parser.add_argument(
-        "--domain",
-        help="Fetch all products from specific domain",
-    )
-    parser.add_argument(
         "--all",
         action="store_true",
         default=True,
@@ -202,12 +198,6 @@ async def main():
                 completed_at=completed_at,
                 duration_seconds=duration,
             )
-
-        elif args.domain:
-            logger.info("fetching_domain", domain=args.domain)
-            # TODO: Implement domain-specific fetch
-            logger.error("domain_fetch_not_implemented")
-            sys.exit(1)
 
         else:
             # Fetch all products
