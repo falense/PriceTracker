@@ -919,6 +919,52 @@ class OperationLog(models.Model):
         return f"[{self.level}] {self.service}: {self.event} at {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
 
 
+class UserFeedback(models.Model):
+    """User feedback submissions."""
+
+    STATUS_CHOICES = [
+        ('new', 'New'),
+        ('in_review', 'In Review'),
+        ('implemented', 'Implemented'),
+        ('dismissed', 'Dismissed'),
+    ]
+
+    id = models.BigAutoField(primary_key=True)
+
+    # User and content
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='feedback_submissions', db_index=True)
+    message = models.TextField(help_text='User feedback message')
+
+    # Context capture
+    page_url = models.CharField(max_length=500, help_text='URL path where feedback was submitted')
+    page_title = models.CharField(max_length=200, blank=True, help_text='Page title for context')
+    view_name = models.CharField(max_length=100, blank=True, help_text='Django view name if available')
+    context_data = models.JSONField(default=dict, blank=True, help_text='Additional context: browser, screen size, etc.')
+
+    # Admin workflow
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='new', db_index=True)
+    admin_notes = models.TextField(blank=True, help_text='Internal notes from admin review')
+    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_feedback')
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', '-created_at']),
+            models.Index(fields=['status', '-created_at']),
+            models.Index(fields=['-created_at']),
+        ]
+        verbose_name = 'User Feedback'
+        verbose_name_plural = 'User Feedback'
+
+    def __str__(self):
+        return f"Feedback from {self.user.username} on {self.page_url}"
+
+
 # ========== Signals ==========
 
 from django.db.models.signals import pre_save, post_save

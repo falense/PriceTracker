@@ -1755,3 +1755,57 @@ def api_regenerate_pattern(request):
         )
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def submit_feedback(request):
+    """Submit user feedback via HTMX form."""
+    import json
+
+    try:
+        # Extract form data
+        message = request.POST.get('message', '').strip()
+        page_url = request.POST.get('page_url', '').strip()
+        page_title = request.POST.get('page_title', '').strip()
+        view_name = request.POST.get('view_name', '').strip()
+        context_data_str = request.POST.get('context_data', '{}')
+
+        # Validation
+        if not message:
+            return JsonResponse({'success': False, 'error': 'Feedback message is required'}, status=400)
+
+        if len(message) > 2000:
+            return JsonResponse({'success': False, 'error': 'Feedback message is too long (max 2000 characters)'}, status=400)
+
+        if not page_url:
+            return JsonResponse({'success': False, 'error': 'Page URL is required'}, status=400)
+
+        # Parse context data
+        try:
+            context_data = json.loads(context_data_str)
+        except json.JSONDecodeError:
+            context_data = {}
+
+        # Create feedback record
+        from .models import UserFeedback
+        feedback = UserFeedback.objects.create(
+            user=request.user,
+            message=message,
+            page_url=page_url,
+            page_title=page_title,
+            view_name=view_name,
+            context_data=context_data
+        )
+
+        logger.info(f"User feedback submitted: user={request.user.username}, feedback_id={feedback.id}, page_url={page_url}")
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Thank you for your feedback!',
+            'data': {'feedback_id': feedback.id}
+        })
+
+    except Exception as e:
+        logger.error(f"Error submitting feedback: user={request.user.username}, error={str(e)}", exc_info=True)
+        return JsonResponse({'success': False, 'error': 'An error occurred while submitting feedback'}, status=500)

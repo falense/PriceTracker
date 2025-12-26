@@ -72,6 +72,8 @@ urlpatterns = [
         views.mark_notifications_read,
         name="mark_notifications_read",
     ),
+    # Feedback
+    path("feedback/submit/", views.submit_feedback, name="submit_feedback"),
     # Admin pages (staff only)
     path("admin-dashboard/", views.admin_dashboard, name="admin_dashboard"),
     path("admin-dashboard/logs/", views.admin_logs, name="admin_logs"),

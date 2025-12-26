@@ -11,7 +11,7 @@ from datetime import datetime
 from .models import (
     Product, Store, ProductListing, UserSubscription,
     PriceHistory, Notification, UserView, AdminFlag, OperationLog,
-    ExtractorVersion
+    ExtractorVersion, UserFeedback
 )
 
 
@@ -538,5 +538,28 @@ class ExtractorVersionAdmin(admin.ModelAdmin):
         if obj:
             return obj.listings.count() == 0
         return True
+
+
+@admin.register(UserFeedback)
+class UserFeedbackAdmin(admin.ModelAdmin):
+    """Admin interface for user feedback submissions."""
+
+    list_display = ['id', 'user', 'page_url', 'status', 'created_at']
+    list_filter = ['status', 'created_at']
+    search_fields = ['user__username', 'message', 'page_url']
+    readonly_fields = ['created_at', 'updated_at']
+    ordering = ['-created_at']
+
+    fieldsets = (
+        ('Feedback Details', {
+            'fields': ('user', 'message', 'created_at')
+        }),
+        ('Context', {
+            'fields': ('page_url', 'page_title', 'view_name', 'context_data')
+        }),
+        ('Admin Review', {
+            'fields': ('status', 'admin_notes', 'reviewed_by', 'reviewed_at')
+        }),
+    )
 
 

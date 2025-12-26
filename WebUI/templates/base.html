@@ -222,6 +222,11 @@
         {% block content %}{% endblock %}
     </main>
 
+    <!-- Capture current view name for feedback widget -->
+    <script>
+        window.currentViewName = "{{ request.resolver_match.view_name|default:'' }}";
+    </script>
+
     <!-- Footer -->
     <footer class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 mt-auto">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -230,6 +235,165 @@
             </div>
         </div>
     </footer>
+
+    <!-- Feedback Widget (Fixed Bottom-Left) -->
+    <div x-data="feedbackWidget()" class="fixed bottom-4 left-4 z-40" x-cloak>
+
+        <!-- Feedback Button -->
+        <button @click="toggleForm()"
+                :class="{ 'ring-2 ring-blue-500': isOpen }"
+                class="bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white rounded-full px-4 py-3 shadow-lg transition-all duration-200 flex items-center space-x-2"
+                aria-label="Send Feedback">
+            <svg x-show="!isOpen" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/>
+            </svg>
+            <svg x-show="isOpen" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+            <span x-show="!isOpen" class="text-sm font-medium">Feedback</span>
+        </button>
+
+        <!-- Expandable Form -->
+        <div x-show="isOpen"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 translate-y-4"
+             x-transition:enter-end="opacity-100 translate-y-0"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100 translate-y-0"
+             x-transition:leave-end="opacity-0 translate-y-4"
+             class="absolute bottom-16 left-0 w-80 sm:w-96 max-w-[calc(100vw-2rem)] bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700">
+
+            <!-- Form Header -->
+            <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Send Feedback</h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Help us improve PriceTracker</p>
+            </div>
+
+            <!-- Form Body -->
+            <form id="feedback-form"
+                  hx-post="{% url 'submit_feedback' %}"
+                  hx-trigger="submit"
+                  hx-swap="none"
+                  @htmx:after-request="handleResponse($event)"
+                  class="p-4 space-y-4">
+                {% csrf_token %}
+
+                <!-- Hidden Context Fields -->
+                <input type="hidden" name="page_url" x-model="pageUrl">
+                <input type="hidden" name="page_title" x-model="pageTitle">
+                <input type="hidden" name="view_name" x-model="viewName">
+                <input type="hidden" name="context_data" x-model="contextDataJson">
+
+                <!-- Feedback Message -->
+                <div>
+                    <label for="feedback-message" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Your Feedback
+                    </label>
+                    <textarea id="feedback-message"
+                              name="message"
+                              rows="4"
+                              required
+                              maxlength="2000"
+                              placeholder="Tell us what you think, report issues, or suggest improvements..."
+                              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                              x-model="message"></textarea>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        <span x-text="message.length"></span>/2000 characters
+                    </p>
+                </div>
+
+                <!-- Context Display -->
+                <div class="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 rounded p-2">
+                    <p class="font-medium mb-1">Context (auto-captured):</p>
+                    <p>Page: <span class="font-mono" x-text="pageTitle || pageUrl"></span></p>
+                </div>
+
+                <!-- Submit Buttons -->
+                <div class="flex justify-end space-x-2">
+                    <button type="button"
+                            @click="toggleForm()"
+                            class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition">
+                        Cancel
+                    </button>
+                    <button type="submit"
+                            class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 rounded-lg transition">
+                        Send Feedback
+                    </button>
+                </div>
+            </form>
+
+            <!-- Success Message -->
+            <div x-show="showSuccess"
+                 x-transition
+                 class="absolute inset-0 bg-white dark:bg-gray-800 rounded-lg flex items-center justify-center p-6">
+                <div class="text-center">
+                    <svg class="w-16 h-16 text-green-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <h4 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Thank You!</h4>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">Your feedback has been submitted.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alpine.js Component Script -->
+    <script>
+    function feedbackWidget() {
+        return {
+            isOpen: false,
+            showSuccess: false,
+            message: '',
+            pageUrl: window.location.pathname,
+            pageTitle: document.title,
+            viewName: window.currentViewName || '',
+
+            get contextDataJson() {
+                return JSON.stringify({
+                    screen_width: window.innerWidth,
+                    screen_height: window.innerHeight,
+                    user_agent: navigator.userAgent,
+                    referrer: document.referrer
+                });
+            },
+
+            toggleForm() {
+                this.isOpen = !this.isOpen;
+                this.showSuccess = false;
+                if (this.isOpen) {
+                    this.$nextTick(() => {
+                        document.getElementById('feedback-message')?.focus();
+                    });
+                }
+            },
+
+            handleResponse(event) {
+                // HTMX event gives us the response in event.detail
+                try {
+                    let data;
+                    if (event.detail.xhr && event.detail.xhr.response) {
+                        data = JSON.parse(event.detail.xhr.response);
+                    } else if (event.detail.successful) {
+                        // Response might already be parsed
+                        const xhr = event.detail.xhr;
+                        data = JSON.parse(xhr.responseText);
+                    }
+
+                    if (data && data.success) {
+                        this.showSuccess = true;
+                        this.message = '';
+                        setTimeout(() => {
+                            this.isOpen = false;
+                            this.showSuccess = false;
+                        }, 2000);
+                    }
+                } catch (e) {
+                    console.error('Error parsing feedback response:', e, event.detail);
+                }
+            }
+        };
+    }
+    </script>
 
     <!-- Alpine.js for simple interactions -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>

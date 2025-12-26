@@ -561,7 +561,7 @@
                                         {% endwith %}
 
                                         <!-- Message (if different from event) -->
-                                        {% if log.message %}
+                                        {% if log.message and log.message != log.event %}
                                         <span class="text-xs text-gray-600 dark:text-gray-400 italic">
                                             — {{ log.message }}
                                         </span>
