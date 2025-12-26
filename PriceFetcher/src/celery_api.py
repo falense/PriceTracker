@@ -127,12 +127,22 @@ async def fetch_listing_price_direct(
 
         return response
 
-    except Exception as e:
-        logger.exception("fetch_listing_price_direct_error", listing_id=listing_id, error=str(e))
+    except KeyError as e:
+        # KeyError needs special handling - str(KeyError('key')) just returns 'key'
+        error_msg = f"Missing required configuration key: {e}"
+        logger.exception("fetch_listing_price_direct_error", listing_id=listing_id, error=error_msg)
         return {
             'status': 'error',
             'listing_id': listing_id,
-            'error': str(e)
+            'error': error_msg
+        }
+    except Exception as e:
+        error_msg = f"{type(e).__name__}: {str(e)}"
+        logger.exception("fetch_listing_price_direct_error", listing_id=listing_id, error=error_msg)
+        return {
+            'status': 'error',
+            'listing_id': listing_id,
+            'error': error_msg
         }
 
 
@@ -212,11 +222,19 @@ async def fetch_all_due_prices(
 
         return response
 
-    except Exception as e:
-        logger.exception("fetch_all_due_prices_error", error=str(e))
+    except KeyError as e:
+        error_msg = f"Missing required configuration key: {e}"
+        logger.exception("fetch_all_due_prices_error", error=error_msg)
         return {
             'status': 'error',
-            'error': str(e)
+            'error': error_msg
+        }
+    except Exception as e:
+        error_msg = f"{type(e).__name__}: {str(e)}"
+        logger.exception("fetch_all_due_prices_error", error=error_msg)
+        return {
+            'status': 'error',
+            'error': error_msg
         }
 
 
@@ -291,9 +309,17 @@ async def backfill_images_direct(
 
         return response
 
-    except Exception as e:
-        logger.exception("backfill_images_direct_error", error=str(e))
+    except KeyError as e:
+        error_msg = f"Missing required configuration key: {e}"
+        logger.exception("backfill_images_direct_error", error=error_msg)
         return {
             'status': 'error',
-            'error': str(e)
+            'error': error_msg
+        }
+    except Exception as e:
+        error_msg = f"{type(e).__name__}: {str(e)}"
+        logger.exception("backfill_images_direct_error", error=error_msg)
+        return {
+            'status': 'error',
+            'error': error_msg
         }

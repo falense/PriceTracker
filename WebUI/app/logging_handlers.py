@@ -135,8 +135,9 @@ class DatabaseLogHandler(logging.Handler):
             event = event_dict.get('event', record.getMessage())
 
             # Extract message (human-readable description)
-            # Some events use 'event' as the message, others have a separate 'message' field
-            message = event_dict.get('message', '') if 'message' in event_dict else event
+            # IMPORTANT: Use 'description' field. Both 'message' and 'msg' are reserved
+            # attributes in LogRecord and will cause "Attempt to overwrite" errors
+            message = event_dict.get('description', '') if 'description' in event_dict else event
 
             # Determine service (celery/fetcher/extractor)
             service = event_dict.get('service', 'webui')

@@ -154,23 +154,9 @@ class PriceFetcher:
             total=summary.total,
             success=summary.success,
             failed=summary.failed,
-            duration=summary.duration_seconds,
-        )
-
-        # Log fetch run summary to OperationLog
-        self.storage.log_operation(
-            service="fetcher",
-            level="INFO",
-            event="fetch_run_completed",
-            message=f"Fetch run completed: {success_count}/{len(products)} successful",
-            context={
-                "total": len(products),
-                "success": success_count,
-                "failed": failed_count,
-                "duration_seconds": duration,
-            },
-            filename="fetcher.py",
+            duration_seconds=duration,
             duration_ms=int(duration * 1000),
+            description=f"Fetch run completed: {success_count}/{len(products)} successful",
         )
 
         return summary
@@ -192,21 +178,41 @@ class PriceFetcher:
         product_id = product.product_id
         url = product.url
 
-        logger.info("fetching_product", product_id=product_id, url=url)
-
-        # Log operation start
-        self.storage.log_operation(
-            service="fetcher",
-            level="INFO",
-            event="fetch_started",
-            message=f"Starting fetch for product {product_id}",
-            context={"url": url, "domain": product.domain},
-            listing_id=product.listing_id,
+        logger.info(
+            "fetch_started",
             product_id=product_id,
-            filename="fetcher.py",
+            listing_id=product.listing_id,
+            url=url,
+            domain=product.domain,
+            description=f"Starting fetch for product {product_id}",
         )
 
         try:
+            # Check if extractor exists for this domain before fetching
+            if not self.extractor.has_extractor(product.domain):
+                error_msg = f"No extractor found for domain: {product.domain}"
+                logger.error(
+                    "extractor_not_found",
+                    product_id=product_id,
+                    listing_id=product.listing_id,
+                    url=url,
+                    domain=product.domain,
+                    error=error_msg,
+                    description=error_msg,
+                )
+
+                # Update last_checked to prevent infinite retries
+                if product.listing_id:
+                    self.storage.update_last_checked(product.listing_id)
+
+                return FetchResult(
+                    product_id=product_id,
+                    url=url,
+                    success=False,
+                    error=error_msg,
+                    duration_ms=int((time.time() - start_time) * 1000),
+                )
+
             # Fetch HTML
             html = await self._fetch_html(url)
 
@@ -228,22 +234,19 @@ class PriceFetcher:
             validation = self.validator.validate_extraction(extraction, previous_extraction)
 
             # Log extraction result
-            self.storage.log_operation(
-                service="fetcher",
-                level="INFO" if validation.valid else "WARNING",
-                event="extraction_completed",
-                message=f"Extraction {'succeeded' if validation.valid else 'failed'} with confidence {validation.confidence:.2f}",
-                context={
-                    "valid": validation.valid,
-                    "confidence": validation.confidence,
-                    "extraction_method": extraction.price.method if extraction.price else None,
-                    "extractor_module": extractor_module,
-                    "errors": validation.errors,
-                    "warnings": validation.warnings,
-                },
-                listing_id=product.listing_id,
+            log_level = "info" if validation.valid else "warning"
+            getattr(logger, log_level)(
+                "extraction_completed",
                 product_id=product_id,
-                filename="fetcher.py",
+                listing_id=product.listing_id,
+                url=url,
+                valid=validation.valid,
+                confidence=validation.confidence,
+                extraction_method=extraction.price.method if extraction.price else None,
+                extractor_module=extractor_module,
+                errors=validation.errors,
+                warnings=validation.warnings,
+                description=f"Extraction {'succeeded' if validation.valid else 'failed'} with confidence {validation.confidence:.2f}",
             )
 
             # Store if valid
@@ -276,27 +279,14 @@ class PriceFetcher:
             error_msg = str(e)
 
             logger.exception(
-                "product_fetch_failed",
+                "fetch_failed",
                 product_id=product_id,
-                url=url,
-                error=error_msg,
-            )
-
-            # Log to OperationLog
-            self.storage.log_operation(
-                service="fetcher",
-                level="ERROR",
-                event="fetch_failed",
-                message=f"Fetch failed: {error_msg}",
-                context={
-                    "error": error_msg,
-                    "url": url,
-                    "domain": product.domain,
-                },
                 listing_id=product.listing_id,
-                product_id=product_id,
-                filename="fetcher.py",
+                url=url,
+                domain=product.domain,
+                error=error_msg,
                 duration_ms=duration_ms,
+                description=f"Fetch failed: {error_msg}",
             )
 
             # Update last_checked even on exception to prevent infinite retries

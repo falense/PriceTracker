@@ -20,6 +20,41 @@ Extraction patterns are Python modules that extract product data from e-commerce
 
 Patterns are located in `ExtractorPatternAgent/generated_extractors/` and follow a standardized structure.
 
+### Fields Reference
+
+Each extractor should extract up to **6 fields** from e-commerce product pages:
+
+#### 1. **Price** 💰 (Required)
+- Current selling price as a Decimal
+- Extracts from: data attributes, CSS classes, JSON-LD, dataLayer
+- Example values: `1990.00`, `299.99`
+- Example sources: `1 990,-`, `€299,-`
+
+#### 2. **Title** 📝 (Required)
+- Product name/title
+- Extracts from: Open Graph meta tags, H1 headings, JSON-LD
+- Example: `Bose QuietComfort SC trådløse hodetelefoner, Over-Ear (sort)`
+
+#### 3. **Image** 🖼️ (Optional)
+- Primary product image URL
+- Extracts from: Open Graph meta tags (`og:image`, `og:image:secure_url`), img elements
+- Example: `https://www.komplett.no/img/p/200/1310167.jpg`
+
+#### 4. **Availability** ✅ (Optional)
+- Stock status/availability information
+- Extracts from: stock indicators, availability elements, JSON data
+- Example: `50+`, `In Stock`, `Out of Stock`, `Tilgjengelighet: 20+ stk. på lager.`
+
+#### 5. **Article Number** 🔢 (Optional)
+- Web store item number (Varenummer/SKU/Product ID)
+- Extracts from: `itemprop="sku"`, dataLayer, product specification tables, URLs
+- Example: `1310167`
+
+#### 6. **Model Number** 🏷️ (Optional)
+- Manufacturer model/part number
+- Extracts from: dataLayer, JSON-LD, product specification tables
+- Example: `884367-0900`
+
 ---
 
 ## Prerequisites

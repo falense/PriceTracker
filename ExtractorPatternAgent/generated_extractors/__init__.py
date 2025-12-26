@@ -47,7 +47,7 @@ class ExtractorRegistry:
         if self._loaded:
             return
 
-        logger.info("Discovering extractor modules...")
+        logger.debug("Discovering extractor modules...")
 
         # Get package directory
         package_dir = Path(__file__).parent
@@ -71,7 +71,7 @@ class ExtractorRegistry:
                     domain = module.PATTERN_METADATA.get("domain")
                     if domain:
                         self._extractors[domain] = module
-                        logger.info(f"Registered extractor for {domain}")
+                        logger.debug(f"Registered extractor for {domain}")
                     else:
                         logger.warning(
                             f"Module {module_name} has PATTERN_METADATA but no 'domain' key"

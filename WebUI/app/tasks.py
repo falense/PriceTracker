@@ -199,14 +199,26 @@ async def _fetch_listing_price_async(task_self, listing_id: str):
             "listing_id": listing_id,
             "error": "Listing not found",
         }
-    except Exception as e:
+    except KeyError as e:
+        # KeyError needs special handling - str(KeyError('key')) just returns 'key'
+        error_msg = f"Missing required configuration key: {e}"
         logger.error(
             "fetch_listing_error",
             listing_id=listing_id,
-            error=str(e),
+            error=error_msg,
             exc_info=True,
         )
-        return {"status": "error", "listing_id": listing_id, "error": str(e)}
+        return {"status": "error", "listing_id": listing_id, "error": error_msg}
+    except Exception as e:
+        # Include exception type in error message for better debugging
+        error_msg = f"{type(e).__name__}: {str(e)}" if str(e) else type(e).__name__
+        logger.error(
+            "fetch_listing_error",
+            listing_id=listing_id,
+            error=error_msg,
+            exc_info=True,
+        )
+        return {"status": "error", "listing_id": listing_id, "error": error_msg}
 
 
 @shared_task
@@ -249,8 +261,9 @@ def fetch_prices_by_aggregated_priority():
         return {"products_checked": product_count, "listings_queued": listing_count}
 
     except Exception as e:
+        error_msg = f"{type(e).__name__}: {str(e)}" if str(e) else type(e).__name__
         logger.exception("Error in fetch_prices_by_aggregated_priority")
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": error_msg}
 
 
 @shared_task
@@ -354,5 +367,6 @@ async def _fetch_missing_images_async():
         return result
 
     except Exception as e:
+        error_msg = f"{type(e).__name__}: {str(e)}" if str(e) else type(e).__name__
         logger.exception("Error in fetch_missing_images task")
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": error_msg}

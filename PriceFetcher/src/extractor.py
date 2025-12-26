@@ -21,6 +21,33 @@ if str(EXTRACTOR_PATH) not in sys.path:
 class Extractor:
     """Apply Python extractors to HTML to extract product data."""
 
+    def has_extractor(self, domain: str) -> bool:
+        """
+        Check if an extractor exists for the given domain.
+
+        Args:
+            domain: Store domain (e.g., "komplett.no")
+
+        Returns:
+            True if an extractor exists for this domain, False otherwise
+        """
+        try:
+            from generated_extractors import get_parser
+
+            # Normalize domain (remove www.)
+            normalized_domain = domain.lower().replace("www.", "")
+
+            # Check if parser exists for this domain
+            parser_module = get_parser(normalized_domain)
+            return parser_module is not None
+
+        except ImportError:
+            logger.warning("extractor_module_not_available", domain=domain)
+            return False
+        except Exception as e:
+            logger.exception("extractor_check_failed", domain=domain, error=str(e))
+            return False
+
     def extract_with_domain(self, html: str, domain: str) -> tuple[ExtractionResult, Optional[str]]:
         """
         Extract data using Python extractor module for domain.
