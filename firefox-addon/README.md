@@ -247,6 +247,13 @@ After making changes:
 2. Click "Reload" next to PriceTracker
 3. Changes will take effect immediately
 
+**Note**: If you modify icon files (`.png` files in the `icons/` directory), a simple reload may not be sufficient. In this case, you need to:
+1. Click "Remove" to uninstall the addon completely
+2. Re-add the addon using "Load Temporary Add-on"
+3. Select `manifest.json` again
+
+This is required because Firefox caches icon resources and doesn't always update them with a regular reload.
+
 ## Security Notes
 
 - **Session authentication**: Uses Django session cookies
