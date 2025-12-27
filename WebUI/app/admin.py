@@ -11,7 +11,7 @@ from datetime import datetime
 from .models import (
     Product, Store, ProductListing, UserSubscription,
     PriceHistory, Notification, UserView, AdminFlag, OperationLog,
-    ExtractorVersion, UserFeedback
+    ExtractorVersion, UserFeedback, ProductRelation
 )
 
 
@@ -561,5 +561,41 @@ class UserFeedbackAdmin(admin.ModelAdmin):
             'fields': ('status', 'admin_notes', 'reviewed_by', 'reviewed_at')
         }),
     )
+
+
+@admin.register(ProductRelation)
+class ProductRelationAdmin(admin.ModelAdmin):
+    """Admin interface for product relation votes."""
+
+    list_display = ['user', 'product_1', 'product_2', 'weight_display', 'updated_at']
+    list_filter = ['weight', 'updated_at']
+    search_fields = ['user__username', 'product_1__name', 'product_2__name']
+    raw_id_fields = ['user', 'product_1', 'product_2']
+    readonly_fields = ['created_at', 'updated_at']
+    date_hierarchy = 'created_at'
+    ordering = ['-updated_at']
+
+    fieldsets = (
+        ('Relation Information', {
+            'fields': ('user', 'product_1', 'product_2', 'weight')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at')
+        }),
+    )
+
+    def weight_display(self, obj):
+        """Display vote with color coding."""
+        weight_colors = {
+            1: ('green', '👍 Same'),
+            -1: ('red', '👎 Different'),
+            0: ('gray', 'Dismissed'),
+        }
+        color, label = weight_colors.get(obj.weight, ('gray', 'Unknown'))
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            color, label
+        )
+    weight_display.short_description = 'Vote'
 
 

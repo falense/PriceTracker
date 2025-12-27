@@ -1809,3 +1809,116 @@ def submit_feedback(request):
     except Exception as e:
         logger.error(f"Error submitting feedback: user={request.user.username}, error={str(e)}", exc_info=True)
         return JsonResponse({'success': False, 'error': 'An error occurred while submitting feedback'}, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def vote_product_relation(request, subscription_id):
+    """
+    HTMX endpoint: User votes on whether a suggested product is the same.
+
+    POST params:
+        - suggested_product_id: UUID of the suggested similar product
+        - vote: 'same' (1), 'different' (-1), or 'dismiss' (0)
+    """
+    subscription = get_object_or_404(
+        UserSubscription, id=subscription_id, user=request.user
+    )
+
+    suggested_product_id = request.POST.get('suggested_product_id')
+    vote_str = request.POST.get('vote')
+
+    # Validate inputs
+    if not suggested_product_id or not vote_str:
+        messages.error(request, "Invalid vote data")
+        return redirect('subscription_detail', subscription_id=subscription_id)
+
+    # Convert vote string to weight
+    vote_map = {'same': 1, 'different': -1, 'dismiss': 0}
+    weight = vote_map.get(vote_str)
+
+    if weight is None:
+        messages.error(request, "Invalid vote value")
+        return redirect('subscription_detail', subscription_id=subscription_id)
+
+    # Record vote
+    try:
+        from .services import ProductRelationService
+
+        ProductRelationService.vote_on_relation(
+            user=request.user,
+            product_id_1=subscription.product.id,
+            product_id_2=suggested_product_id,
+            weight=weight
+        )
+
+        # HTMX: Return updated suggestions partial
+        if request.headers.get('HX-Request'):
+            return get_similar_products_partial(request, subscription_id)
+
+        messages.success(request, "Thanks for your feedback!")
+        return redirect('subscription_detail', subscription_id=subscription_id)
+
+    except Exception as e:
+        logger.error(f"Vote error: {e}")
+        messages.error(request, "Failed to record vote")
+        return redirect('subscription_detail', subscription_id=subscription_id)
+
+
+@login_required
+def get_similar_products_partial(request, subscription_id):
+    """
+    HTMX endpoint: Get similar products suggestions for display.
+    Returns HTML partial for injection.
+    """
+    subscription = get_object_or_404(
+        UserSubscription, id=subscription_id, user=request.user
+    )
+
+    from .services import ProductSimilarityService, ProductRelationService
+
+    # Find similar products
+    similar_products = ProductSimilarityService.find_similar_products(
+        target_product=subscription.product,
+        limit=5
+    )
+
+    # Enrich with user's existing votes and aggregate stats
+    suggestions = []
+    for product, similarity_score in similar_products:
+        user_vote = ProductRelationService.get_user_vote(
+            user=request.user,
+            product_id_1=subscription.product.id,
+            product_id_2=product.id
+        )
+
+        # Skip if user already voted (except if they want to see it)
+        if user_vote == 0:  # Dismissed
+            continue
+
+        aggregate = ProductRelationService.get_aggregate_votes(
+            product_id_1=subscription.product.id,
+            product_id_2=product.id
+        )
+
+        # Get best price for this product
+        best_listing = product.listings.filter(active=True).order_by('current_price').first()
+
+        suggestions.append({
+            'product': product,
+            'similarity_score': similarity_score,
+            'user_vote': user_vote,
+            'aggregate': aggregate,
+            'best_listing': best_listing,
+        })
+
+    context = {
+        'subscription': subscription,
+        'suggestions': suggestions[:3],  # Show top 3
+    }
+
+    return render(
+        request,
+        'product/partials/similar_products.html',
+        context
+    )
