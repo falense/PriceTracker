@@ -1908,12 +1908,20 @@ def get_similar_products_partial(request, subscription_id):
         # Get best price for this product
         best_listing = product.listings.filter(active=True).order_by('current_price').first()
 
+        # Check if user has a subscription to this product
+        user_subscription = UserSubscription.objects.filter(
+            user=request.user,
+            product=product,
+            active=True
+        ).first()
+
         suggestions.append({
             'product': product,
             'similarity_score': similarity_score,
             'user_vote': user_vote,
             'aggregate': aggregate,
             'best_listing': best_listing,
+            'user_subscription': user_subscription,
         })
 
     context = {
