@@ -52,6 +52,17 @@ urlpatterns = [
         views.refresh_price,
         name="refresh_price",
     ),
+    # Product Relations
+    path(
+        "subscriptions/<uuid:subscription_id>/vote-relation/",
+        views.vote_product_relation,
+        name="vote_product_relation",
+    ),
+    path(
+        "subscriptions/<uuid:subscription_id>/similar-products/",
+        views.get_similar_products_partial,
+        name="get_similar_products",
+    ),
     # HTMX endpoints
     path("search/", views.search_product, name="search_product"),
     path("search/autocomplete/", views.search_autocomplete, name="search_autocomplete"),

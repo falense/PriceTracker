@@ -17,6 +17,9 @@ lxml>=5.0.0
 # Data validation (for PriceFetcher)
 pydantic>=2.0.0
 
+# Fuzzy string matching (for product similarity)
+rapidfuzz>=3.0.0
+
 # Structured logging
 structlog>=24.0.0
 

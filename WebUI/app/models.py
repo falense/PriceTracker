@@ -965,6 +965,73 @@ class UserFeedback(models.Model):
         return f"Feedback from {self.user.username} on {self.page_url}"
 
 
+class ProductRelation(models.Model):
+    """User voting on whether two products are the same item."""
+
+    VOTE_CHOICES = [
+        (-1, 'Not the same'),
+        (0, 'Dismissed'),
+        (1, 'Same product'),
+    ]
+
+    id = models.BigAutoField(primary_key=True, serialize=False)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='product_relations'
+    )
+    product_1 = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name='relations_as_first'
+    )
+    product_2 = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name='relations_as_second'
+    )
+    weight = models.SmallIntegerField(
+        choices=VOTE_CHOICES,
+        db_index=True,
+        help_text='User vote: -1 (different), 0 (dismissed), 1 (same)'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True, db_index=True)
+
+    class Meta:
+        verbose_name = 'Product Relation'
+        verbose_name_plural = 'Product Relations'
+        ordering = ['-updated_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'product_1', 'product_2'],
+                name='unique_user_product_relation'
+            ),
+            models.CheckConstraint(
+                check=Q(product_1_id__lt=models.F('product_2_id')),
+                name='product_1_less_than_product_2',
+                violation_error_message='product_1 must be less than product_2'
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['user', '-updated_at']),
+            models.Index(fields=['product_1', 'product_2']),
+            models.Index(fields=['product_2', 'product_1']),  # Reverse lookup
+            models.Index(fields=['weight', '-updated_at']),
+        ]
+
+    def __str__(self):
+        vote_display = dict(self.VOTE_CHOICES)[self.weight]
+        return f"{self.user.username}: {self.product_1.name} ↔ {self.product_2.name} ({vote_display})"
+
+    @staticmethod
+    def normalize_product_ids(product_id_1, product_id_2):
+        """Ensure product_1 < product_2 for consistent ordering."""
+        if product_id_1 < product_id_2:
+            return product_id_1, product_id_2
+        return product_id_2, product_id_1
+
+
 # ========== Signals ==========
 
 from django.db.models.signals import pre_save, post_save

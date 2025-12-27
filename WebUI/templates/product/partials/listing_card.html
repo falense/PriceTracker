@@ -1,0 +1,34 @@
+{% load currency_filters %}
+
+<div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4
+            {% if is_best %}bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700{% endif %}">
+    <div class="flex items-center justify-between mb-2">
+        <div>
+            <h3 class="font-semibold text-gray-900 dark:text-white">
+                {{ listing.store.name }}
+                {% if is_best %}
+                <span class="ml-2 px-2 py-0.5 bg-green-600 text-white text-xs rounded-full">Best Price</span>
+                {% endif %}
+            </h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400">{{ listing.store.domain }}</p>
+        </div>
+        <div class="text-right">
+            {% if listing.current_price %}
+            <p class="text-2xl font-bold text-gray-900 dark:text-white">
+                {{ listing.current_price|format_currency:listing.currency }}
+            </p>
+            <p class="text-sm text-gray-500 dark:text-gray-400">
+                {% if listing.last_checked %}{{ listing.last_checked|timesince }} ago{% endif %}
+            </p>
+            {% else %}
+            <p class="text-gray-500 dark:text-gray-400">Fetching...</p>
+            {% endif %}
+        </div>
+    </div>
+    {% if listing.current_price %}
+    <a href="{{ listing.url }}" target="_blank" rel="noopener noreferrer"
+       class="inline-block mt-2 text-sm text-primary-600 dark:text-primary-400 hover:underline">
+        View on {{ listing.store.name }} →
+    </a>
+    {% endif %}
+</div>

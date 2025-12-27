@@ -317,11 +317,84 @@ def subscription_detail(request, subscription_id):
         listings, key=lambda l: l.current_price or float("inf"), default=None
     )
 
+    # Fetch similar products and create unified list
+    from .services import ProductSimilarityService, ProductRelationService
+
+    similar_products = ProductSimilarityService.find_similar_products(
+        target_product=subscription.product,
+        limit=5
+    )
+
+    # Enrich with votes and stats
+    similar_suggestions = []
+    for product, similarity_score in similar_products:
+        user_vote = ProductRelationService.get_user_vote(
+            user=request.user,
+            product_id_1=subscription.product.id,
+            product_id_2=product.id
+        )
+
+        # Skip dismissed products
+        if user_vote == 0:
+            continue
+
+        aggregate = ProductRelationService.get_aggregate_votes(
+            product_id_1=subscription.product.id,
+            product_id_2=product.id
+        )
+
+        best_listing_for_similar = product.listings.filter(active=True).order_by('current_price').first()
+        user_subscription = UserSubscription.objects.filter(
+            user=request.user,
+            product=product,
+            active=True
+        ).first()
+
+        similar_suggestions.append({
+            'type': 'similar',
+            'product': product,
+            'similarity_score': similarity_score,
+            'user_vote': user_vote,
+            'aggregate': aggregate,
+            'best_listing': best_listing_for_similar,
+            'user_subscription': user_subscription,
+            'price': best_listing_for_similar.current_price if best_listing_for_similar and best_listing_for_similar.current_price else None,
+        })
+
+    # Create unified items list
+    unified_items = []
+
+    # Add listings as unified items
+    for listing in listings:
+        unified_items.append({
+            'type': 'listing',
+            'listing': listing,
+            'price': listing.current_price,
+            'is_best': False,  # Will be set after sorting
+        })
+
+    # Add similar products (limit to 4)
+    unified_items.extend(similar_suggestions[:4])
+
+    # Sort by price (None prices go to end)
+    unified_items.sort(key=lambda x: x['price'] if x['price'] else float('inf'))
+
+    # Mark the first item with a price as best
+    for item in unified_items:
+        if item['price'] is not None:
+            item['is_best'] = True
+            break
+
+    # Identify best price item
+    best_item = unified_items[0] if unified_items and unified_items[0]['price'] else None
+
     context = {
         "subscription": subscription,
         "product": subscription.product,
         "listings": listings,
         "best_listing": best_listing,
+        "unified_items": unified_items,
+        "best_item": best_item,
     }
 
     # Admin-only: Add operation logs
@@ -1809,3 +1882,185 @@ def submit_feedback(request):
     except Exception as e:
         logger.error(f"Error submitting feedback: user={request.user.username}, error={str(e)}", exc_info=True)
         return JsonResponse({'success': False, 'error': 'An error occurred while submitting feedback'}, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def vote_product_relation(request, subscription_id):
+    """
+    HTMX endpoint: User votes on whether a suggested product is the same.
+
+    POST params:
+        - suggested_product_id: UUID of the suggested similar product
+        - vote: 'same' (1), 'different' (-1), or 'dismiss' (0)
+    """
+    subscription = get_object_or_404(
+        UserSubscription, id=subscription_id, user=request.user
+    )
+
+    suggested_product_id = request.POST.get('suggested_product_id')
+    vote_str = request.POST.get('vote')
+
+    # Validate inputs
+    if not suggested_product_id or not vote_str:
+        messages.error(request, "Invalid vote data")
+        return redirect('subscription_detail', subscription_id=subscription_id)
+
+    # Convert vote string to weight
+    vote_map = {'same': 1, 'different': -1, 'dismiss': 0}
+    weight = vote_map.get(vote_str)
+
+    if weight is None:
+        messages.error(request, "Invalid vote value")
+        return redirect('subscription_detail', subscription_id=subscription_id)
+
+    # Record vote
+    try:
+        import uuid
+        from .services import ProductRelationService
+
+        # Convert string UUID to UUID object
+        suggested_product_uuid = uuid.UUID(suggested_product_id)
+
+        ProductRelationService.vote_on_relation(
+            user=request.user,
+            product_id_1=subscription.product.id,
+            product_id_2=suggested_product_uuid,
+            weight=weight
+        )
+
+        # HTMX: Return updated card partial
+        if request.headers.get('HX-Request'):
+            from django.http import HttpResponse
+
+            # If dismissed, remove card from DOM
+            if weight == 0:
+                return HttpResponse("")
+
+            # Otherwise, return updated card with new vote state
+            from .models import Product
+            suggested_product = Product.objects.get(id=suggested_product_uuid)
+
+            # Re-fetch similarity score
+            from .services import ProductSimilarityService
+            similar_products = ProductSimilarityService.find_similar_products(
+                target_product=subscription.product,
+                limit=10
+            )
+
+            similarity_score = None
+            for product, score in similar_products:
+                if product.id == suggested_product_uuid:
+                    similarity_score = score
+                    break
+
+            if similarity_score is None:
+                return HttpResponse("")  # Product no longer similar
+
+            # Get updated vote and aggregate
+            user_vote = ProductRelationService.get_user_vote(
+                user=request.user,
+                product_id_1=subscription.product.id,
+                product_id_2=suggested_product_uuid
+            )
+
+            aggregate = ProductRelationService.get_aggregate_votes(
+                product_id_1=subscription.product.id,
+                product_id_2=suggested_product_uuid
+            )
+
+            best_listing = suggested_product.listings.filter(active=True).order_by('current_price').first()
+            user_subscription = UserSubscription.objects.filter(
+                user=request.user,
+                product=suggested_product,
+                active=True
+            ).first()
+
+            suggestion = {
+                'product': suggested_product,
+                'similarity_score': similarity_score,
+                'user_vote': user_vote,
+                'aggregate': aggregate,
+                'best_listing': best_listing,
+                'user_subscription': user_subscription,
+            }
+
+            return render(request, 'product/partials/similar_product_card.html', {
+                'suggestion': suggestion,
+                'subscription': subscription,
+            })
+
+        messages.success(request, "Thanks for your feedback!")
+        return redirect('subscription_detail', subscription_id=subscription_id)
+
+    except Exception as e:
+        logger.error(f"Vote error: {e}")
+        messages.error(request, "Failed to record vote")
+        return redirect('subscription_detail', subscription_id=subscription_id)
+
+
+@login_required
+def get_similar_products_partial(request, subscription_id):
+    """
+    HTMX endpoint: Get similar products suggestions for display.
+    Returns HTML partial for injection.
+    """
+    subscription = get_object_or_404(
+        UserSubscription, id=subscription_id, user=request.user
+    )
+
+    from .services import ProductSimilarityService, ProductRelationService
+
+    # Find similar products
+    similar_products = ProductSimilarityService.find_similar_products(
+        target_product=subscription.product,
+        limit=5
+    )
+
+    # Enrich with user's existing votes and aggregate stats
+    suggestions = []
+    for product, similarity_score in similar_products:
+        user_vote = ProductRelationService.get_user_vote(
+            user=request.user,
+            product_id_1=subscription.product.id,
+            product_id_2=product.id
+        )
+
+        # Skip if user already voted (except if they want to see it)
+        if user_vote == 0:  # Dismissed
+            continue
+
+        aggregate = ProductRelationService.get_aggregate_votes(
+            product_id_1=subscription.product.id,
+            product_id_2=product.id
+        )
+
+        # Get best price for this product
+        best_listing = product.listings.filter(active=True).order_by('current_price').first()
+
+        # Check if user has a subscription to this product
+        user_subscription = UserSubscription.objects.filter(
+            user=request.user,
+            product=product,
+            active=True
+        ).first()
+
+        suggestions.append({
+            'product': product,
+            'similarity_score': similarity_score,
+            'user_vote': user_vote,
+            'aggregate': aggregate,
+            'best_listing': best_listing,
+            'user_subscription': user_subscription,
+        })
+
+    context = {
+        'subscription': subscription,
+        'suggestions': suggestions[:4],  # Show top 4
+    }
+
+    return render(
+        request,
+        'product/partials/similar_products.html',
+        context
+    )

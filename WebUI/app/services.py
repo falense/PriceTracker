@@ -658,3 +658,187 @@ class SubscriptionStatusService:
         if listing:
             return listing.store.name
         return "the store"
+
+
+class ProductSimilarityService:
+    """Fuzzy matching service to find similar products."""
+
+    # Thresholds
+    NAME_SIMILARITY_THRESHOLD = 75  # Token set ratio minimum
+    BRAND_BOOST = 15  # Bonus points for brand match
+    MODEL_BOOST = 20  # Bonus points for model number match
+    MAX_CANDIDATES = 200  # Limit candidate pool for performance
+
+    @classmethod
+    def find_similar_products(cls, target_product, limit=5, exclude_ids=None):
+        """
+        Find products similar to target_product using fuzzy matching.
+
+        Args:
+            target_product: Product instance to find matches for
+            limit: Maximum number of similar products to return
+            exclude_ids: List of product IDs to exclude from results
+
+        Returns:
+            List of tuples: [(product, similarity_score), ...]
+            Sorted by similarity score (highest first)
+        """
+        from rapidfuzz import fuzz
+
+        exclude_ids = exclude_ids or []
+        exclude_ids.append(target_product.id)
+
+        # Step 1: Exact matches on EAN/UPC (100% confidence)
+        exact_matches = []
+        if target_product.ean:
+            exact_matches.extend(
+                Product.objects.filter(ean=target_product.ean)
+                .exclude(id__in=exclude_ids)
+            )
+        if target_product.upc:
+            exact_matches.extend(
+                Product.objects.filter(upc=target_product.upc)
+                .exclude(id__in=exclude_ids)
+            )
+
+        results = [(p, 100.0) for p in exact_matches]
+
+        # Step 2: Fuzzy name matching with boosting
+        # Get candidate pool (limit for performance)
+        candidates = (
+            Product.objects.exclude(id__in=exclude_ids)
+            .order_by('-subscriber_count', '-updated_at')[:cls.MAX_CANDIDATES]
+        )
+
+        target_name = target_product.canonical_name or target_product.name
+        target_brand = (target_product.brand or '').lower()
+        target_model = (target_product.model_number or '').lower()
+
+        for candidate in candidates:
+            # Base similarity: token set ratio (handles word order differences)
+            candidate_name = candidate.canonical_name or candidate.name
+            base_score = fuzz.token_set_ratio(target_name, candidate_name)
+
+            if base_score < cls.NAME_SIMILARITY_THRESHOLD:
+                continue
+
+            # Calculate boosted score
+            score = float(base_score)
+
+            # Brand match boost
+            if target_brand and candidate.brand:
+                if target_brand == candidate.brand.lower():
+                    score = min(100, score + cls.BRAND_BOOST)
+
+            # Model number match boost
+            if target_model and candidate.model_number:
+                if target_model == candidate.model_number.lower():
+                    score = min(100, score + cls.MODEL_BOOST)
+
+            results.append((candidate, score))
+
+        # Sort by score and return top N
+        results.sort(key=lambda x: x[1], reverse=True)
+        return results[:limit]
+
+
+class ProductRelationService:
+    """Service for managing product relation votes."""
+
+    @staticmethod
+    def vote_on_relation(user, product_id_1, product_id_2, weight):
+        """
+        Record or update user's vote on product similarity.
+
+        Args:
+            user: User instance
+            product_id_1, product_id_2: UUIDs of products to relate
+            weight: -1 (different), 0 (dismissed), 1 (same)
+
+        Returns:
+            ProductRelation instance
+        """
+        from .models import ProductRelation
+
+        # Normalize product order
+        p1, p2 = ProductRelation.normalize_product_ids(product_id_1, product_id_2)
+
+        # Create or update relation
+        relation, created = ProductRelation.objects.update_or_create(
+            user=user,
+            product_1_id=p1,
+            product_2_id=p2,
+            defaults={'weight': weight}
+        )
+
+        logger.info(
+            f"User {user.username} voted {weight} on products {p1} ↔ {p2}"
+        )
+
+        return relation
+
+    @staticmethod
+    def get_user_vote(user, product_id_1, product_id_2):
+        """Get user's existing vote on a product pair, if any."""
+        from .models import ProductRelation
+
+        p1, p2 = ProductRelation.normalize_product_ids(product_id_1, product_id_2)
+
+        try:
+            relation = ProductRelation.objects.get(
+                user=user,
+                product_1_id=p1,
+                product_2_id=p2
+            )
+            return relation.weight
+        except ProductRelation.DoesNotExist:
+            return None
+
+    @staticmethod
+    def get_aggregate_votes(product_id_1, product_id_2):
+        """
+        Get aggregate vote statistics for a product pair.
+
+        Returns:
+            dict: {
+                'total_votes': int,
+                'upvotes': int,
+                'downvotes': int,
+                'dismissed': int,
+                'score': float (-1.0 to 1.0)
+            }
+        """
+        from .models import ProductRelation
+        from django.db.models import Count, Q
+
+        p1, p2 = ProductRelation.normalize_product_ids(product_id_1, product_id_2)
+
+        relations = ProductRelation.objects.filter(
+            product_1_id=p1,
+            product_2_id=p2
+        )
+
+        stats = relations.aggregate(
+            total=Count('id'),
+            upvotes=Count('id', filter=Q(weight=1)),
+            downvotes=Count('id', filter=Q(weight=-1)),
+            dismissed=Count('id', filter=Q(weight=0))
+        )
+
+        total_votes = stats['total'] or 0
+        upvotes = stats['upvotes'] or 0
+        downvotes = stats['downvotes'] or 0
+
+        # Calculate weighted score
+        if total_votes > 0:
+            score = (upvotes - downvotes) / total_votes
+        else:
+            score = 0.0
+
+        return {
+            'total_votes': total_votes,
+            'upvotes': upvotes,
+            'downvotes': downvotes,
+            'dismissed': stats['dismissed'] or 0,
+            'score': score
+        }
