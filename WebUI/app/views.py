@@ -1918,7 +1918,7 @@ def get_similar_products_partial(request, subscription_id):
 
     context = {
         'subscription': subscription,
-        'suggestions': suggestions[:3],  # Show top 3
+        'suggestions': suggestions[:4],  # Show top 4
     }
 
     return render(
