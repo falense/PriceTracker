@@ -5,6 +5,7 @@ import os
 from celery import Celery
 from celery.schedules import crontab
 from celery.signals import worker_process_init
+from kombu import Exchange, Queue
 
 # Set the default Django settings module
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
@@ -16,6 +17,23 @@ app.config_from_object('django.conf:settings', namespace='CELERY')
 
 # Auto-discover tasks in all installed apps
 app.autodiscover_tasks()
+
+# ========== Queue Configuration ==========
+# Route pattern generation to dedicated queue for resource isolation
+app.conf.task_routes = {
+    'app.tasks.generate_pattern': {
+        'queue': 'pattern_generation',
+        'routing_key': 'pattern_generation',
+    },
+    # All other tasks use default queue (celery)
+}
+
+# Define queue configurations
+# Note: Celery's default queue is named 'celery', not 'default'
+app.conf.task_queues = (
+    Queue('celery', Exchange('celery'), routing_key='celery'),
+    Queue('pattern_generation', Exchange('pattern_generation'), routing_key='pattern_generation'),
+)
 
 
 @worker_process_init.connect

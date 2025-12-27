@@ -38,6 +38,9 @@ COPY requirements.txt .
 RUN pip install --upgrade pip && \
     pip install -r requirements.txt
 
+# Install uv for ExtractorPatternAgent script execution
+RUN pip install uv
+
 # Install additional dependencies for ExtractorPatternAgent and PriceFetcher
 # These are needed when celery worker calls these components
 RUN pip install playwright>=1.40.0 click>=8.1.0 rich>=13.0.0 pyyaml>=6.0 structlog>=23.0.0
