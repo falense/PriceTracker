@@ -93,7 +93,7 @@
                 <!-- Aggregate Stats -->
                 {% if suggestion.aggregate.total_votes > 0 %}
                 <span class="text-xs text-gray-500 dark:text-gray-400">
-                    {{ suggestion.aggregate.upvotes }} 👍 / {{ suggestion.aggregate.downvotes }} 👎
+                    Agreement: {% widthratio suggestion.aggregate.upvotes suggestion.aggregate.total_votes 100 %}% ({{ suggestion.aggregate.total_votes }} vote{{ suggestion.aggregate.total_votes|pluralize }})
                 </span>
                 {% endif %}
             </div>
