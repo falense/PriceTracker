@@ -1,5 +1,11 @@
 {
   "aliexpress_com": {
+    "commit_author": "Sondre Engebraten",
+    "commit_date": "2025-12-26T22:44:44+01:00",
+    "commit_email": "sondre.engebraten@gmail.com",
+    "commit_hash": "a1e4aba2ac90dbee5fb950778158f0f1bfea8fba",
+    "commit_hash_short": "a1e4aba",
+    "commit_message": "feat: Create extraction pattern for aliexpress.com products",
     "confidence": 0.85,
     "domain": "aliexpress.com",
     "generated_at": "2024-12-26T17:30:00",
@@ -199,6 +205,13 @@
     "domain": "proshop.no",
     "generated_at": "2025-12-22T21:03:19",
     "module": "proshop_no",
+    "version": "1.0"
+  },
+  "skinister_com": {
+    "confidence": 0.95,
+    "domain": "skinister.com",
+    "generated_at": "2025-12-26T22:18:35",
+    "module": "skinister_com",
     "version": "1.0"
   },
   "store_steampowered_com": {
