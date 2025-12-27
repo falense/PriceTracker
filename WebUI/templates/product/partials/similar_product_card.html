@@ -1,0 +1,101 @@
+{% load currency_filters %}
+
+<div class="border-2 border-purple-200 dark:border-purple-800 rounded-lg p-4 bg-purple-50/30 dark:bg-purple-900/10
+            {% if suggestion.user_vote == 1 %}!border-green-300 dark:!border-green-700 !bg-green-50 dark:!bg-green-900/20
+            {% elif suggestion.user_vote == -1 %}!border-red-300 dark:!border-red-700 !bg-red-50 dark:!bg-red-900/20{% endif %}
+            transition-all duration-200">
+
+    <!-- Clickable Product Info -->
+    <a href="{% if suggestion.user_subscription %}{% url 'subscription_detail' suggestion.user_subscription.id %}{% else %}{% url 'product_detail' suggestion.product.id %}{% endif %}"
+       class="block hover:opacity-90 transition-opacity">
+        <div class="flex items-start space-x-4 mb-3">
+            {% if suggestion.product.image_url %}
+            <img src="{% url 'proxy_image' %}?url={{ suggestion.product.image_url|urlencode }}"
+                 alt="{{ suggestion.product.name }}"
+                 class="w-20 h-20 object-contain rounded bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 flex-shrink-0"
+                 loading="lazy">
+            {% endif %}
+
+            <div class="flex-1 min-w-0">
+                <div class="flex items-start justify-between gap-2">
+                    <div class="flex-1">
+                        <h4 class="text-base font-medium text-gray-900 dark:text-white mb-1">
+                            {{ suggestion.product.name }}
+                        </h4>
+                        {% if suggestion.product.brand %}
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                            {{ suggestion.product.brand }}
+                        </p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Similarity Badge -->
+                    <span class="px-2.5 py-1 text-xs font-semibold rounded-full flex-shrink-0
+                                 {% if suggestion.similarity_score >= 90 %}bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200
+                                 {% elif suggestion.similarity_score >= 80 %}bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-200
+                                 {% else %}bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300{% endif %}">
+                        {{ suggestion.similarity_score|floatformat:0 }}% match
+                    </span>
+                </div>
+
+                {% if suggestion.best_listing %}
+                <div class="flex items-baseline gap-2">
+                    <p class="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                        {{ suggestion.best_listing.current_price|format_currency:suggestion.best_listing.currency }}
+                    </p>
+                    <span class="text-xs text-gray-600 dark:text-gray-400">
+                        at {{ suggestion.best_listing.store.name }}
+                    </span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </a>
+
+    <!-- Vote Buttons & Stats -->
+    <div class="flex items-center justify-between pt-3 border-t border-purple-200 dark:border-purple-800">
+        <div class="flex space-x-2">
+            <button
+                hx-post="{% url 'vote_product_relation' subscription.id %}"
+                hx-vals='{"suggested_product_id": "{{ suggestion.product.id }}", "vote": "same"}'
+                hx-target="closest .border-2"
+                hx-swap="outerHTML"
+                class="px-3 py-1.5 text-sm font-medium rounded-lg transition-colors
+                       {% if suggestion.user_vote == 1 %}bg-green-600 text-white hover:bg-green-700{% else %}bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-green-50{% endif %}">
+                <span class="mr-1">👍</span> Same
+            </button>
+
+            <button
+                hx-post="{% url 'vote_product_relation' subscription.id %}"
+                hx-vals='{"suggested_product_id": "{{ suggestion.product.id }}", "vote": "different"}'
+                hx-target="closest .border-2"
+                hx-swap="outerHTML"
+                class="px-3 py-1.5 text-sm font-medium rounded-lg transition-colors
+                       {% if suggestion.user_vote == -1 %}bg-red-600 text-white hover:bg-red-700{% else %}bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-red-50{% endif %}">
+                <span class="mr-1">👎</span> Different
+            </button>
+
+            <button
+                hx-post="{% url 'vote_product_relation' subscription.id %}"
+                hx-vals='{"suggested_product_id": "{{ suggestion.product.id }}", "vote": "dismiss"}'
+                hx-target="closest .border-2"
+                hx-swap="outerHTML swap:1s"
+                class="px-3 py-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
+                Dismiss
+            </button>
+        </div>
+
+        <!-- Aggregate Stats -->
+        {% if suggestion.aggregate.total_votes > 0 %}
+        <div class="text-xs text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+            </svg>
+            <span>
+                {% widthratio suggestion.aggregate.upvotes suggestion.aggregate.total_votes 100 %}% agree
+                ({{ suggestion.aggregate.total_votes }})
+            </span>
+        </div>
+        {% endif %}
+    </div>
+</div>

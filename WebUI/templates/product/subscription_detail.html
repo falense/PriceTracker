@@ -52,36 +52,74 @@
                 {% endif %}
 
                 <!-- Best Price -->
-                {% if best_listing and best_listing.current_price %}
+                {% if best_item and best_item.price %}
                 <div class="mb-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
                     <p class="text-sm text-green-800 dark:text-green-200 mb-2">Best Available Price</p>
-                    <div class="flex items-baseline space-x-3">
-                        <span class="text-4xl font-bold text-green-900 dark:text-green-100">
-                            {{ best_listing.current_price|format_currency:best_listing.currency }}
-                        </span>
-                        <span class="text-lg text-green-700 dark:text-green-300">
-                            at {{ best_listing.store.name }}
-                        </span>
-                    </div>
-                    {% if subscription.target_price %}
-                    <p class="text-sm text-green-800 dark:text-green-200 mt-2">
-                        {% if best_listing.current_price <= subscription.target_price %}
-                            ✓ Below your target price of {{ subscription.target_price|format_currency:best_listing.currency }}
-                        {% else %}
-                            Target: {{ subscription.target_price|format_currency:best_listing.currency }}
+
+                    {% if best_item.type == 'listing' %}
+                        <!-- Best price is from a regular listing -->
+                        <div class="flex items-baseline space-x-3">
+                            <span class="text-4xl font-bold text-green-900 dark:text-green-100">
+                                {{ best_item.listing.current_price|format_currency:best_item.listing.currency }}
+                            </span>
+                            <span class="text-lg text-green-700 dark:text-green-300">
+                                at {{ best_item.listing.store.name }}
+                            </span>
+                        </div>
+                        {% if subscription.target_price %}
+                        <p class="text-sm text-green-800 dark:text-green-200 mt-2">
+                            {% if best_item.listing.current_price <= subscription.target_price %}
+                                ✓ Below your target price of {{ subscription.target_price|format_currency:best_item.listing.currency }}
+                            {% else %}
+                                Target: {{ subscription.target_price|format_currency:best_item.listing.currency }}
+                            {% endif %}
+                        </p>
                         {% endif %}
-                    </p>
+                    {% else %}
+                        <!-- Best price is from a similar product -->
+                        <div class="flex items-baseline space-x-3 mb-2">
+                            <span class="text-4xl font-bold text-green-900 dark:text-green-100">
+                                {{ best_item.best_listing.current_price|format_currency:best_item.best_listing.currency }}
+                            </span>
+                            <span class="text-lg text-green-700 dark:text-green-300">
+                                at {{ best_item.best_listing.store.name }}
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-200">
+                                Similar Product ({{ best_item.similarity_score|floatformat:0 }}% match)
+                            </span>
+                        </div>
+                        <p class="text-sm text-green-800 dark:text-green-200">
+                            {{ best_item.product.name }}
+                        </p>
+                        {% if subscription.target_price %}
+                        <p class="text-sm text-green-800 dark:text-green-200 mt-2">
+                            {% if best_item.best_listing.current_price <= subscription.target_price %}
+                                ✓ Below your target price of {{ subscription.target_price|format_currency:best_item.best_listing.currency }}
+                            {% else %}
+                                Target: {{ subscription.target_price|format_currency:best_item.best_listing.currency }}
+                            {% endif %}
+                        </p>
+                        {% endif %}
                     {% endif %}
                 </div>
                 {% endif %}
 
                 <!-- Actions -->
                 <div class="flex space-x-3">
-                    {% if best_listing %}
-                    <a href="{{ best_listing.url }}" target="_blank" rel="noopener noreferrer"
-                       class="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium text-center">
-                        View Best Price
-                    </a>
+                    {% if best_item %}
+                        {% if best_item.type == 'listing' %}
+                            <a href="{{ best_item.listing.url }}" target="_blank" rel="noopener noreferrer"
+                               class="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium text-center">
+                                View Best Price
+                            </a>
+                        {% else %}
+                            <a href="{% if best_item.user_subscription %}{% url 'subscription_detail' best_item.user_subscription.id %}{% else %}{% url 'product_detail' best_item.product.id %}{% endif %}"
+                               class="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium text-center">
+                                View Similar Product
+                            </a>
+                        {% endif %}
                     {% endif %}
                     <form method="post" action="{% url 'refresh_price' subscription.id %}" class="inline">
                         {% csrf_token %}
@@ -96,51 +134,27 @@
                 </div>
             </div>
 
-            <!-- Store Price Comparison -->
+            <!-- Unified Price Comparison -->
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
                 <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">
                     Price Comparison
                 </h2>
 
-                {% if listings %}
+                {% if unified_items %}
                 <div class="space-y-4">
-                    {% for listing in listings %}
-                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 {% if listing == best_listing %}bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700{% endif %}">
-                        <div class="flex items-center justify-between mb-2">
-                            <div>
-                                <h3 class="font-semibold text-gray-900 dark:text-white">
-                                    {{ listing.store.name }}
-                                    {% if listing == best_listing %}
-                                    <span class="ml-2 px-2 py-0.5 bg-green-600 text-white text-xs rounded-full">Best Price</span>
-                                    {% endif %}
-                                </h3>
-                                <p class="text-sm text-gray-500 dark:text-gray-400">{{ listing.store.domain }}</p>
-                            </div>
-                            <div class="text-right">
-                                {% if listing.current_price %}
-                                <p class="text-2xl font-bold text-gray-900 dark:text-white">
-                                    {{ listing.current_price|format_currency:listing.currency }}
-                                </p>
-                                <p class="text-sm text-gray-500 dark:text-gray-400">
-                                    {% if listing.last_checked %}{{ listing.last_checked|timesince }} ago{% endif %}
-                                </p>
-                                {% else %}
-                                <p class="text-gray-500 dark:text-gray-400">Fetching...</p>
-                                {% endif %}
-                            </div>
-                        </div>
-                        {% if listing.current_price %}
-                        <a href="{{ listing.url }}" target="_blank" rel="noopener noreferrer"
-                           class="inline-block mt-2 text-sm text-primary-600 dark:text-primary-400 hover:underline">
-                            View on {{ listing.store.name }} →
-                        </a>
+                    {% for item in unified_items %}
+                        {% if item.type == 'listing' %}
+                            <!-- LISTING CARD -->
+                            {% include 'product/partials/listing_card.html' with listing=item.listing is_best=item.is_best %}
+                        {% else %}
+                            <!-- SIMILAR PRODUCT CARD -->
+                            {% include 'product/partials/similar_product_card.html' with suggestion=item subscription=subscription %}
                         {% endif %}
-                    </div>
                     {% endfor %}
                 </div>
                 {% else %}
                 <p class="text-gray-500 dark:text-gray-400 text-center py-8">
-                    No store listings available yet
+                    No listings or similar products available yet
                 </p>
                 {% endif %}
             </div>
@@ -190,19 +204,6 @@
                 </div>
             </div>
 
-            <!-- Similar Products (HTMX Loaded) -->
-            <div id="similar-products-container"
-                 hx-get="{% url 'get_similar_products' subscription.id %}"
-                 hx-trigger="load"
-                 hx-swap="innerHTML">
-                <!-- Loading skeleton -->
-                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                    <div class="animate-pulse space-y-4">
-                        <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/3"></div>
-                        <div class="h-20 bg-gray-200 dark:bg-gray-700 rounded"></div>
-                    </div>
-                </div>
-            </div>
         </div>
 
         <!-- Sidebar -->
