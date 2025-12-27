@@ -1843,12 +1843,16 @@ def vote_product_relation(request, subscription_id):
 
     # Record vote
     try:
+        import uuid
         from .services import ProductRelationService
+
+        # Convert string UUID to UUID object
+        suggested_product_uuid = uuid.UUID(suggested_product_id)
 
         ProductRelationService.vote_on_relation(
             user=request.user,
             product_id_1=subscription.product.id,
-            product_id_2=suggested_product_id,
+            product_id_2=suggested_product_uuid,
             weight=weight
         )
 
