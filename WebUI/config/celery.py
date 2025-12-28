@@ -65,6 +65,10 @@ app.conf.beat_schedule = {
         'task': 'app.tasks.fetch_missing_images',
         'schedule': crontab(hour=4, minute=0),  # Daily at 4 AM
     },
+    'expire-referral-tiers': {
+        'task': 'app.tasks.expire_referral_tiers',
+        'schedule': crontab(hour=1, minute=0),  # Daily at 1 AM
+    },
 }
 
 @app.task(bind=True)

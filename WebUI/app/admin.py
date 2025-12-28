@@ -11,7 +11,8 @@ from datetime import datetime
 from .models import (
     Product, Store, ProductListing, UserSubscription,
     PriceHistory, Notification, UserView, AdminFlag, OperationLog,
-    ExtractorVersion, UserFeedback, ProductRelation
+    ExtractorVersion, UserFeedback, ProductRelation,
+    ReferralCode, ReferralVisit, UserTierHistory
 )
 
 
@@ -597,5 +598,148 @@ class ProductRelationAdmin(admin.ModelAdmin):
             color, label
         )
     weight_display.short_description = 'Vote'
+
+
+# ========== Referral System Admin ==========
+
+
+@admin.register(ReferralCode)
+class ReferralCodeAdmin(admin.ModelAdmin):
+    """Admin interface for referral codes."""
+
+    list_display = ['code', 'user', 'total_visits', 'unique_visits', 'conversions', 'rewards_earned', 'active', 'created_at']
+    list_filter = ['active', 'created_at']
+    search_fields = ['code', 'user__username', 'user__email']
+    readonly_fields = ['code', 'created_at', 'total_visits', 'unique_visits', 'conversions', 'last_reward_granted_at']
+
+    fieldsets = (
+        ('Code Information', {
+            'fields': ('code', 'user', 'active', 'created_at')
+        }),
+        ('Statistics', {
+            'fields': ('total_visits', 'unique_visits', 'conversions', 'last_reward_granted_at')
+        }),
+    )
+
+    def rewards_earned(self, obj):
+        """Calculate rewards earned (every 3 unique visits)."""
+        return obj.get_reward_count()
+    rewards_earned.short_description = 'Rewards'
+
+    def has_add_permission(self, request):
+        """Prevent manual creation - codes are auto-generated."""
+        return False
+
+
+@admin.register(ReferralVisit)
+class ReferralVisitAdmin(admin.ModelAdmin):
+    """Admin interface for referral visits."""
+
+    list_display = ['referral_code', 'visited_at', 'is_unique', 'visitor_user', 'converted_user', 'duplicate_reason_display']
+    list_filter = ['is_unique', 'visited_at', 'duplicate_reason']
+    search_fields = ['referral_code__code', 'visitor_user__username', 'user_agent', 'visitor_ip_hash']
+    readonly_fields = ['visited_at', 'referral_code', 'visitor_cookie_id', 'visitor_ip_hash', 'visitor_user', 'is_unique', 'duplicate_reason', 'session_key', 'converted_user', 'converted_at']
+    date_hierarchy = 'visited_at'
+    ordering = ['-visited_at']
+
+    fieldsets = (
+        ('Visit Information', {
+            'fields': ('referral_code', 'visited_at', 'is_unique', 'duplicate_reason')
+        }),
+        ('Visitor Identification', {
+            'fields': ('visitor_user', 'visitor_cookie_id', 'visitor_ip_hash', 'visitor_fingerprint')
+        }),
+        ('Metadata', {
+            'fields': ('user_agent', 'referer', 'landing_page', 'session_key')
+        }),
+        ('Conversion', {
+            'fields': ('converted_user', 'converted_at')
+        }),
+    )
+
+    def duplicate_reason_display(self, obj):
+        """Show duplicate reason with color."""
+        if obj.is_unique:
+            return format_html('<span style="color: green;">✓ Unique</span>')
+        else:
+            reason_display = {
+                'logged_in_duplicate': 'Same User',
+                'cookie_duplicate': 'Same Cookie',
+                'ip_duplicate': 'Same IP',
+                'rate_limit_exceeded': 'Rate Limited',
+            }.get(obj.duplicate_reason, obj.duplicate_reason)
+            return format_html('<span style="color: orange;">⚠ {}</span>', reason_display)
+    duplicate_reason_display.short_description = 'Status'
+
+    def has_add_permission(self, request):
+        """Prevent manual creation - visits are auto-tracked."""
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        """Prevent editing - visits are immutable."""
+        return False
+
+
+@admin.register(UserTierHistory)
+class UserTierHistoryAdmin(admin.ModelAdmin):
+    """Admin interface for tier change history."""
+
+    list_display = ['user', 'tier_change_display', 'source_display', 'changed_at', 'changed_by']
+    list_filter = ['source', 'old_tier', 'new_tier', 'changed_at']
+    search_fields = ['user__username', 'notes', 'changed_by__username']
+    readonly_fields = ['user', 'old_tier', 'new_tier', 'source', 'notes', 'changed_at', 'changed_by']
+    date_hierarchy = 'changed_at'
+    ordering = ['-changed_at']
+
+    fieldsets = (
+        ('User', {
+            'fields': ('user',)
+        }),
+        ('Change Details', {
+            'fields': ('old_tier', 'new_tier', 'source', 'notes')
+        }),
+        ('Metadata', {
+            'fields': ('changed_at', 'changed_by')
+        }),
+    )
+
+    def tier_change_display(self, obj):
+        """Show tier change with arrow."""
+        tier_colors = {
+            'free': 'gray',
+            'supporter': 'blue',
+            'ultimate': 'gold'
+        }
+        old_color = tier_colors.get(obj.old_tier, 'gray')
+        new_color = tier_colors.get(obj.new_tier, 'gray')
+
+        return format_html(
+            '<span style="color: {};">{}</span> → <span style="color: {};">{}</span>',
+            old_color, obj.old_tier.title(),
+            new_color, obj.new_tier.title()
+        )
+    tier_change_display.short_description = 'Tier Change'
+
+    def source_display(self, obj):
+        """Show source with icon."""
+        source_icons = {
+            'default': '🆕',
+            'payment': '💳',
+            'referral': '🔗',
+            'admin': '👤',
+            'promotion': '🎁',
+            'expiration': '⏰',
+        }
+        icon = source_icons.get(obj.source, '❓')
+        return format_html('{} {}', icon, obj.get_source_display())
+    source_display.short_description = 'Source'
+
+    def has_add_permission(self, request):
+        """Prevent manual creation - history is auto-tracked."""
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        """Prevent editing - history is immutable."""
+        return False
 
 

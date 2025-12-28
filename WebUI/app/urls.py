@@ -147,6 +147,9 @@ urlpatterns = [
     # Settings
     path("settings/", views.user_settings, name="user_settings"),
     path("settings/change-password/", views.change_password, name="change_password"),
+    # Referral System
+    path("ref/<str:code>/", views.referral_landing, name="referral_landing"),
+    path("settings/referral/", views.referral_settings, name="referral_settings"),
     # Utilities
     path("proxy-image/", views.proxy_image, name="proxy_image"),
 ]

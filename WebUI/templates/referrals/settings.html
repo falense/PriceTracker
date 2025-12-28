@@ -1,0 +1,331 @@
+{% extends 'base.html' %}
+
+{% block title %}Henvisningssystem - {{ SITE_NAME }}{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+        <a href="{% url 'user_settings' %}" class="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium mb-4 inline-block">
+            ← Tilbake til innstillinger
+        </a>
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+            🎁 Henvisningssystem
+        </h1>
+        <p class="text-gray-600 dark:text-gray-400 mt-2">
+            Del din henvisningslenke og tjen gratis Støttebruker-nivå!
+        </p>
+    </div>
+
+    <!-- Hero Card - Your Referral Link -->
+    <div class="bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg border border-primary-600 p-8 text-white mb-6">
+        <div class="text-center mb-6">
+            <h2 class="text-2xl font-bold mb-2">Din henvisningskode</h2>
+            <div class="inline-block bg-white/20 backdrop-blur-sm rounded-lg px-6 py-3 text-3xl font-mono font-bold tracking-wider">
+                {{ referral_code.code }}
+            </div>
+        </div>
+
+        <div class="bg-white/10 backdrop-blur-sm rounded-lg p-6">
+            <label class="block text-sm font-medium mb-3">Del denne lenken</label>
+            <div class="flex gap-3">
+                <input type="text"
+                       id="referral-url-full"
+                       value="{{ referral_url }}"
+                       readonly
+                       class="flex-1 px-4 py-3 bg-white/20 border border-white/30 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-white/50 select-all font-mono">
+                <button onclick="copyReferralUrl()"
+                        id="copy-button"
+                        class="px-6 py-3 bg-white text-primary-600 hover:bg-primary-50 rounded-lg font-medium text-sm transition shadow-lg hover:shadow-xl">
+                    📋 Kopier
+                </button>
+            </div>
+            <p class="text-primary-100 text-xs mt-3">
+                💡 Tips: Del lenken på sosiale medier, e-post eller chat for å nå flere!
+            </p>
+        </div>
+    </div>
+
+    <!-- Progress Section -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
+        <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-6">
+            Fremgang mot neste belønning
+        </h2>
+
+        <div class="mb-6">
+            <div class="flex items-center justify-between mb-3">
+                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {% if needed_for_next == 0 %}
+                        🎉 Belønning klar!
+                    {% else %}
+                        {{ current_progress }} av 3 unike besøk
+                    {% endif %}
+                </span>
+                <span class="text-sm font-bold text-primary-600 dark:text-primary-400">
+                    {% if needed_for_next == 0 %}
+                        Neste besøk starter ny periode
+                    {% else %}
+                        {{ needed_for_next }} besøk igjen
+                    {% endif %}
+                </span>
+            </div>
+            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 overflow-hidden">
+                <div class="bg-gradient-to-r from-primary-500 to-primary-600 h-4 rounded-full transition-all duration-500 flex items-center justify-end pr-2"
+                     style="width: {% widthratio current_progress 3 100 %}%">
+                    {% if current_progress > 0 %}
+                        <span class="text-xs font-bold text-white">{% widthratio current_progress 3 100 %}%</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Reward Info -->
+        <div class="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+            <div class="flex items-start gap-3">
+                <div class="text-2xl">🏆</div>
+                <div>
+                    <h3 class="font-bold text-gray-900 dark:text-white mb-1">Hva får du?</h3>
+                    <p class="text-sm text-gray-700 dark:text-gray-300">
+                        For hver 3 unike besøk får du <strong>30 dager med Støttebruker-nivå</strong> (50 produkter).
+                        Tidspunktet tilbakestilles hver gang, så du kan tjene ubegrenset med 30-dagers perioder!
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+        <!-- Total Visits -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Totalt besøk</p>
+                    <p class="text-3xl font-bold text-gray-900 dark:text-white">{{ referral_code.total_visits }}</p>
+                </div>
+                <svg class="w-12 h-12 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                </svg>
+            </div>
+        </div>
+
+        <!-- Unique Visits -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Unike besøk</p>
+                    <p class="text-3xl font-bold text-green-600 dark:text-green-400">{{ referral_code.unique_visits }}</p>
+                </div>
+                <svg class="w-12 h-12 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </div>
+        </div>
+
+        <!-- Conversions -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Registreringer</p>
+                    <p class="text-3xl font-bold text-purple-600 dark:text-purple-400">{{ referral_code.conversions }}</p>
+                </div>
+                <svg class="w-12 h-12 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+                </svg>
+            </div>
+        </div>
+
+        <!-- Rewards Earned -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Belønninger</p>
+                    <p class="text-3xl font-bold text-yellow-600 dark:text-yellow-400">{{ rewards_earned }}</p>
+                </div>
+                <svg class="w-12 h-12 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tier History -->
+    {% if tier_history %}
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
+        <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-6">
+            Belønningshistorikk
+        </h2>
+
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead>
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Dato
+                        </th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Endring
+                        </th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Kilde
+                        </th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Notater
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                    {% for entry in tier_history %}
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                            {{ entry.changed_at|date:"d. M Y H:i" }}
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm">
+                            <span class="text-gray-500 dark:text-gray-400">{{ entry.old_tier|title }}</span>
+                            →
+                            <span class="font-bold {% if entry.new_tier == 'supporter' %}text-green-600 dark:text-green-400{% elif entry.new_tier == 'free' %}text-gray-600 dark:text-gray-400{% endif %}">
+                                {{ entry.new_tier|title }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm">
+                            {% if entry.source == 'referral' %}
+                                <span class="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-full text-xs font-medium">
+                                    🎁 Henvisning
+                                </span>
+                            {% elif entry.source == 'expiration' %}
+                                <span class="px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300 rounded-full text-xs font-medium">
+                                    ⏱️ Utløpt
+                                </span>
+                            {% elif entry.source == 'payment' %}
+                                <span class="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-xs font-medium">
+                                    💳 Betaling
+                                </span>
+                            {% else %}
+                                <span class="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-full text-xs font-medium">
+                                    {{ entry.source|title }}
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                            {{ entry.notes|default:"—" }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- How It Works -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-6">
+            Hvordan fungerer det?
+        </h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- Step 1 -->
+            <div class="text-center">
+                <div class="w-16 h-16 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span class="text-2xl font-bold text-primary-600 dark:text-primary-400">1</span>
+                </div>
+                <h3 class="font-bold text-gray-900 dark:text-white mb-2">Del lenken din</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400">
+                    Kopier henvisningslenken din og del den med venner, familie eller på sosiale medier.
+                </p>
+            </div>
+
+            <!-- Step 2 -->
+            <div class="text-center">
+                <div class="w-16 h-16 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span class="text-2xl font-bold text-primary-600 dark:text-primary-400">2</span>
+                </div>
+                <h3 class="font-bold text-gray-900 dark:text-white mb-2">Noen besøker lenken</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400">
+                    Når noen klikker på lenken din, registreres det som et besøk. Unike besøk telles mot belønningen.
+                </p>
+            </div>
+
+            <!-- Step 3 -->
+            <div class="text-center">
+                <div class="w-16 h-16 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span class="text-2xl font-bold text-primary-600 dark:text-primary-400">3</span>
+                </div>
+                <h3 class="font-bold text-gray-900 dark:text-white mb-2">Tjen belønning!</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400">
+                    Når du når 3 unike besøk, får du automatisk 30 dager med Støttebruker-nivå (50 produkter)!
+                </p>
+            </div>
+        </div>
+
+        <!-- FAQ -->
+        <div class="mt-8 pt-8 border-t border-gray-200 dark:border-gray-700">
+            <h3 class="font-bold text-gray-900 dark:text-white mb-4">Vanlige spørsmål</h3>
+
+            <div class="space-y-4">
+                <div>
+                    <h4 class="font-semibold text-gray-900 dark:text-white text-sm mb-1">
+                        Hva teller som et unikt besøk?
+                    </h4>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">
+                        Et unikt besøk er når en ny person klikker på lenken din. Vi bruker cookies og IP-adresser for å unngå duplikater.
+                    </p>
+                </div>
+
+                <div>
+                    <h4 class="font-semibold text-gray-900 dark:text-white text-sm mb-1">
+                        Kan jeg tjene flere belønninger?
+                    </h4>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">
+                        Ja! For hver 3 unike besøk får du en ny 30-dagers periode. Det er ingen grense på hvor mange ganger du kan tjene belønningen.
+                    </p>
+                </div>
+
+                <div>
+                    <h4 class="font-semibold text-gray-900 dark:text-white text-sm mb-1">
+                        Hva skjer hvis jeg allerede har et betalt abonnement?
+                    </h4>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">
+                        Betalte abonnementer har alltid forrang over henvisningsbelønninger. Henvisningsbelønninger aktiveres kun når du er på gratisnivået.
+                    </p>
+                </div>
+
+                <div>
+                    <h4 class="font-semibold text-gray-900 dark:text-white text-sm mb-1">
+                        Kan jeg bruke min egen henvisningslenke?
+                    </h4>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">
+                        Nei, egne klikk telles ikke. Systemet ser automatisk om du er pålogget og ignorerer dine besøk.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function copyReferralUrl() {
+    const input = document.getElementById('referral-url-full');
+    const button = document.getElementById('copy-button');
+
+    input.select();
+    input.setSelectionRange(0, 99999); // For mobile devices
+
+    navigator.clipboard.writeText(input.value).then(() => {
+        const originalText = button.innerHTML;
+        button.innerHTML = '✓ Kopiert!';
+        button.classList.add('bg-green-500', 'text-white');
+        button.classList.remove('bg-white', 'text-primary-600');
+
+        setTimeout(() => {
+            button.innerHTML = originalText;
+            button.classList.remove('bg-green-500', 'text-white');
+            button.classList.add('bg-white', 'text-primary-600');
+        }, 2000);
+    }).catch(err => {
+        alert('Kunne ikke kopiere lenken. Prøv å velge og kopiere manuelt.');
+        console.error('Copy failed:', err);
+    });
+}
+</script>
+{% endblock %}

@@ -59,6 +59,31 @@ class CustomUser(AbstractUser):
         related_name='tier_updates_made'
     )
 
+    # Referral system fields
+    TIER_SOURCE_CHOICES = [
+        ('none', 'No Active Tier Source'),
+        ('referral', 'Referral Earned'),
+        ('payment', 'Paid Subscription'),
+    ]
+
+    referral_tier_source = models.CharField(
+        max_length=20,
+        choices=TIER_SOURCE_CHOICES,
+        default='none',
+        db_index=True,
+        help_text='How current tier was obtained'
+    )
+    referral_tier_expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text='When referral-earned tier expires (null for non-referral tiers)'
+    )
+    referral_tier_granted_count = models.IntegerField(
+        default=0,
+        help_text='Number of times user has earned referral tier'
+    )
+
     class Meta:
         verbose_name = 'User'
         verbose_name_plural = 'Users'
@@ -1105,6 +1130,231 @@ class ProductRelation(models.Model):
         if product_id_1 < product_id_2:
             return product_id_1, product_id_2
         return product_id_2, product_id_1
+
+
+# ========== Referral System Models ==========
+
+
+class ReferralCode(models.Model):
+    """
+    Referral code for each user - one per user.
+    Users share their referral link to earn rewards.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='referral_code'
+    )
+    code = models.CharField(
+        max_length=12,
+        unique=True,
+        db_index=True,
+        help_text='Short unique referral code (e.g., ABCD1234EFGH)'
+    )
+
+    # Statistics
+    total_visits = models.IntegerField(
+        default=0,
+        help_text='Total number of visits to referral link'
+    )
+    unique_visits = models.IntegerField(
+        default=0,
+        help_text='Number of unique visits (deduplicated)'
+    )
+    conversions = models.IntegerField(
+        default=0,
+        help_text='Number of users who registered via this referral'
+    )
+
+    # Tracking
+    last_reward_granted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='When last 30-day reward was granted'
+    )
+
+    # Status
+    active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Referral Code'
+        verbose_name_plural = 'Referral Codes'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['code']),
+            models.Index(fields=['user', 'active']),
+            models.Index(fields=['-unique_visits']),  # For leaderboards
+        ]
+
+    def __str__(self):
+        return f"{self.user.username}'s referral code: {self.code}"
+
+    def get_next_reward_progress(self):
+        """
+        Calculate how many more unique visits needed for next reward.
+        Returns (current_progress, needed_for_next) tuple.
+        """
+        current = self.unique_visits % 3
+        needed = 3 - current if current > 0 else 3
+        return (current, needed)
+
+    def get_reward_count(self):
+        """How many times has this code earned rewards."""
+        return self.unique_visits // 3
+
+
+class ReferralVisit(models.Model):
+    """
+    Individual visit to a referral link.
+    Tracks all visits with deduplication info.
+    """
+    id = models.BigAutoField(primary_key=True)
+    referral_code = models.ForeignKey(
+        ReferralCode,
+        on_delete=models.CASCADE,
+        related_name='visits'
+    )
+
+    # Visitor identification (multiple methods for deduplication)
+    visitor_cookie_id = models.UUIDField(
+        db_index=True,
+        null=True,
+        blank=True,
+        help_text='Tracking cookie ID (1-year persistent)'
+    )
+    visitor_ip_hash = models.CharField(
+        max_length=64,
+        db_index=True,
+        null=True,
+        blank=True,
+        help_text='Hashed IP address (SHA256) for privacy'
+    )
+    visitor_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='referral_visits',
+        help_text='If visitor was logged in'
+    )
+    visitor_fingerprint = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text='Optional browser fingerprint for future use'
+    )
+
+    # Visit metadata
+    user_agent = models.CharField(max_length=500, blank=True)
+    referer = models.CharField(max_length=500, blank=True)
+    landing_page = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text='Page they landed on after clicking referral'
+    )
+    session_key = models.CharField(
+        max_length=40,
+        blank=True,
+        help_text='Django session key if available'
+    )
+
+    # Deduplication result
+    is_unique = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text='Counted as unique visit toward referral rewards'
+    )
+    duplicate_reason = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text='Why marked as duplicate (if not unique)'
+    )
+
+    # Conversion tracking
+    converted_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='conversion_from_referral',
+        help_text='User who registered from this visit'
+    )
+    converted_at = models.DateTimeField(null=True, blank=True)
+
+    # Timestamp
+    visited_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = 'Referral Visit'
+        verbose_name_plural = 'Referral Visits'
+        ordering = ['-visited_at']
+        indexes = [
+            models.Index(fields=['referral_code', '-visited_at']),
+            models.Index(fields=['referral_code', 'is_unique']),
+            models.Index(fields=['visitor_cookie_id', 'referral_code']),
+            models.Index(fields=['visitor_ip_hash', 'referral_code']),
+            models.Index(fields=['visitor_user', 'referral_code']),
+            models.Index(fields=['-visited_at']),
+        ]
+
+    def __str__(self):
+        unique_str = "Unique" if self.is_unique else "Duplicate"
+        visitor_str = self.visitor_user.username if self.visitor_user else "Anonymous"
+        return f"{unique_str} visit to {self.referral_code.code} by {visitor_str}"
+
+
+class UserTierHistory(models.Model):
+    """
+    Audit log for all tier changes.
+    Tracks who changed what and why.
+    """
+    TIER_SOURCE_CHOICES = [
+        ('default', 'Default (Free)'),
+        ('payment', 'Payment'),
+        ('referral', 'Referral Reward'),
+        ('admin', 'Admin Manual Change'),
+        ('promotion', 'Promotional Grant'),
+        ('expiration', 'Tier Expired'),
+    ]
+
+    id = models.BigAutoField(primary_key=True)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='tier_history'
+    )
+
+    # Change details
+    old_tier = models.CharField(max_length=20)
+    new_tier = models.CharField(max_length=20)
+    source = models.CharField(
+        max_length=20,
+        choices=TIER_SOURCE_CHOICES
+    )
+
+    # Metadata
+    notes = models.TextField(blank=True)
+    changed_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='tier_changes_made'
+    )
+
+    class Meta:
+        verbose_name = 'User Tier History'
+        verbose_name_plural = 'User Tier Histories'
+        ordering = ['-changed_at']
+        indexes = [
+            models.Index(fields=['user', '-changed_at']),
+            models.Index(fields=['source', '-changed_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username}: {self.old_tier} → {self.new_tier} ({self.get_source_display()})"
 
 
 # ========== Signals ==========

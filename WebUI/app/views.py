@@ -59,6 +59,47 @@ def register_view(request):
         if form.is_valid():
             user = form.save()
             login(request, user)
+
+            # Track referral conversion
+            referral_code_str = request.session.get('referral_code')
+            if referral_code_str:
+                try:
+                    from .models import ReferralCode, ReferralVisit
+                    from django.db.models import Q
+
+                    referral_code = ReferralCode.objects.get(code=referral_code_str)
+
+                    # Find the visit that led to this registration
+                    # Look for recent visit from this session or cookie
+                    cookie_id = request.COOKIES.get('ref_visitor_id')
+                    recent_visit = ReferralVisit.objects.filter(
+                        referral_code=referral_code,
+                        converted_user__isnull=True,
+                        visited_at__gte=timezone.now() - timedelta(days=30)
+                    ).filter(
+                        Q(session_key=request.session.session_key) |
+                        Q(visitor_cookie_id=cookie_id) if cookie_id else Q()
+                    ).first()
+
+                    if recent_visit:
+                        recent_visit.converted_user = user
+                        recent_visit.converted_at = timezone.now()
+                        recent_visit.save()
+
+                        # Update referral code conversion count
+                        referral_code.conversions += 1
+                        referral_code.save()
+
+                        logger.info(
+                            f"Referral conversion tracked: {user.username} via {referral_code.code}",
+                            extra={'user_id': user.id, 'referral_code': referral_code.code}
+                        )
+
+                    # Clear referral from session
+                    del request.session['referral_code']
+                except Exception as e:
+                    logger.error(f"Failed to track referral conversion: {e}")
+
             messages.success(request, "Konto opprettet!")
             return redirect("dashboard")
         else:
@@ -1833,6 +1874,10 @@ def admin_user_detail(request, user_id):
 @login_required
 def user_settings(request):
     """User settings page."""
+    from .models import ReferralCode
+    from .services import ReferralService
+    from django.urls import reverse
+
     # Get user statistics
     active_subscriptions = UserSubscription.objects.filter(
         user=request.user, active=True
@@ -1855,10 +1900,30 @@ def user_settings(request):
         user=request.user, read=False
     ).count()
 
+    # Get or create referral code
+    referral_code, created = ReferralCode.objects.get_or_create(
+        user=request.user,
+        defaults={'code': ReferralService.generate_code()}
+    )
+
+    # Calculate progress toward next reward
+    current_progress, needed_for_next = referral_code.get_next_reward_progress()
+
+    # Get referral URL
+    referral_url = request.build_absolute_uri(
+        reverse('referral_landing', kwargs={'code': referral_code.code})
+    )
+
     context = {
         "active_subscriptions": active_subscriptions,
         "stores_tracked": stores_tracked,
         "unread_notifications": unread_notifications,
+        # Referral system
+        "referral_code": referral_code,
+        "referral_url": referral_url,
+        "referral_progress": current_progress,
+        "referral_needed": needed_for_next,
+        "referral_rewards_earned": referral_code.get_reward_count(),
     }
 
     return render(request, "settings.html", context)
@@ -2237,3 +2302,130 @@ def pricing_view(request):
 def about_view(request):
     """About us page."""
     return render(request, 'about.html')
+
+
+# ========== Referral System Views ==========
+
+
+def referral_landing(request, code):
+    """
+    Handle referral link clicks.
+    1. Track the visit
+    2. Set tracking cookie
+    3. Redirect to dashboard (or register if not logged in)
+    """
+    from .models import ReferralCode, ReferralVisit
+    from .services import ReferralService
+    from django.contrib import messages
+    import uuid
+
+    # Get referral code
+    try:
+        referral_code = ReferralCode.objects.select_related('user').get(code=code, active=True)
+    except ReferralCode.DoesNotExist:
+        messages.error(request, "Ugyldig henvisningskode.")
+        return redirect('dashboard')
+
+    # Don't track if user is clicking their own referral link
+    if request.user.is_authenticated and request.user == referral_code.user:
+        messages.info(request, "Du kan ikke bruke din egen henvisningskode.")
+        return redirect('dashboard')
+
+    # Check if this is a unique visit
+    is_unique, duplicate_reason = ReferralService.is_unique_visit(referral_code, request)
+
+    # Get visitor identifiers
+    cookie_id = request.COOKIES.get('ref_visitor_id')
+    ip_hash = ReferralService.hash_ip_address(ReferralService.get_client_ip(request))
+
+    # Create visit record
+    visit = ReferralVisit.objects.create(
+        referral_code=referral_code,
+        visitor_cookie_id=uuid.UUID(cookie_id) if cookie_id else None,
+        visitor_ip_hash=ip_hash,
+        visitor_user=request.user if request.user.is_authenticated else None,
+        user_agent=request.META.get('HTTP_USER_AGENT', '')[:500],
+        referer=request.META.get('HTTP_REFERER', '')[:500],
+        landing_page=request.path,
+        session_key=request.session.session_key,
+        is_unique=is_unique,
+        duplicate_reason=duplicate_reason if not is_unique else ''
+    )
+
+    # Update referral code stats
+    referral_code.total_visits += 1
+    if is_unique:
+        referral_code.unique_visits += 1
+    referral_code.save()
+
+    # Check if user earned a reward
+    if is_unique:
+        reward_granted = ReferralService.check_and_grant_reward(referral_code)
+        if reward_granted:
+            # Notification will be created by the service
+            pass
+
+    # Set tracking cookie (1 year expiry)
+    response = redirect('dashboard' if request.user.is_authenticated else 'register')
+
+    if not cookie_id:
+        # Generate new cookie ID
+        new_cookie_id = str(uuid.uuid4())
+        response.set_cookie(
+            'ref_visitor_id',
+            new_cookie_id,
+            max_age=365 * 24 * 60 * 60,  # 1 year
+            secure=not settings.DEBUG,  # HTTPS only in production
+            httponly=True,  # Not accessible via JavaScript
+            samesite='Lax'  # CSRF protection
+        )
+
+        # Update visit with new cookie
+        visit.visitor_cookie_id = uuid.UUID(new_cookie_id)
+        visit.save(update_fields=['visitor_cookie_id'])
+
+    # Store referral code in session for conversion tracking
+    request.session['referral_code'] = code
+
+    return response
+
+
+@login_required
+def referral_settings(request):
+    """
+    User referral dashboard showing their code, stats, and rewards.
+    """
+    from .models import ReferralCode, UserTierHistory
+    from .services import ReferralService
+    from django.urls import reverse
+
+    # Get or create referral code for this user
+    referral_code, created = ReferralCode.objects.get_or_create(
+        user=request.user,
+        defaults={'code': ReferralService.generate_code()}
+    )
+
+    # Calculate progress toward next reward
+    current_progress, needed_for_next = referral_code.get_next_reward_progress()
+
+    # Get referral URL
+    referral_url = request.build_absolute_uri(
+        reverse('referral_landing', kwargs={'code': referral_code.code})
+    )
+
+    # Get tier history for this user (show referral-related changes)
+    tier_history = UserTierHistory.objects.filter(
+        user=request.user,
+        source='referral'
+    ).order_by('-changed_at')[:10]
+
+    context = {
+        'referral_code': referral_code,
+        'referral_url': referral_url,
+        'current_progress': current_progress,
+        'needed_for_next': needed_for_next,
+        'rewards_earned': referral_code.get_reward_count(),
+        'tier_history': tier_history,
+    }
+
+    return render(request, 'referrals/settings.html', context)

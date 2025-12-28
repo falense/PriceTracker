@@ -370,3 +370,87 @@ async def _fetch_missing_images_async():
         error_msg = f"{type(e).__name__}: {str(e)}" if str(e) else type(e).__name__
         logger.exception("Error in fetch_missing_images task")
         return {"status": "error", "error": error_msg}
+
+
+@shared_task
+def expire_referral_tiers():
+    """
+    Check for expired referral tiers and downgrade users to free tier.
+    Runs daily at 2 AM via Celery Beat.
+    """
+    from django.utils import timezone
+    from app.models import CustomUser, UserTierHistory
+    from app.services import NotificationService
+
+    try:
+        logger.info("Starting expire_referral_tiers task")
+
+        # Find users with expired referral tiers
+        expired_users = CustomUser.objects.filter(
+            referral_tier_source='referral',
+            referral_tier_expires_at__lte=timezone.now()
+        )
+
+        expired_count = 0
+
+        for user in expired_users:
+            try:
+                old_tier = user.tier
+                old_expires_at = user.referral_tier_expires_at
+
+                # Downgrade to free tier
+                user.tier = 'free'
+                user.referral_tier_source = 'none'
+                user.referral_tier_expires_at = None
+                user.save()
+
+                # Log tier change
+                UserTierHistory.objects.create(
+                    user=user,
+                    old_tier=old_tier,
+                    new_tier='free',
+                    source='expiration',
+                    notes=f'Referral tier expired (was valid until {old_expires_at.isoformat()})'
+                )
+
+                # Send notification to user
+                try:
+                    NotificationService.create_notification(
+                        user=user,
+                        notification_type='warning',
+                        title='Nivå utløpt',
+                        message='Din Støttebruker-nivå fra henvisningssystemet har utløpt. '
+                               'Du kan tjene et nytt nivå ved å dele henvisningslenken din!',
+                        priority=2
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to create expiration notification for user {user.id}: {e}")
+
+                expired_count += 1
+                logger.info(
+                    f"Expired referral tier for user {user.username}",
+                    extra={
+                        'user_id': user.id,
+                        'old_tier': old_tier,
+                        'expired_at': old_expires_at.isoformat() if old_expires_at else None
+                    }
+                )
+
+            except Exception as e:
+                logger.error(f"Error expiring tier for user {user.id}: {e}")
+                continue
+
+        logger.info(
+            f"Referral tier expiration completed: {expired_count} users downgraded",
+            extra={'expired_count': expired_count}
+        )
+
+        return {
+            'status': 'success',
+            'expired_count': expired_count
+        }
+
+    except Exception as e:
+        error_msg = f"{type(e).__name__}: {str(e)}" if str(e) else type(e).__name__
+        logger.exception("Error in expire_referral_tiers task")
+        return {"status": "error", "error": error_msg}

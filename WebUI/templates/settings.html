@@ -57,12 +57,105 @@
             </div>
 
             <div class="mt-6">
-                <a href="{% url 'product_list' %}" 
+                <a href="{% url 'product_list' %}"
                    class="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium">
                     Vis alle fulgte produkter →
                 </a>
             </div>
         </div>
+
+        <!-- Referral System -->
+        <div class="bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg border border-primary-600 p-6 text-white">
+            <div class="flex items-start justify-between mb-6">
+                <div>
+                    <h2 class="text-xl font-bold mb-2">
+                        🎁 Henvisningssystem
+                    </h2>
+                    <p class="text-primary-100 text-sm">
+                        Del lenken din og få Støttebruker-nivå gratis!
+                    </p>
+                </div>
+                <a href="{% url 'referral_settings' %}"
+                   class="px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-lg text-sm font-medium transition">
+                    Detaljer →
+                </a>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="mb-6">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium">Fremgang mot neste belønning</span>
+                    <span class="text-sm font-bold">{{ referral_progress }}/3 unike besøk</span>
+                </div>
+                <div class="w-full bg-white/20 rounded-full h-3 overflow-hidden">
+                    <div class="bg-white h-3 rounded-full transition-all duration-500"
+                         style="width: {% widthratio referral_progress 3 100 %}%"></div>
+                </div>
+                <p class="text-primary-100 text-xs mt-2">
+                    {% if referral_needed > 0 %}
+                        {{ referral_needed }} besøk til - får 30 dager Støttebruker!
+                    {% else %}
+                        Gratulerer! Du kan nå tjene din neste belønning.
+                    {% endif %}
+                </p>
+            </div>
+
+            <!-- Referral Link -->
+            <div class="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                <label class="block text-sm font-medium mb-2">Din henvisningslenke</label>
+                <div class="flex gap-2">
+                    <input type="text"
+                           id="referral-url"
+                           value="{{ referral_url }}"
+                           readonly
+                           class="flex-1 px-3 py-2 bg-white/20 border border-white/30 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-white/50 select-all">
+                    <button onclick="copyReferralUrl()"
+                            class="px-4 py-2 bg-white text-primary-600 hover:bg-primary-50 rounded-lg font-medium text-sm transition">
+                        Kopier
+                    </button>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="grid grid-cols-3 gap-4 mt-6 pt-6 border-t border-white/20">
+                <div class="text-center">
+                    <p class="text-2xl font-bold">{{ referral_code.total_visits }}</p>
+                    <p class="text-primary-100 text-xs">Totalt besøk</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-2xl font-bold">{{ referral_code.unique_visits }}</p>
+                    <p class="text-primary-100 text-xs">Unike besøk</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-2xl font-bold">{{ referral_rewards_earned }}</p>
+                    <p class="text-primary-100 text-xs">Belønninger</p>
+                </div>
+            </div>
+        </div>
+
+        <script>
+        function copyReferralUrl() {
+            const input = document.getElementById('referral-url');
+            input.select();
+            input.setSelectionRange(0, 99999); // For mobile devices
+
+            navigator.clipboard.writeText(input.value).then(() => {
+                const button = event.target;
+                const originalText = button.textContent;
+                button.textContent = '✓ Kopiert!';
+                button.classList.add('bg-green-500', 'text-white');
+                button.classList.remove('bg-white', 'text-primary-600');
+
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.classList.remove('bg-green-500', 'text-white');
+                    button.classList.add('bg-white', 'text-primary-600');
+                }, 2000);
+            }).catch(err => {
+                alert('Kunne ikke kopiere lenken. Prøv å velge og kopiere manuelt.');
+            });
+        }
+        </script>
 
         <!-- Account Settings -->
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">

@@ -13,16 +13,24 @@ from .models import (
     PriceHistory,
     AdminFlag,
     normalize_name,
+    ReferralCode,
+    ReferralVisit,
+    UserTierHistory,
 )
 from .utils.currency import format_price
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from django.db.models import Max, Q
+from django.db import transaction
 from urllib.parse import urlparse
 from decimal import Decimal
 from datetime import timedelta
 import uuid
 import logging
+import hashlib
+import secrets
+import random
+import string
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -863,10 +871,37 @@ class TierService:
     def check_can_add_product(user) -> tuple[bool, str]:
         """
         Check if user can add another product.
+        Also checks if referral tier has expired and downgrades if needed.
 
         Returns:
             Tuple of (can_add: bool, message: str)
         """
+        # Check if referral tier has expired
+        if (user.referral_tier_source == 'referral' and
+            user.referral_tier_expires_at and
+            user.referral_tier_expires_at <= timezone.now()):
+
+            # Tier has expired - downgrade to free
+            logger.info(
+                f"Referral tier expired for {user.username}, downgrading to free",
+                extra={'user_id': user.id, 'expired_at': user.referral_tier_expires_at.isoformat()}
+            )
+
+            old_tier = user.tier
+            user.tier = 'free'
+            user.referral_tier_source = 'none'
+            user.referral_tier_expires_at = None
+            user.save()
+
+            # Log tier change
+            UserTierHistory.objects.create(
+                user=user,
+                old_tier=old_tier,
+                new_tier='free',
+                source='expiration',
+                notes='Referral tier expired'
+            )
+
         if user.is_at_product_limit():
             limit = user.get_product_limit()
             tier_display = user.get_tier_display()
@@ -918,3 +953,190 @@ class TierService:
             'at_limit': user.is_at_product_limit(),
             'percentage_used': percentage_used,
         }
+
+
+class ReferralService:
+    """Business logic for referral system - tracking visits and granting rewards."""
+
+    @staticmethod
+    def generate_code():
+        """
+        Generate a unique 12-character referral code.
+        Format: Uppercase letters and numbers only for clarity.
+        """
+        while True:
+            # Generate 12-character code (uppercase + digits)
+            code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))
+
+            # Check if unique
+            if not ReferralCode.objects.filter(code=code).exists():
+                return code
+
+    @staticmethod
+    def get_client_ip(request):
+        """
+        Extract client IP address from request.
+        Handles X-Forwarded-For header for proxied requests.
+        """
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            # Take the first IP in the chain (original client)
+            ip = x_forwarded_for.split(',')[0].strip()
+        else:
+            ip = request.META.get('REMOTE_ADDR')
+        return ip
+
+    @staticmethod
+    def hash_ip_address(ip_address):
+        """
+        Hash IP address for privacy (GDPR compliance).
+        Uses SHA256 with a daily rotating salt for 7-day deduplication window.
+        """
+        if not ip_address:
+            return None
+
+        # Use date as salt (rotates daily)
+        # This allows same IP to be "new" after ~7 days naturally
+        from datetime import date
+        salt = date.today().isoformat()
+
+        # Create hash
+        hash_input = f"{salt}:{ip_address}".encode('utf-8')
+        return hashlib.sha256(hash_input).hexdigest()
+
+    @staticmethod
+    def is_unique_visit(referral_code, request):
+        """
+        Check if this visit should be counted as unique.
+        Uses hybrid deduplication: logged-in user > cookie > IP hash.
+
+        Returns: tuple (is_unique: bool, duplicate_reason: str)
+        """
+        # Check 1: Authenticated user
+        if request.user.is_authenticated:
+            # Check if this user has visited this referral code before
+            previous_visit = ReferralVisit.objects.filter(
+                referral_code=referral_code,
+                visitor_user=request.user
+            ).exists()
+
+            if previous_visit:
+                return (False, "logged_in_duplicate")
+
+        # Check 2: Cookie (primary method)
+        cookie_id = request.COOKIES.get('ref_visitor_id')
+        if cookie_id:
+            # Check if this cookie visited within 7 days
+            seven_days_ago = timezone.now() - timedelta(days=7)
+            recent_cookie_visit = ReferralVisit.objects.filter(
+                referral_code=referral_code,
+                visitor_cookie_id=cookie_id,
+                visited_at__gte=seven_days_ago
+            ).exists()
+
+            if recent_cookie_visit:
+                return (False, "cookie_duplicate")
+
+        # Check 3: IP hash (backup method)
+        ip_address = ReferralService.get_client_ip(request)
+        ip_hash = ReferralService.hash_ip_address(ip_address)
+
+        if ip_hash:
+            seven_days_ago = timezone.now() - timedelta(days=7)
+            recent_ip_visit = ReferralVisit.objects.filter(
+                referral_code=referral_code,
+                visitor_ip_hash=ip_hash,
+                visited_at__gte=seven_days_ago
+            ).exists()
+
+            if recent_ip_visit:
+                return (False, "ip_duplicate")
+
+        # Passed all checks - this is a unique visit
+        return (True, "unique")
+
+    @staticmethod
+    def check_and_grant_reward(referral_code):
+        """
+        Check if user has reached a reward milestone (every 3 unique visits).
+        If yes, grant Supporter tier for 30 days.
+
+        Returns: bool - True if reward was granted, False otherwise
+        """
+        user = referral_code.user
+        unique_visits = referral_code.unique_visits
+
+        # Check if this is a reward milestone (multiple of 3)
+        if unique_visits % 3 != 0:
+            return False
+
+        # Check if reward was already granted for this milestone
+        # (prevent double-granting if called twice)
+        if referral_code.last_reward_granted_at:
+            # If we already granted at this exact count, skip
+            last_granted_count = (referral_code.unique_visits // 3) * 3
+            if last_granted_count == unique_visits:
+                # Already granted for this milestone
+                return False
+
+        # Check if user has paid tier - payment supersedes referrals
+        if user.referral_tier_source == 'payment':
+            logger.info(
+                f"Skipping referral reward for {user.username} - has paid tier",
+                extra={'user_id': user.id, 'unique_visits': unique_visits}
+            )
+            return False
+
+        # Grant reward using transaction for safety
+        with transaction.atomic():
+            # Re-fetch user with lock to prevent race conditions
+            user = User.objects.select_for_update().get(id=user.id)
+
+            old_tier = user.tier
+            old_expires_at = user.referral_tier_expires_at
+
+            # Grant Supporter tier for 30 days from NOW (RESET, not extend)
+            user.tier = 'supporter'
+            user.referral_tier_source = 'referral'
+            user.referral_tier_expires_at = timezone.now() + timedelta(days=30)
+            user.referral_tier_granted_count += 1
+            user.save()
+
+            # Update referral code
+            referral_code.last_reward_granted_at = timezone.now()
+            referral_code.save()
+
+            # Log tier change to audit history
+            UserTierHistory.objects.create(
+                user=user,
+                old_tier=old_tier,
+                new_tier='supporter',
+                source='referral',
+                notes=f'Earned via referral code {referral_code.code} - {unique_visits} unique visits'
+            )
+
+            logger.info(
+                f"Granted referral reward to {user.username}",
+                extra={
+                    'user_id': user.id,
+                    'unique_visits': unique_visits,
+                    'old_tier': old_tier,
+                    'new_tier': 'supporter',
+                    'expires_at': user.referral_tier_expires_at.isoformat()
+                }
+            )
+
+        # Create notification
+        try:
+            NotificationService.create_notification(
+                user=user,
+                notification_type='info',
+                title='Belønning opptjent!',
+                message=f'Du har tjent 30 dager med Støttebruker-nivå gjennom henvisningssystemet! '
+                        f'({unique_visits} unike besøk)',
+                priority=2
+            )
+        except Exception as e:
+            logger.error(f"Failed to create referral reward notification: {e}")
+
+        return True
