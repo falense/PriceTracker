@@ -2317,6 +2317,7 @@ def referral_landing(request, code):
     from .models import ReferralCode, ReferralVisit
     from .services import ReferralService
     from django.contrib import messages
+    from django.conf import settings
     import uuid
 
     # Get referral code
