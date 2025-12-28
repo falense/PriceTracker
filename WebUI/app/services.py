@@ -16,7 +16,7 @@ from .models import (
 )
 from .utils.currency import format_price
 from django.utils import timezone
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from django.db.models import Max, Q
 from urllib.parse import urlparse
 from decimal import Decimal
@@ -24,7 +24,13 @@ from datetime import timedelta
 import uuid
 import logging
 
+User = get_user_model()
 logger = logging.getLogger(__name__)
+
+
+class TierLimitReached(Exception):
+    """Raised when user tries to add product but is at tier limit."""
+    pass
 
 PLACEHOLDER_PRODUCT_PREFIX = "Product from "
 
@@ -79,6 +85,12 @@ class ProductService:
             Tuple of (Product, UserSubscription, ProductListing, bool):
                 product, subscription, listing, and created flag
         """
+        # === TIER CHECK - MUST BE FIRST ===
+        can_add, error_message = TierService.check_can_add_product(user)
+        if not can_add:
+            raise TierLimitReached(error_message)
+        # === END TIER CHECK ===
+
         # Step 1: Parse URL and get/create Store
         parsed = urlparse(url)
         domain = parsed.netloc.replace("www.", "").lower()
@@ -841,4 +853,68 @@ class ProductRelationService:
             'downvotes': downvotes,
             'dismissed': stats['dismissed'] or 0,
             'score': score
+        }
+
+
+class TierService:
+    """Business logic for user tier management and enforcement."""
+
+    @staticmethod
+    def check_can_add_product(user) -> tuple[bool, str]:
+        """
+        Check if user can add another product.
+
+        Returns:
+            Tuple of (can_add: bool, message: str)
+        """
+        if user.is_at_product_limit():
+            limit = user.get_product_limit()
+            tier_display = user.get_tier_display()
+
+            from .constants import (
+                TIER_SUPPORTER_NAME,
+                TIER_SUPPORTER_LIMIT,
+                TIER_ULTIMATE_NAME
+            )
+
+            if user.tier == 'free':
+                message = (
+                    f"Du har nådd grensen på {limit} produkter for {tier_display}. "
+                    f"Oppgrader til {TIER_SUPPORTER_NAME} ({TIER_SUPPORTER_LIMIT} produkter) "
+                    f"eller {TIER_ULTIMATE_NAME} (ubegrenset) for å følge flere produkter."
+                )
+            elif user.tier == 'supporter':
+                message = (
+                    f"Du har nådd grensen på {limit} produkter for {tier_display}. "
+                    f"Oppgrader til {TIER_ULTIMATE_NAME} for ubegrenset produkter."
+                )
+            else:
+                message = f"Du har nådd grensen på {limit} produkter."
+
+            return (False, message)
+
+        return (True, "")
+
+    @staticmethod
+    def get_user_tier_info(user) -> dict:
+        """Get comprehensive tier information for templates."""
+        limit = user.get_product_limit()
+        current_count = user.subscriptions.filter(active=True).count()
+
+        if limit is None:  # Unlimited
+            remaining = None
+            percentage_used = 0.0
+        else:
+            remaining = max(0, limit - current_count)
+            percentage_used = (current_count / limit * 100) if limit > 0 else 0.0
+
+        return {
+            'tier': user.tier,
+            'tier_display': user.get_tier_display(),
+            'limit': limit,
+            'limit_display': user.get_product_limit_display(),
+            'current_count': current_count,
+            'remaining': remaining,
+            'at_limit': user.is_at_product_limit(),
+            'percentage_used': percentage_used,
         }

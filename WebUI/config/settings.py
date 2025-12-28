@@ -30,6 +30,9 @@ INSTALLED_APPS = [
     'app',
 ]
 
+# Custom User Model
+AUTH_USER_MODEL = 'app.CustomUser'
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',  # After Security, before Common

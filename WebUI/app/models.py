@@ -7,7 +7,8 @@ This version supports:
 - Aggregated priority (highest priority from any subscriber)
 """
 from django.db import models
-from django.contrib.auth.models import User
+from django.contrib.auth.models import AbstractUser
+from django.conf import settings
 from django.utils import timezone
 from django.db.models import Max, Q
 from datetime import timedelta
@@ -23,6 +24,80 @@ def normalize_name(name):
     normalized = re.sub(r'[^\w\s]', '', name.lower())
     normalized = re.sub(r'\s+', ' ', normalized).strip()
     return normalized
+
+
+class CustomUser(AbstractUser):
+    """
+    Custom User model with tier support.
+
+    Extends Django's AbstractUser to add tier tracking for the three-tier system:
+    - Free (Registrert bruker): 5 products max
+    - Supporter (Støttebruker): 50 products max
+    - Ultimate: Unlimited products
+    """
+    TIER_CHOICES = [
+        ('free', 'Registrert bruker'),
+        ('supporter', 'Støttebruker'),
+        ('ultimate', 'Ultimate'),
+    ]
+
+    tier = models.CharField(
+        max_length=20,
+        choices=TIER_CHOICES,
+        default='free',
+        db_index=True,
+        help_text='User subscription tier'
+    )
+
+    # Audit fields
+    tier_updated_at = models.DateTimeField(auto_now=True)
+    tier_updated_by = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='tier_updates_made'
+    )
+
+    class Meta:
+        verbose_name = 'User'
+        verbose_name_plural = 'Users'
+
+    def __str__(self):
+        return f"{self.username} ({self.get_tier_display()})"
+
+    def get_product_limit(self):
+        """Get product limit for current tier."""
+        from .constants import TIER_FREE_LIMIT, TIER_SUPPORTER_LIMIT
+        limits = {
+            'free': TIER_FREE_LIMIT,
+            'supporter': TIER_SUPPORTER_LIMIT,
+            'ultimate': None,  # Unlimited
+        }
+        return limits.get(self.tier, TIER_FREE_LIMIT)
+
+    def get_product_limit_display(self):
+        """Get human-readable product limit."""
+        limit = self.get_product_limit()
+        return 'Ubegrenset' if limit is None else str(limit)
+
+    def is_at_product_limit(self):
+        """Check if user is at or over their product limit."""
+        limit = self.get_product_limit()
+        if limit is None:  # Unlimited
+            return False
+
+        current_count = self.subscriptions.filter(active=True).count()
+        return current_count >= limit
+
+    def get_products_remaining(self):
+        """Get number of products remaining before hitting limit."""
+        limit = self.get_product_limit()
+        if limit is None:
+            return None
+
+        current_count = self.subscriptions.filter(active=True).count()
+        return max(0, limit - current_count)
 
 
 class Product(models.Model):
@@ -337,7 +412,7 @@ class UserSubscription(models.Model):
 
     # Relationships
     user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='subscriptions'
     )
@@ -512,7 +587,7 @@ class Notification(models.Model):
 
     # Relationships
     user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='notifications'
     )
@@ -729,7 +804,7 @@ class UserView(models.Model):
     """
     id = models.BigAutoField(primary_key=True)
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     subscription = models.ForeignKey(
         UserSubscription,
         on_delete=models.CASCADE,
@@ -798,7 +873,7 @@ class AdminFlag(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     resolved_at = models.DateTimeField(null=True, blank=True)
     resolved_by = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -932,7 +1007,7 @@ class UserFeedback(models.Model):
     id = models.BigAutoField(primary_key=True)
 
     # User and content
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='feedback_submissions', db_index=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='feedback_submissions', db_index=True)
     message = models.TextField(help_text='User feedback message')
 
     # Context capture
@@ -944,7 +1019,7 @@ class UserFeedback(models.Model):
     # Admin workflow
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='new', db_index=True)
     admin_notes = models.TextField(blank=True, help_text='Internal notes from admin review')
-    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_feedback')
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_feedback')
     reviewed_at = models.DateTimeField(null=True, blank=True)
 
     # Timestamps
@@ -976,7 +1051,7 @@ class ProductRelation(models.Model):
 
     id = models.BigAutoField(primary_key=True, serialize=False)
     user = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='product_relations'
     )
