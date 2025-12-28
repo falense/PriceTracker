@@ -1,0 +1,192 @@
+{% extends 'base.html' %}
+
+{% block title %}Priser - Følgpris{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div class="text-center mb-12">
+        <h1 class="text-4xl font-bold text-gray-900 dark:text-white mb-4">
+            Velg riktig plan for deg
+        </h1>
+        <p class="text-lg text-gray-600 dark:text-gray-400">
+            Alle planer inkluderer prisvarsler og fullstendig prishistorikk
+        </p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <!-- Free Tier -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border-2 border-gray-200 dark:border-gray-700 p-8">
+            <h3 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                Registrert bruker
+            </h3>
+            <p class="text-4xl font-bold text-primary-600 dark:text-primary-400 mb-1">
+                Gratis
+            </p>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                For alltid
+            </p>
+
+            <ul class="space-y-3 mb-8">
+                <li class="flex items-start">
+                    <svg class="w-5 h-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                    </svg>
+                    <span class="text-gray-600 dark:text-gray-400">Følg opptil <strong>5 produkter</strong></span>
+                </li>
+                <li class="flex items-start">
+                    <svg class="w-5 h-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                    </svg>
+                    <span class="text-gray-600 dark:text-gray-400">Prisvarsler</span>
+                </li>
+                <li class="flex items-start">
+                    <svg class="w-5 h-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                    </svg>
+                    <span class="text-gray-600 dark:text-gray-400">Prishistorikk</span>
+                </li>
+            </ul>
+
+            <a href="{% url 'register' %}"
+               class="block w-full text-center px-6 py-3 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition">
+                Kom i gang
+            </a>
+        </div>
+
+        <!-- Supporter Tier -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-primary-600 dark:border-primary-400 p-8 relative">
+            <div class="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                <span class="bg-primary-600 text-white text-xs font-bold px-3 py-1 rounded-full">
+                    POPULÆRT
+                </span>
+            </div>
+
+            <h3 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                Støttebruker
+            </h3>
+            <p class="text-4xl font-bold text-primary-600 dark:text-primary-400 mb-1">
+                10 kr<span class="text-lg">/måned</span>
+            </p>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                eller 3 unike lenkebesøk
+            </p>
+
+            <ul class="space-y-3 mb-8">
+                <li class="flex items-start">
+                    <svg class="w-5 h-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                    </svg>
+                    <span class="text-gray-600 dark:text-gray-400">Følg opptil <strong>50 produkter</strong></span>
+                </li>
+                <li class="flex items-start">
+                    <svg class="w-5 h-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                    </svg>
+                    <span class="text-gray-600 dark:text-gray-400">Prisvarsler</span>
+                </li>
+                <li class="flex items-start">
+                    <svg class="w-5 h-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                    </svg>
+                    <span class="text-gray-600 dark:text-gray-400">Prishistorikk</span>
+                </li>
+                <li class="flex items-start">
+                    <svg class="w-5 h-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                    </svg>
+                    <span class="text-gray-600 dark:text-gray-400">Støtt prosjektet</span>
+                </li>
+            </ul>
+
+            <button disabled
+                    class="block w-full text-center px-6 py-3 bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 rounded-lg font-medium cursor-not-allowed">
+                Kommer snart
+            </button>
+        </div>
+
+        <!-- Ultimate Tier -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border-2 border-gray-200 dark:border-gray-700 p-8">
+            <h3 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                Ultimate
+            </h3>
+            <p class="text-4xl font-bold text-primary-600 dark:text-primary-400 mb-1">
+                100 kr<span class="text-lg">/måned</span>
+            </p>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                For superbrukere
+            </p>
+
+            <ul class="space-y-3 mb-8">
+                <li class="flex items-start">
+                    <svg class="w-5 h-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                    </svg>
+                    <span class="text-gray-600 dark:text-gray-400"><strong>Ubegrenset</strong> produkter</span>
+                </li>
+                <li class="flex items-start">
+                    <svg class="w-5 h-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                    </svg>
+                    <span class="text-gray-600 dark:text-gray-400">Prisvarsler</span>
+                </li>
+                <li class="flex items-start">
+                    <svg class="w-5 h-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                    </svg>
+                    <span class="text-gray-600 dark:text-gray-400">Prishistorikk</span>
+                </li>
+                <li class="flex items-start">
+                    <svg class="w-5 h-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                    </svg>
+                    <span class="text-gray-600 dark:text-gray-400"><strong>Prisagenter</strong> (AI-drevet)</span>
+                </li>
+                <li class="flex items-start">
+                    <svg class="w-5 h-5 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                    </svg>
+                    <span class="text-gray-600 dark:text-gray-400">Prioritert støtte</span>
+                </li>
+            </ul>
+
+            <button disabled
+                    class="block w-full text-center px-6 py-3 bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 rounded-lg font-medium cursor-not-allowed">
+                Kommer snart
+            </button>
+        </div>
+    </div>
+
+    <!-- FAQ Section -->
+    <div class="mt-16">
+        <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-8 text-center">
+            Ofte stilte spørsmål
+        </h2>
+        <div class="max-w-3xl mx-auto space-y-4">
+            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                    Hva betyr "3 unike lenkebesøk"?
+                </h3>
+                <p class="text-gray-600 dark:text-gray-400">
+                    Du kan bli Støttebruker ved å dele din unike henvisningslenke. Når 3 forskjellige personer besøker lenken din, får du Støttebruker-status automatisk.
+                </p>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                    Når kommer betalingsintegrasjon?
+                </h3>
+                <p class="text-gray-600 dark:text-gray-400">
+                    Vi jobber med å implementere betalingsløsninger. Foreløpig er alle funksjoner tilgjengelige for registrerte brukere mens vi tester tjenesten.
+                </p>
+            </div>
+            <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                    Hva er prisagenter?
+                </h3>
+                <p class="text-gray-600 dark:text-gray-400">
+                    Prisagenter er AI-drevne assistenter som automatisk leter etter bedre priser på produkter du ser på, og varsler deg om alternativer du kanskje ikke visste om.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

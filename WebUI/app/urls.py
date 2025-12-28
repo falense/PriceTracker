@@ -12,6 +12,9 @@ urlpatterns = [
     path("login/", views.login_view, name="login"),
     path("logout/", views.logout_view, name="logout"),
     path("register/", views.register_view, name="register"),
+    # Info pages
+    path("priser/", views.pricing_view, name="pricing"),
+    path("om-oss/", views.about_view, name="about"),
     # Product management
     path("products/", views.product_list, name="product_list"),
     path("products/add/", views.add_product, name="add_product"),

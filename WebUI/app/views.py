@@ -36,10 +36,10 @@ def login_view(request):
             user = authenticate(username=username, password=password)
             if user is not None:
                 login(request, user)
-                messages.success(request, f"Welcome back, {username}!")
+                messages.success(request, f"Velkommen tilbake, {username}!")
                 return redirect("dashboard")
         else:
-            messages.error(request, "Invalid username or password.")
+            messages.error(request, "Ugyldig brukernavn eller passord.")
     else:
         form = AuthenticationForm()
 
@@ -56,10 +56,10 @@ def register_view(request):
         if form.is_valid():
             user = form.save()
             login(request, user)
-            messages.success(request, "Account created successfully!")
+            messages.success(request, "Konto opprettet!")
             return redirect("dashboard")
         else:
-            messages.error(request, "Please correct the errors below.")
+            messages.error(request, "Vennligst korriger feilene nedenfor.")
     else:
         form = UserCreationForm()
 
@@ -69,7 +69,7 @@ def register_view(request):
 def logout_view(request):
     """User logout view."""
     logout(request)
-    messages.info(request, "You have been logged out.")
+    messages.info(request, "Du er logget ut.")
     return redirect("login")
 
 
@@ -805,10 +805,10 @@ def add_product(request):
 
             if created:
                 messages.success(
-                    request, f"Subscribed to {product.name}! Fetching current price..."
+                    request, f"Følger nå {product.name}! Henter gjeldende pris..."
                 )
             else:
-                messages.info(request, f"Updated subscription to {product.name}")
+                messages.info(request, f"Oppdaterte abonnement på {product.name}")
 
             return redirect("subscription_detail", subscription_id=subscription.id)
 
@@ -816,18 +816,18 @@ def add_product(request):
             messages.error(request, str(e))
             return redirect("dashboard")
         except Exception as e:
-            messages.error(request, f"Failed to add product: {str(e)}")
+            messages.error(request, f"Kunne ikke legge til produkt: {str(e)}")
             return redirect("dashboard")
 
     # POST - only for authenticated users
     if not request.user.is_authenticated:
-        messages.error(request, "Please log in to track products.")
+        messages.error(request, "Vennligst logg inn for å følge produkter.")
         return redirect("login")
 
     url = request.POST.get("url", "").strip()
 
     if not url:
-        messages.error(request, "Please provide a valid product URL.")
+        messages.error(request, "Vennligst oppgi en gyldig produkt-URL.")
         return redirect("dashboard")
 
     # Get optional parameters
@@ -855,10 +855,10 @@ def add_product(request):
 
         if created:
             messages.success(
-                request, f"Subscribed to {product.name}! Fetching current price..."
+                request, f"Følger nå {product.name}! Henter gjeldende pris..."
             )
         else:
-            messages.info(request, f"Updated subscription to {product.name}")
+            messages.info(request, f"Oppdaterte abonnement på {product.name}")
 
         return redirect("subscription_detail", subscription_id=subscription.id)
 
@@ -866,7 +866,7 @@ def add_product(request):
         messages.error(request, str(e))
         return redirect("dashboard")
     except Exception as e:
-        messages.error(request, f"Failed to add product: {str(e)}")
+        messages.error(request, f"Kunne ikke legge til produkt: {str(e)}")
         return redirect("dashboard")
 
 
@@ -882,7 +882,7 @@ def unsubscribe(request, subscription_id):
     subscription.active = False
     subscription.save()
 
-    messages.success(request, f'Unsubscribed from "{product_name}"')
+    messages.success(request, f'Følger ikke lenger "{product_name}"')
 
     if request.headers.get("HX-Request"):
         return HttpResponse("")
@@ -945,7 +945,7 @@ def update_subscription(request, subscription_id):
 
     subscription.save()
 
-    messages.success(request, "Subscription settings updated successfully")
+    messages.success(request, "Innstillinger oppdatert")
 
     if request.headers.get("HX-Request"):
         # Return updated settings form for HTMX
@@ -1714,7 +1714,7 @@ def change_password(request):
         user = form.save()
         # Update session to prevent logout
         update_session_auth_hash(request, user)
-        messages.success(request, "Your password was successfully updated!")
+        messages.success(request, "Passordet ditt ble oppdatert!")
     else:
         # Display form errors
         for field, errors in form.errors.items():
@@ -2064,3 +2064,13 @@ def get_similar_products_partial(request, subscription_id):
         'product/partials/similar_products.html',
         context
     )
+
+
+def pricing_view(request):
+    """Pricing tiers page."""
+    return render(request, 'pricing.html')
+
+
+def about_view(request):
+    """About us page."""
+    return render(request, 'about.html')
