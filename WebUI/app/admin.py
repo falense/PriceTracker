@@ -16,9 +16,9 @@ from .models import (
 
 
 # Customize admin site
-admin.site.site_header = 'PriceTracker Admin'
-admin.site.site_title = 'PriceTracker Admin'
-admin.site.index_title = 'Welcome to PriceTracker Administration'
+admin.site.site_header = 'Følgpris Admin'
+admin.site.site_title = 'Følgpris Admin'
+admin.site.index_title = 'Velkommen til Følgpris administrasjon'
 
 
 # Custom admin views for Celery monitoring

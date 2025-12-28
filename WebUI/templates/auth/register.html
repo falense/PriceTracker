@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Register - PriceTracker{% endblock %}
+{% block title %}Registrer - Følgpris{% endblock %}
 
 {% block content %}
 <div class="min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8">
@@ -8,10 +8,10 @@
         <!-- Header -->
         <div class="text-center">
             <h2 class="text-3xl font-bold text-gray-900 dark:text-white">
-                Create your account
+                Opprett konto
             </h2>
             <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                Start tracking prices and save money
+                Begynn å følge priser og spar penger
             </p>
         </div>
 
@@ -34,7 +34,7 @@
                 <!-- Username -->
                 <div>
                     <label for="id_username" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Username
+                        Brukernavn
                     </label>
                     {{ form.username }}
                     {% if form.username.errors %}
@@ -50,7 +50,7 @@
                 <!-- Password 1 -->
                 <div>
                     <label for="id_password1" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Password
+                        Passord
                     </label>
                     {{ form.password1 }}
                     {% if form.password1.errors %}
@@ -66,7 +66,7 @@
                 <!-- Password 2 -->
                 <div>
                     <label for="id_password2" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Confirm Password
+                        Bekreft passord
                     </label>
                     {{ form.password2 }}
                     {% if form.password2.errors %}
@@ -80,15 +80,15 @@
             <!-- Submit Button -->
             <button type="submit"
                     class="w-full py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:focus:ring-offset-gray-800">
-                Create account
+                Opprett konto
             </button>
 
             <!-- Login Link -->
             <div class="text-center">
                 <span class="text-sm text-gray-600 dark:text-gray-400">
-                    Already have an account?
+                    Har du allerede konto?
                     <a href="{% url 'login' %}" class="font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400">
-                        Sign in
+                        Logg inn her
                     </a>
                 </span>
             </div>

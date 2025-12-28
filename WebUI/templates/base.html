@@ -1,9 +1,27 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full">
+<html lang="nb" class="h-full">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}PriceTracker{% endblock %}</title>
+    <title>{% block title %}Følgpris{% endblock %}</title>
+
+    <!-- Norwegian Meta Tags -->
+    <meta name="description" content="Følgpris - Følg produktpriser, få varsler om prisfall, spar penger. Støtte for hundrevis av norske og internasjonale nettbutikker.">
+    <meta name="keywords" content="prisfølging, prisvarsler, prissammenligning, produktpriser, norge, netthandel">
+    <meta name="author" content="Følgpris">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{ request.build_absolute_uri }}">
+    <meta property="og:title" content="{% block og_title %}Følgpris - Følg priser, spar penger{% endblock %}">
+    <meta property="og:description" content="{% block og_description %}Følg produktpriser og få varsler om prisfall fra hundrevis av nettbutikker{% endblock %}">
+    <meta property="og:locale" content="nb_NO">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="{{ request.build_absolute_uri }}">
+    <meta property="twitter:title" content="{% block twitter_title %}Følgpris - Følg priser, spar penger{% endblock %}">
+    <meta property="twitter:description" content="{% block twitter_description %}Følg produktpriser og få varsler om prisfall{% endblock %}">
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -97,8 +115,20 @@
                         <svg class="w-8 h-8 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/>
                         </svg>
-                        <span class="text-xl font-semibold text-gray-900 dark:text-white">PriceTracker</span>
+                        <span class="text-xl font-semibold text-gray-900 dark:text-white">Følgpris</span>
                     </a>
+
+                    <!-- Main Navigation Links -->
+                    <div class="hidden md:flex items-center space-x-1 ml-10">
+                        <a href="{% url 'pricing' %}"
+                           class="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition">
+                            Priser
+                        </a>
+                        <a href="{% url 'about' %}"
+                           class="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition">
+                            Om oss
+                        </a>
+                    </div>
                 </div>
 
                 <!-- Right side -->
@@ -152,7 +182,7 @@
                         <!-- Logout -->
                         <a href="{% url 'logout' %}"
                            class="text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
-                            Logout
+                            Logg ut
                         </a>
                     {% else %}
                         <!-- Theme toggle for non-authenticated users -->
@@ -168,11 +198,11 @@
 
                         <a href="{% url 'login' %}"
                            class="text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
-                            Login
+                            Logg inn
                         </a>
                         <a href="{% url 'register' %}"
                            class="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-lg">
-                            Register
+                            Registrer
                         </a>
                     {% endif %}
                 </div>
@@ -231,7 +261,7 @@
     <footer class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 mt-auto">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div class="text-center text-sm text-gray-500 dark:text-gray-400">
-                <p>&copy; 2025 PriceTracker. Track prices, save money.</p>
+                <p>&copy; 2025 Følgpris. Følg priser, spar penger.</p>
             </div>
         </div>
     </footer>
@@ -250,7 +280,7 @@
             <svg x-show="isOpen" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
             </svg>
-            <span x-show="!isOpen" class="text-sm font-medium">Feedback</span>
+            <span x-show="!isOpen" class="text-sm font-medium">Tilbakemelding</span>
         </button>
 
         <!-- Expandable Form -->
@@ -265,8 +295,8 @@
 
             <!-- Form Header -->
             <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Send Feedback</h3>
-                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Help us improve PriceTracker</p>
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Send tilbakemelding</h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Hjelp oss forbedre Følgpris</p>
             </div>
 
             <!-- Form Body -->
@@ -287,25 +317,25 @@
                 <!-- Feedback Message -->
                 <div>
                     <label for="feedback-message" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Your Feedback
+                        Din tilbakemelding
                     </label>
                     <textarea id="feedback-message"
                               name="message"
                               rows="4"
                               required
                               maxlength="2000"
-                              placeholder="Tell us what you think, report issues, or suggest improvements..."
+                              placeholder="Fortell oss hva du synes, rapporter problemer, eller foreslå forbedringer..."
                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
                               x-model="message"></textarea>
                     <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        <span x-text="message.length"></span>/2000 characters
+                        <span x-text="message.length"></span>/2000 tegn
                     </p>
                 </div>
 
                 <!-- Context Display -->
                 <div class="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 rounded p-2">
-                    <p class="font-medium mb-1">Context (auto-captured):</p>
-                    <p>Page: <span class="font-mono" x-text="pageTitle || pageUrl"></span></p>
+                    <p class="font-medium mb-1">Kontekst (automatisk fanget):</p>
+                    <p>Side: <span class="font-mono" x-text="pageTitle || pageUrl"></span></p>
                 </div>
 
                 <!-- Submit Buttons -->
@@ -313,11 +343,11 @@
                     <button type="button"
                             @click="toggleForm()"
                             class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition">
-                        Cancel
+                        Avbryt
                     </button>
                     <button type="submit"
                             class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 rounded-lg transition">
-                        Send Feedback
+                        Send tilbakemelding
                     </button>
                 </div>
             </form>
@@ -330,8 +360,8 @@
                     <svg class="w-16 h-16 text-green-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
-                    <h4 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Thank You!</h4>
-                    <p class="text-sm text-gray-600 dark:text-gray-400">Your feedback has been submitted.</p>
+                    <h4 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Takk!</h4>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">Din tilbakemelding er sendt.</p>
                 </div>
             </div>
         </div>

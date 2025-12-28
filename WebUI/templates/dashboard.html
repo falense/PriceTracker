@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load currency_filters %}
 
-{% block title %}Dashboard - PriceTracker{% endblock %}
+{% block title %}Oversikt - Følgpris{% endblock %}
 
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -9,16 +9,16 @@
     {% if user.is_authenticated %}
     <div class="mb-8">
         <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
-            Dashboard
+            Oversikt
         </h1>
         <p class="mt-2 text-gray-600 dark:text-gray-400">
-            Track your favorite products and never miss a price drop
+            Følg favorittprodukter og gå ikke glipp av prisfall
         </p>
     </div>
     {% else %}
     <div class="mb-16">
         <h1 class="text-4xl font-bold text-gray-900 dark:text-white text-center mb-4">
-            Track Any Product Price
+            Følg hvilken som helst produktpris
         </h1>
     </div>
     {% endif %}
@@ -30,7 +30,7 @@
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
             <div class="flex items-center justify-between">
                 <div>
-                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Total Products</p>
+                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Produkter fulgt</p>
                     <p class="text-3xl font-bold text-gray-900 dark:text-white mt-2">{{ stats.total_products }}</p>
                 </div>
                 <div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center">
@@ -45,7 +45,7 @@
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
             <div class="flex items-center justify-between">
                 <div>
-                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Drops (24h)</p>
+                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Prisfall (24t)</p>
                     <p class="text-3xl font-bold text-green-600 dark:text-green-400 mt-2">{{ stats.price_drops_24h }}</p>
                 </div>
                 <div class="w-12 h-12 bg-green-100 dark:bg-green-900/20 rounded-lg flex items-center justify-center">
@@ -60,7 +60,7 @@
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
             <div class="flex items-center justify-between">
                 <div>
-                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Active Alerts</p>
+                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Aktive varsler</p>
                     <p class="text-3xl font-bold text-orange-600 dark:text-orange-400 mt-2">{{ stats.active_alerts }}</p>
                 </div>
                 <div class="w-12 h-12 bg-orange-100 dark:bg-orange-900/20 rounded-lg flex items-center justify-center">
@@ -77,14 +77,14 @@
     <div class="max-w-3xl mx-auto mb-16">
         {% if user.is_authenticated %}
         <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-6 text-center">
-            Track Any Product
+            Følg hvilket som helst produkt
         </h2>
         {% endif %}
         <div>
             <div class="relative">
                 <input type="text"
                        id="search-input"
-                       placeholder="{% if user.is_authenticated %}Search products or paste URL...{% else %}Search or paste product URL...{% endif %}"
+                       placeholder="{% if user.is_authenticated %}Søk produkter eller lim inn URL...{% else %}Søk eller lim inn produkt-URL...{% endif %}"
                        class="w-full px-6 py-5 text-lg border-2 border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                        hx-post="{% url 'search_product' %}"
                        hx-trigger="keyup changed delay:500ms"
@@ -102,7 +102,7 @@
                         </svg>
                     </span>
                     <span class="htmx-indicator">...</span>
-                    Search
+                    Søk
                 </button>
             </div>
             <div id="search-results" class="mt-4"></div>
@@ -121,10 +121,10 @@
                     </svg>
                 </div>
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                    Instant Alerts
+                    Øyeblikkelige varsler
                 </h3>
                 <p class="text-gray-600 dark:text-gray-400">
-                    Get notified immediately when prices drop on products you're tracking
+                    Få beskjed umiddelbart når priser faller på produkter du følger
                 </p>
             </div>
 
@@ -136,10 +136,10 @@
                     </svg>
                 </div>
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                    Price History
+                    Prishistorikk
                 </h3>
                 <p class="text-gray-600 dark:text-gray-400">
-                    View complete price history with charts to make informed buying decisions
+                    Se komplett prishistorikk med grafer for å ta informerte kjøpsbeslutninger
                 </p>
             </div>
 
@@ -151,10 +151,10 @@
                     </svg>
                 </div>
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                    Multi-Store Support
+                    Støtte for flere butikker
                 </h3>
                 <p class="text-gray-600 dark:text-gray-400">
-                    Track prices from Amazon, eBay, and hundreds of other online stores
+                    Følg priser fra hundrevis av norske og internasjonale nettbutikker
                 </p>
             </div>
         </div>
@@ -166,10 +166,10 @@
     <div class="mb-8">
         <div class="flex items-center justify-between mb-6">
             <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
-                Your Products
+                Dine produkter
             </h2>
             <a href="{% url 'product_list' %}" class="text-primary-600 dark:text-primary-400 hover:text-primary-700 font-medium">
-                View all →
+                Vis alle →
             </a>
         </div>
 
@@ -192,30 +192,30 @@
                         {{ subscription.product.name }}
                     </h3>
                     <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">
-                        Available at {{ subscription.store_count }} store{% if subscription.store_count != 1 %}s{% endif %}
+                        Tilgjengelig hos {{ subscription.store_count }} butikk{% if subscription.store_count != 1 %}er{% endif %}
                     </p>
 
                     {% if subscription.best_listing and subscription.best_listing.current_price %}
                     <div class="mb-2">
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Best Price</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Beste pris</p>
                         <div class="flex items-baseline space-x-2">
                             <span class="text-2xl font-bold text-gray-900 dark:text-white">
                                 {{ subscription.best_listing.current_price|format_currency:subscription.best_listing.currency }}
                             </span>
                             {% if not subscription.best_listing.available %}
                             <span class="text-xs px-2 py-1 bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200 rounded-full">
-                                Out of Stock
+                                Utsolgt
                             </span>
                             {% endif %}
                         </div>
                         <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            at {{ subscription.best_listing.store.name }}
+                            hos {{ subscription.best_listing.store.name }}
                         </p>
                     </div>
                     {% if subscription.target_price %}
                     <div class="mb-4">
                         <p class="text-xs text-gray-500 dark:text-gray-400">
-                            Target: <span class="font-semibold {% if subscription.best_listing.current_price <= subscription.target_price %}text-green-600 dark:text-green-400{% else %}text-orange-600 dark:text-orange-400{% endif %}">
+                            Målpris: <span class="font-semibold {% if subscription.best_listing.current_price <= subscription.target_price %}text-green-600 dark:text-green-400{% else %}text-orange-600 dark:text-orange-400{% endif %}">
                                 {{ subscription.target_price|format_currency:subscription.best_listing.currency }}
                             </span>
                         </p>
@@ -223,13 +223,13 @@
                     {% endif %}
                     {% else %}
                     <div class="mb-4 text-gray-500 dark:text-gray-400">
-                        Fetching prices...
+                        Henter priser...
                     </div>
                     {% endif %}
 
                     <a href="{% url 'subscription_detail' subscription.id %}"
                        class="block w-full text-center px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 font-medium">
-                        View Details
+                        Vis detaljer
                     </a>
                 </div>
             </div>
@@ -241,10 +241,10 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
             </svg>
             <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                No products tracked yet
+                Ingen produkter fulgt ennå
             </h3>
             <p class="text-gray-600 dark:text-gray-400">
-                Start by searching for a product or pasting a URL above
+                Begynn med å søke etter et produkt eller lime inn en URL ovenfor
             </p>
         </div>
         {% endif %}
