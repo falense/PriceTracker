@@ -2326,10 +2326,14 @@ def referral_landing(request, code):
         messages.error(request, "Ugyldig henvisningskode.")
         return redirect('dashboard')
 
-    # Don't track if user is clicking their own referral link
+    # Don't track if user is clicking their own referral link (unless staff for testing)
     if request.user.is_authenticated and request.user == referral_code.user:
-        messages.info(request, "Du kan ikke bruke din egen henvisningskode.")
-        return redirect('dashboard')
+        if not request.user.is_staff:
+            messages.info(request, "Du kan ikke bruke din egen henvisningskode.")
+            return redirect('dashboard')
+        else:
+            # Staff bypass - allow for testing
+            messages.info(request, "🔧 Staff-modus: Besøk registreres for testing.")
 
     # Check if this is a unique visit
     is_unique, duplicate_reason = ReferralService.is_unique_visit(referral_code, request)
