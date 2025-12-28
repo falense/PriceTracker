@@ -18,6 +18,7 @@ from .models import (
     Notification,
     OperationLog,
 )
+from .services import TierLimitReached
 
 logger = logging.getLogger(__name__)
 
@@ -812,6 +813,9 @@ def add_product(request):
 
             return redirect("subscription_detail", subscription_id=subscription.id)
 
+        except TierLimitReached as e:
+            messages.error(request, str(e))
+            return redirect("dashboard")
         except ValueError as e:
             messages.error(request, str(e))
             return redirect("dashboard")
@@ -862,6 +866,9 @@ def add_product(request):
 
         return redirect("subscription_detail", subscription_id=subscription.id)
 
+    except TierLimitReached as e:
+        messages.error(request, str(e))
+        return redirect("dashboard")
     except ValueError as e:
         messages.error(request, str(e))
         return redirect("dashboard")

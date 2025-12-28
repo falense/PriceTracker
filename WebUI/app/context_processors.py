@@ -37,3 +37,13 @@ def site_constants(request):
             'add_product': constants.ACTION_ADD_PRODUCT,
         },
     }
+
+
+def user_tier_context(request):
+    """Add user tier information to template context."""
+    if request.user.is_authenticated:
+        from .services import TierService
+        tier_info = TierService.get_user_tier_info(request.user)
+        return {'user_tier': tier_info}
+
+    return {'user_tier': None}
