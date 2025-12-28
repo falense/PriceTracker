@@ -16,10 +16,10 @@
             <!-- Main Message -->
             <div>
                 <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-3">
-                    Adding {{ store_name }}
+                    Legger til {{ store_name }}
                 </h2>
                 <p class="text-lg text-gray-600 dark:text-gray-400">
-                    This might take a few minutes...
+                    Dette kan ta noen minutter...
                 </p>
             </div>
             
@@ -38,11 +38,11 @@
                     </svg>
                     <div>
                         <p class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
-                            First time tracking from {{ store_name }}
+                            Første gang du følger fra {{ store_name }}
                         </p>
                         <p class="text-sm text-blue-700 dark:text-blue-300">
-                            We're setting up price tracking for this store. This is a one-time process that 
-                            teaches our system how to extract product information from {{ store_name }}.
+                            Vi setter opp prissporing for denne butikken. Dette er en engangsprosess som
+                            lærer systemet vårt hvordan det skal hente produktinformasjon fra {{ store_name }}.
                         </p>
                     </div>
                 </div>
@@ -50,7 +50,7 @@
 
             <!-- Timestamp -->
             <p class="text-xs text-gray-500 dark:text-gray-500">
-                Started {{ subscription.created_at|timesince }} ago • Page will refresh automatically
+                Startet {{ subscription.created_at|timesince }} siden • Siden oppdateres automatisk
             </p>
         </div>
     </div>
@@ -211,7 +211,7 @@
                 <svg class="w-12 h-12 mx-auto mb-3 animate-spin text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                 </svg>
-                <p>Waiting for operation logs...</p>
+                <p>Venter på operasjonslogger...</p>
             </div>
             {% endif %}
         </div>

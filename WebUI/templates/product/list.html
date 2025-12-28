@@ -1,22 +1,22 @@
 {% extends 'base.html' %}
 {% load currency_filters %}
 
-{% block title %}My Products - PriceTracker{% endblock %}
+{% block title %}Mine produkter - {{ SITE_NAME }}{% endblock %}
 
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <div class="flex items-center justify-between mb-8">
         <div>
             <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
-                My Products
+                Mine produkter
             </h1>
             <p class="mt-2 text-gray-600 dark:text-gray-400">
-                All products you're tracking
+                Alle produkter du følger
             </p>
         </div>
         <a href="{% url 'add_product' %}"
            class="px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium">
-            + Add Product
+            + Legg til produkt
         </a>
     </div>
 
@@ -39,30 +39,30 @@
                     {{ subscription.product.name }}
                 </h3>
                 <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">
-                    Available at {{ subscription.store_count }} store{% if subscription.store_count != 1 %}s{% endif %}
+                    Tilgjengelig hos {{ subscription.store_count }} butikk{{ subscription.store_count|pluralize:"er" }}
                 </p>
 
                 {% if subscription.best_listing and subscription.best_listing.current_price %}
                 <div class="mb-2">
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Best Price</p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Beste pris</p>
                     <div class="flex items-baseline space-x-2">
                         <span class="text-2xl font-bold text-gray-900 dark:text-white">
                             {{ subscription.best_listing.current_price|format_currency:subscription.best_listing.currency }}
                         </span>
                         {% if not subscription.best_listing.available %}
                         <span class="text-xs px-2 py-1 bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200 rounded-full">
-                            Out of Stock
+                            Utsolgt
                         </span>
                         {% endif %}
                     </div>
                     <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        at {{ subscription.best_listing.store.name }}
+                        hos {{ subscription.best_listing.store.name }}
                     </p>
                 </div>
                 {% if subscription.target_price %}
                 <div class="mb-4">
                     <p class="text-xs text-gray-500 dark:text-gray-400">
-                        Target: <span class="font-semibold {% if subscription.best_listing.current_price <= subscription.target_price %}text-green-600 dark:text-green-400{% else %}text-orange-600 dark:text-orange-400{% endif %}">
+                        Målpris: <span class="font-semibold {% if subscription.best_listing.current_price <= subscription.target_price %}text-green-600 dark:text-green-400{% else %}text-orange-600 dark:text-orange-400{% endif %}">
                             {{ subscription.target_price|format_currency:subscription.best_listing.currency }}
                         </span>
                     </p>
@@ -70,13 +70,13 @@
                 {% endif %}
                 {% else %}
                 <div class="mb-4 text-gray-500 dark:text-gray-400">
-                    Fetching prices...
+                    Henter priser...
                 </div>
                 {% endif %}
 
                 <a href="{% url 'subscription_detail' subscription.id %}"
                    class="block w-full text-center px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 font-medium">
-                    View Details
+                    Vis detaljer
                 </a>
             </div>
         </div>
@@ -88,14 +88,14 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
         </svg>
         <h3 class="text-xl font-medium text-gray-900 dark:text-white mb-2">
-            No products tracked yet
+            Ingen produkter fulgt ennå
         </h3>
         <p class="text-gray-600 dark:text-gray-400 mb-6">
-            Start tracking products to monitor their prices
+            Begynn å følge produkter for å overvåke prisene deres
         </p>
         <a href="{% url 'add_product' %}"
            class="inline-block px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium">
-            Add Your First Product
+            Legg til ditt første produkt
         </a>
     </div>
     {% endif %}

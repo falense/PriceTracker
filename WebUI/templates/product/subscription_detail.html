@@ -3,10 +3,10 @@
 
 {% block title %}
     {% if is_being_added %}
-        Adding {{ store_name }}
+        Legger til {{ store_name }}
     {% else %}
         {{ product.name }}
-    {% endif %} - PriceTracker
+    {% endif %} - {{ SITE_NAME }}
 {% endblock %}
 
 {% block content %}
@@ -18,7 +18,7 @@
     <!-- Back Button -->
     <div class="mb-6">
         <a href="{% url 'dashboard' %}" class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">
-            ← Back to Dashboard
+            ← Tilbake til oversikt
         </a>
     </div>
 
@@ -32,16 +32,16 @@
                         {{ product.name }}
                     </h1>
                     <span class="px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full text-sm">
-                        {% if subscription.priority == 3 %}High Priority
-                        {% elif subscription.priority == 2 %}Normal Priority
-                        {% else %}Low Priority{% endif %}
+                        {% if subscription.priority == 3 %}Høy prioritet
+                        {% elif subscription.priority == 2 %}Normal prioritet
+                        {% else %}Lav prioritet{% endif %}
                     </span>
                 </div>
 
                 <div class="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400 mb-6">
-                    <span>{{ listings|length }} store{% if listings|length != 1 %}s{% endif %}</span>
+                    <span>{{ listings|length }} butikk{{ listings|length|pluralize:"er" }}</span>
                     <span>•</span>
-                    <span>Subscribed {{ subscription.created_at|date:"M d, Y" }}</span>
+                    <span>Fulgt siden {{ subscription.created_at|date:"M d, Y" }}</span>
                 </div>
 
                 <!-- Product Image -->
@@ -54,7 +54,7 @@
                 <!-- Best Price -->
                 {% if best_item and best_item.price %}
                 <div class="mb-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-                    <p class="text-sm text-green-800 dark:text-green-200 mb-2">Best Available Price</p>
+                    <p class="text-sm text-green-800 dark:text-green-200 mb-2">Beste tilgjengelige pris</p>
 
                     {% if best_item.type == 'listing' %}
                         <!-- Best price is from a regular listing -->
@@ -63,15 +63,15 @@
                                 {{ best_item.listing.current_price|format_currency:best_item.listing.currency }}
                             </span>
                             <span class="text-lg text-green-700 dark:text-green-300">
-                                at {{ best_item.listing.store.name }}
+                                hos {{ best_item.listing.store.name }}
                             </span>
                         </div>
                         {% if subscription.target_price %}
                         <p class="text-sm text-green-800 dark:text-green-200 mt-2">
                             {% if best_item.listing.current_price <= subscription.target_price %}
-                                ✓ Below your target price of {{ subscription.target_price|format_currency:best_item.listing.currency }}
+                                ✓ Under målprisen din på {{ subscription.target_price|format_currency:best_item.listing.currency }}
                             {% else %}
-                                Target: {{ subscription.target_price|format_currency:best_item.listing.currency }}
+                                Målpris: {{ subscription.target_price|format_currency:best_item.listing.currency }}
                             {% endif %}
                         </p>
                         {% endif %}
@@ -82,12 +82,12 @@
                                 {{ best_item.best_listing.current_price|format_currency:best_item.best_listing.currency }}
                             </span>
                             <span class="text-lg text-green-700 dark:text-green-300">
-                                at {{ best_item.best_listing.store.name }}
+                                hos {{ best_item.best_listing.store.name }}
                             </span>
                         </div>
                         <div class="flex items-center gap-2 mb-2">
                             <span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-200">
-                                Similar Product ({{ best_item.similarity_score|floatformat:0 }}% match)
+                                Lignende produkt ({{ best_item.similarity_score|floatformat:0 }}% treff)
                             </span>
                         </div>
                         <p class="text-sm text-green-800 dark:text-green-200">
@@ -96,9 +96,9 @@
                         {% if subscription.target_price %}
                         <p class="text-sm text-green-800 dark:text-green-200 mt-2">
                             {% if best_item.best_listing.current_price <= subscription.target_price %}
-                                ✓ Below your target price of {{ subscription.target_price|format_currency:best_item.best_listing.currency }}
+                                ✓ Under målprisen din på {{ subscription.target_price|format_currency:best_item.best_listing.currency }}
                             {% else %}
-                                Target: {{ subscription.target_price|format_currency:best_item.best_listing.currency }}
+                                Målpris: {{ subscription.target_price|format_currency:best_item.best_listing.currency }}
                             {% endif %}
                         </p>
                         {% endif %}
@@ -112,12 +112,12 @@
                         {% if best_item.type == 'listing' %}
                             <a href="{{ best_item.listing.url }}" target="_blank" rel="noopener noreferrer"
                                class="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium text-center">
-                                View Best Price
+                                Vis beste pris
                             </a>
                         {% else %}
                             <a href="{% if best_item.user_subscription %}{% url 'subscription_detail' best_item.user_subscription.id %}{% else %}{% url 'product_detail' best_item.product.id %}{% endif %}"
                                class="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium text-center">
-                                View Similar Product
+                                Vis lignende produkt
                             </a>
                         {% endif %}
                     {% endif %}
@@ -128,7 +128,7 @@
                             <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                             </svg>
-                            Refresh
+                            Oppdater
                         </button>
                     </form>
                 </div>
@@ -137,7 +137,7 @@
             <!-- Unified Price Comparison -->
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
                 <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">
-                    Price Comparison
+                    Prissammenligning
                 </h2>
 
                 {% if unified_items %}
@@ -154,7 +154,7 @@
                 </div>
                 {% else %}
                 <p class="text-gray-500 dark:text-gray-400 text-center py-8">
-                    No listings or similar products available yet
+                    Ingen oppføringer eller lignende produkter tilgjengelig ennå
                 </p>
                 {% endif %}
             </div>
@@ -163,7 +163,7 @@
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
                 <div class="flex items-center justify-between mb-4">
                     <h2 class="text-xl font-bold text-gray-900 dark:text-white">
-                        Price History
+                        Prishistorikk
                     </h2>
                     <button onclick="downloadCSV()"
                             id="csv-export-btn"
@@ -172,14 +172,14 @@
                         <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                         </svg>
-                        Export CSV
+                        Eksporter CSV
                     </button>
                 </div>
 
                 <!-- Loading State -->
                 <div id="chart-loading" class="text-center py-12">
                     <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-                    <p class="mt-2 text-gray-500 dark:text-gray-400">Loading price history...</p>
+                    <p class="mt-2 text-gray-500 dark:text-gray-400">Laster prishistorikk...</p>
                 </div>
 
                 <!-- Error State -->
@@ -187,7 +187,7 @@
                     <svg class="w-12 h-12 mx-auto text-red-500 dark:text-red-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
-                    <p class="text-red-600 dark:text-red-400" id="chart-error-message">Failed to load chart data</p>
+                    <p class="text-red-600 dark:text-red-400" id="chart-error-message">Kunne ikke laste grafdata</p>
                 </div>
 
                 <!-- Empty State -->
@@ -195,7 +195,7 @@
                     <svg class="w-12 h-12 mx-auto text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                     </svg>
-                    <p class="text-gray-500 dark:text-gray-400" id="chart-empty-message">No price history available yet</p>
+                    <p class="text-gray-500 dark:text-gray-400" id="chart-empty-message">Ingen prishistorikk tilgjengelig ennå</p>
                 </div>
 
                 <!-- Chart Container -->
@@ -211,7 +211,7 @@
             <!-- Settings -->
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
                 <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">
-                    Subscription Settings
+                    Abonnementsinnstillinger
                 </h3>
 
                 <form method="post" action="{% url 'update_subscription' subscription.id %}">
@@ -220,31 +220,31 @@
                         <!-- Target Price -->
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Target Price
+                                Målpris
                             </label>
                             <input type="number"
                                    name="target_price"
                                    step="0.01"
                                    value="{{ subscription.target_price|default:'' }}"
-                                   placeholder="Set target"
+                                   placeholder="Sett målpris"
                                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
                         </div>
 
                         <!-- Notification Settings -->
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Notifications
+                                Varsler
                             </label>
                             <div class="space-y-2">
                                 <label class="flex items-center">
                                     <input type="checkbox" name="notify_on_drop" {% if subscription.notify_on_drop %}checked{% endif %}
                                            class="rounded border-gray-300 text-primary-600 focus:ring-primary-500">
-                                    <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Price drops</span>
+                                    <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Prisfall</span>
                                 </label>
                                 <label class="flex items-center">
                                     <input type="checkbox" name="notify_on_restock" {% if subscription.notify_on_restock %}checked{% endif %}
                                            class="rounded border-gray-300 text-primary-600 focus:ring-primary-500">
-                                    <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Back in stock</span>
+                                    <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Tilbake på lager</span>
                                 </label>
                             </div>
                         </div>
@@ -252,16 +252,16 @@
                         <!-- Check Frequency -->
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Check Frequency
+                                Sjekkfrekvens
                             </label>
                             <select name="priority" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
-                                <option value="normal" {% if subscription.priority == 2 %}selected{% endif %}>Every hour</option>
-                                <option value="low" {% if subscription.priority == 1 %}selected{% endif %}>Daily</option>
+                                <option value="normal" {% if subscription.priority == 2 %}selected{% endif %}>Hver time</option>
+                                <option value="low" {% if subscription.priority == 1 %}selected{% endif %}>Daglig</option>
                             </select>
                         </div>
 
                         <button type="submit" class="w-full px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium">
-                            Save Settings
+                            Lagre innstillinger
                         </button>
                     </div>
                 </form>
@@ -270,18 +270,18 @@
             <!-- Danger Zone -->
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-red-200 dark:border-red-900 p-6">
                 <h3 class="text-lg font-bold text-red-600 dark:text-red-400 mb-4">
-                    Danger Zone
+                    Faresone
                 </h3>
                 <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    Unsubscribe from this product. This will stop tracking and remove all notifications.
+                    Slutt å følge dette produktet. Dette vil stoppe sporing og fjerne alle varsler.
                 </p>
-                <form method="post" action="{% url 'unsubscribe' subscription.id %}" class="inline" onsubmit="return confirm('Are you sure you want to unsubscribe? This action cannot be undone.');">
+                <form method="post" action="{% url 'unsubscribe' subscription.id %}" class="inline" onsubmit="return confirm('Er du sikker på at du vil slutte å følge? Denne handlingen kan ikke angres.');">
                     {% csrf_token %}
                     <button type="submit" class="w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium">
                         <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                         </svg>
-                        Unsubscribe
+                        Slutt å følge
                     </button>
                 </form>
             </div>

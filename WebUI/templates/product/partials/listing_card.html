@@ -7,7 +7,7 @@
             <h3 class="font-semibold text-gray-900 dark:text-white">
                 {{ listing.store.name }}
                 {% if is_best %}
-                <span class="ml-2 px-2 py-0.5 bg-green-600 text-white text-xs rounded-full">Best Price</span>
+                <span class="ml-2 px-2 py-0.5 bg-green-600 text-white text-xs rounded-full">Beste pris</span>
                 {% endif %}
             </h3>
             <p class="text-sm text-gray-500 dark:text-gray-400">{{ listing.store.domain }}</p>
@@ -18,17 +18,17 @@
                 {{ listing.current_price|format_currency:listing.currency }}
             </p>
             <p class="text-sm text-gray-500 dark:text-gray-400">
-                {% if listing.last_checked %}{{ listing.last_checked|timesince }} ago{% endif %}
+                {% if listing.last_checked %}{{ listing.last_checked|timesince }} siden{% endif %}
             </p>
             {% else %}
-            <p class="text-gray-500 dark:text-gray-400">Fetching...</p>
+            <p class="text-gray-500 dark:text-gray-400">Henter...</p>
             {% endif %}
         </div>
     </div>
     {% if listing.current_price %}
     <a href="{{ listing.url }}" target="_blank" rel="noopener noreferrer"
        class="inline-block mt-2 text-sm text-primary-600 dark:text-primary-400 hover:underline">
-        View on {{ listing.store.name }} →
+        Vis hos {{ listing.store.name }} →
     </a>
     {% endif %}
 </div>

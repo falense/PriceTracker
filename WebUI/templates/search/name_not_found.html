@@ -11,35 +11,35 @@
 
         <div class="flex-1">
             <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-2">
-                No products found for "{{ query }}"
+                Ingen produkter funnet for "{{ query }}"
             </h3>
 
             <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                Want to track this product? Paste the product URL below
+                Vil du følge dette produktet? Lim inn produkt-URL nedenfor
             </p>
 
             <div class="space-y-3">
                 <input type="text"
                        id="add-product-url"
-                       placeholder="Paste product URL (e.g., https://amazon.com/...)"
+                       placeholder="Lim inn produkt-URL (f.eks. https://amazon.com/...)"
                        class="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
 
                 <div class="flex flex-col sm:flex-row gap-3">
                     <button type="button"
                             onclick="let url = document.getElementById('add-product-url').value.trim(); if(url) { document.getElementById('search-input').value = url; document.getElementById('search-input').dispatchEvent(new Event('keyup')); }"
                             class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
-                        Add Product
+                        Legg til produkt
                     </button>
                     <button type="button"
                             onclick="document.getElementById('search-input').value = ''; document.getElementById('search-results').innerHTML = '';"
                             class="px-6 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-white rounded-lg font-medium transition-colors">
-                        Cancel
+                        Avbryt
                     </button>
                 </div>
             </div>
 
             <p class="text-xs text-gray-500 dark:text-gray-400 mt-3">
-                We support products from Amazon, eBay, and hundreds of other online stores
+                Vi støtter produkter fra Amazon, eBay og hundrevis av andre nettbutikker
             </p>
         </div>
     </div>

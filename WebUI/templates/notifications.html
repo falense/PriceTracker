@@ -1,15 +1,15 @@
 {% extends 'base.html' %}
 
-{% block title %}Notifications - PriceTracker{% endblock %}
+{% block title %}Varsler - {{ SITE_NAME }}{% endblock %}
 
 {% block content %}
 <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <div class="flex items-center justify-between mb-6">
-        <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Notifications</h1>
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Varsler</h1>
         <form method="post" action="{% url 'mark_notifications_read' %}">
             {% csrf_token %}
             <button type="submit" class="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 font-medium">
-                Mark all as read
+                Merk alle som lest
             </button>
         </form>
     </div>

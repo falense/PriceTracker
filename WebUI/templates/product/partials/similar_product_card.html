@@ -34,7 +34,7 @@
                                  {% if suggestion.similarity_score >= 90 %}bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200
                                  {% elif suggestion.similarity_score >= 80 %}bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-200
                                  {% else %}bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300{% endif %}">
-                        {{ suggestion.similarity_score|floatformat:0 }}% match
+                        {{ suggestion.similarity_score|floatformat:0 }}% treff
                     </span>
                 </div>
 
@@ -44,7 +44,7 @@
                         {{ suggestion.best_listing.current_price|format_currency:suggestion.best_listing.currency }}
                     </p>
                     <span class="text-xs text-gray-600 dark:text-gray-400">
-                        at {{ suggestion.best_listing.store.name }}
+                        hos {{ suggestion.best_listing.store.name }}
                     </span>
                 </div>
                 {% endif %}
@@ -62,7 +62,7 @@
                 hx-swap="outerHTML"
                 class="px-3 py-1.5 text-sm font-medium rounded-lg transition-colors
                        {% if suggestion.user_vote == 1 %}bg-green-600 text-white hover:bg-green-700{% else %}bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-green-50{% endif %}">
-                <span class="mr-1">👍</span> Same
+                <span class="mr-1">👍</span> Samme
             </button>
 
             <button
@@ -72,7 +72,7 @@
                 hx-swap="outerHTML"
                 class="px-3 py-1.5 text-sm font-medium rounded-lg transition-colors
                        {% if suggestion.user_vote == -1 %}bg-red-600 text-white hover:bg-red-700{% else %}bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-red-50{% endif %}">
-                <span class="mr-1">👎</span> Different
+                <span class="mr-1">👎</span> Forskjellig
             </button>
 
             <button
@@ -81,7 +81,7 @@
                 hx-target="closest .border-2"
                 hx-swap="outerHTML swap:1s"
                 class="px-3 py-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
-                Dismiss
+                Avvis
             </button>
         </div>
 
@@ -92,7 +92,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
             </svg>
             <span>
-                {% widthratio suggestion.aggregate.upvotes suggestion.aggregate.total_votes 100 %}% agree
+                {% widthratio suggestion.aggregate.upvotes suggestion.aggregate.total_votes 100 %}% enige
                 ({{ suggestion.aggregate.total_votes }})
             </span>
         </div>

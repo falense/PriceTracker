@@ -3,7 +3,7 @@
 <div class="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
     <div class="bg-gray-50 dark:bg-gray-900/50 px-6 py-3 border-b border-gray-200 dark:border-gray-700">
         <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">
-            Found {{ subscriptions|length }} product{{ subscriptions|length|pluralize }} matching "{{ query }}"
+            Fant {{ subscriptions|length }} produkt{{ subscriptions|length|pluralize:"er" }} som matcher "{{ query }}"
         </h3>
     </div>
 
@@ -30,7 +30,7 @@
                         {{ subscription.product.name }}
                     </h4>
                     <p class="text-sm text-gray-500 dark:text-gray-400">
-                        Tracked from {{ subscription.product.listings.count }} store{{ subscription.product.listings.count|pluralize }}
+                        Fulgt fra {{ subscription.product.listings.count }} butikk{{ subscription.product.listings.count|pluralize:"er" }}
                     </p>
                 </div>
 
@@ -41,12 +41,12 @@
                         {{ subscription.best_price|format_currency:first_listing.currency }}
                     </p>
                     <p class="text-xs text-gray-500 dark:text-gray-400">
-                        Best price
+                        Beste pris
                     </p>
                     {% endwith %}
                     {% else %}
                     <p class="text-sm text-gray-500 dark:text-gray-400">
-                        Fetching prices...
+                        Henter priser...
                     </p>
                     {% endif %}
                 </div>
@@ -57,7 +57,7 @@
 
     <div class="bg-gray-50 dark:bg-gray-900/50 px-6 py-3 border-t border-gray-200 dark:border-gray-700">
         <p class="text-xs text-gray-500 dark:text-gray-400 text-center">
-            Click on a product to view details or paste a URL to track a new product
+            Klikk på et produkt for å se detaljer eller lim inn en URL for å følge et nytt produkt
         </p>
     </div>
 </div>

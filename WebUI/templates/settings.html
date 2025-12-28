@@ -1,18 +1,18 @@
 {% extends 'base.html' %}
 
-{% block title %}Profile & Settings - PriceTracker{% endblock %}
+{% block title %}Profil & Innstillinger - {{ SITE_NAME }}{% endblock %}
 
 {% block content %}
 <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-8">
-        Profile & Settings
+        Profil & Innstillinger
     </h1>
 
     <div class="space-y-6">
         <!-- User Statistics -->
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
             <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-6">
-                Your Tracking Statistics
+                Din følgestatistikk
             </h2>
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -20,7 +20,7 @@
                 <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
                     <div class="flex items-center justify-between">
                         <div>
-                            <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Products Tracked</p>
+                            <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Produkter fulgt</p>
                             <p class="text-3xl font-bold text-gray-900 dark:text-white mt-1">{{ active_subscriptions }}</p>
                         </div>
                         <svg class="w-10 h-10 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -33,7 +33,7 @@
                 <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
                     <div class="flex items-center justify-between">
                         <div>
-                            <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Stores Monitored</p>
+                            <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Butikker overvåket</p>
                             <p class="text-3xl font-bold text-gray-900 dark:text-white mt-1">{{ stores_tracked }}</p>
                         </div>
                         <svg class="w-10 h-10 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -46,7 +46,7 @@
                 <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
                     <div class="flex items-center justify-between">
                         <div>
-                            <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Unread Alerts</p>
+                            <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Uleste varsler</p>
                             <p class="text-3xl font-bold text-gray-900 dark:text-white mt-1">{{ unread_notifications }}</p>
                         </div>
                         <svg class="w-10 h-10 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -59,7 +59,7 @@
             <div class="mt-6">
                 <a href="{% url 'product_list' %}" 
                    class="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium">
-                    View all tracked products →
+                    Vis alle fulgte produkter →
                 </a>
             </div>
         </div>
@@ -67,13 +67,13 @@
         <!-- Account Settings -->
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
             <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-6">
-                Account Information
+                Kontoinformasjon
             </h2>
 
             <div class="space-y-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Username
+                        Brukernavn
                     </label>
                     <input type="text" value="{{ user.username }}" disabled
                            class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed">
@@ -81,17 +81,17 @@
 
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Email
+                        E-post
                     </label>
                     <input type="email" value="{{ user.email|default:'' }}" disabled
-                           placeholder="Not set"
+                           placeholder="Ikke angitt"
                            class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed">
-                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Contact an administrator to change your email</p>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Kontakt en administrator for å endre e-postadressen din</p>
                 </div>
 
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Member Since
+                        Medlem siden
                     </label>
                     <input type="text" value="{{ user.date_joined|date:'F j, Y' }}" disabled
                            class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed">
@@ -102,7 +102,7 @@
         <!-- Change Password -->
         <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
             <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-6">
-                Change Password
+                Endre passord
             </h2>
 
             <form method="post" action="{% url 'change_password' %}" class="space-y-4">
@@ -110,7 +110,7 @@
                 
                 <div>
                     <label for="old_password" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Current Password
+                        Nåværende passord
                     </label>
                     <input type="password" 
                            id="old_password" 
@@ -121,21 +121,21 @@
 
                 <div>
                     <label for="new_password1" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        New Password
+                        Nytt passord
                     </label>
-                    <input type="password" 
-                           id="new_password1" 
-                           name="new_password1" 
+                    <input type="password"
+                           id="new_password1"
+                           name="new_password1"
                            required
                            class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
                     <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                        Your password must contain at least 8 characters and can't be entirely numeric.
+                        Passordet ditt må inneholde minst 8 tegn og kan ikke være helt numerisk.
                     </p>
                 </div>
 
                 <div>
                     <label for="new_password2" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Confirm New Password
+                        Bekreft nytt passord
                     </label>
                     <input type="password" 
                            id="new_password2" 
@@ -147,7 +147,7 @@
                 <div class="flex justify-end pt-4">
                     <button type="submit" 
                             class="px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition">
-                        Update Password
+                        Oppdater passord
                     </button>
                 </div>
             </form>

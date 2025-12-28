@@ -1,14 +1,14 @@
 {% extends 'base.html' %}
 {% load currency_filters %}
 
-{% block title %}{{ product.name }} - PriceTracker{% endblock %}
+{% block title %}{{ product.name }} - {{ SITE_NAME }}{% endblock %}
 
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <!-- Back Button -->
     <div class="mb-6">
         <a href="{% url 'dashboard' %}" class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">
-            ← Back to Dashboard
+            ← Tilbake til oversikt
         </a>
     </div>
 
@@ -31,7 +31,7 @@
                     <span>{{ product.lowest_price_listing.store.name }}</span>
                     <span>•</span>
                     {% endif %}
-                    <span>Added {{ product.created_at|date:"M d, Y" }}</span>
+                    <span>Lagt til {{ product.created_at|date:"M d, Y" }}</span>
                 </div>
 
                 <!-- Product Image -->
@@ -44,13 +44,13 @@
                 <!-- Current Price -->
                 {% if product.lowest_price_listing and product.lowest_price_listing.current_price %}
                 <div class="mb-6">
-                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">Best Price</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">Beste pris</p>
                     <div class="flex items-baseline space-x-3">
                         <span class="text-4xl font-bold text-gray-900 dark:text-white">
                             {{ product.lowest_price_listing.current_price|format_currency:product.lowest_price_listing.currency }}
                         </span>
                         <span class="text-sm text-gray-500 dark:text-gray-400">
-                            at {{ product.lowest_price_listing.store.name }}
+                            hos {{ product.lowest_price_listing.store.name }}
                         </span>
                     </div>
                 </div>
@@ -58,14 +58,14 @@
                 <!-- Listings Table -->
                 {% if listings %}
                 <div class="mb-6">
-                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">Available at {{ listings|length }} store{{ listings|length|pluralize }}</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">Tilgjengelig hos {{ listings|length }} butikk{{ listings|length|pluralize:"er" }}</p>
                     <div class="space-y-2">
                         {% for listing in listings %}
                         <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                             <div>
                                 <p class="font-medium text-gray-900 dark:text-white">{{ listing.store.name }}</p>
                                 <p class="text-xs text-gray-500 dark:text-gray-400">
-                                    Updated {{ listing.last_checked|timesince }} ago
+                                    Oppdatert for {{ listing.last_checked|timesince }} siden
                                 </p>
                             </div>
                             <div class="text-right">
@@ -74,10 +74,10 @@
                                     {{ listing.current_price|format_currency:listing.currency }}
                                 </p>
                                 {% if not listing.available %}
-                                <p class="text-xs text-red-600 dark:text-red-400">Out of stock</p>
+                                <p class="text-xs text-red-600 dark:text-red-400">Utsolgt</p>
                                 {% endif %}
                                 {% else %}
-                                <p class="text-sm text-gray-500 dark:text-gray-400">Price unavailable</p>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">Pris utilgjengelig</p>
                                 {% endif %}
                             </div>
                         </div>
@@ -88,7 +88,7 @@
                 {% else %}
                 <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-6">
                     <p class="text-yellow-800 dark:text-yellow-200">
-                        Price information is being fetched. Check back soon!
+                        Prisinformasjon hentes. Sjekk tilbake snart!
                     </p>
                 </div>
                 {% endif %}
@@ -98,7 +98,7 @@
                 <div class="flex space-x-3">
                     <a href="{{ product.lowest_price_listing.url }}" target="_blank" rel="noopener noreferrer"
                        class="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium text-center">
-                        View on {{ product.lowest_price_listing.store.name }}
+                        Vis hos {{ product.lowest_price_listing.store.name }}
                     </a>
                 </div>
                 {% endif %}
@@ -107,7 +107,7 @@
             <!-- Price History -->
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
                 <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">
-                    Price History
+                    Prishistorikk
                 </h2>
 
                 {% if price_history %}
@@ -116,13 +116,13 @@
                         <thead>
                             <tr>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                    Date
+                                    Dato
                                 </th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                    Price
+                                    Pris
                                 </th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                    Change
+                                    Endring
                                 </th>
                             </tr>
                         </thead>
@@ -146,7 +146,7 @@
                 </div>
                 {% else %}
                 <p class="text-gray-500 dark:text-gray-400 text-center py-8">
-                    No price history available yet
+                    Ingen prishistorikk tilgjengelig ennå
                 </p>
                 {% endif %}
             </div>
@@ -158,37 +158,37 @@
             <!-- Settings -->
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
                 <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">
-                    Settings
+                    Innstillinger
                 </h3>
 
                 <div class="space-y-4">
                     <!-- Target Price -->
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            Target Price
+                            Målpris
                         </label>
                         <input type="number"
                                step="0.01"
                                value="{{ product.target_price|default:'' }}"
-                               placeholder="Set target"
+                               placeholder="Sett målpris"
                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
                     </div>
 
                     <!-- Notification Settings -->
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            Notifications
+                            Varsler
                         </label>
                         <div class="space-y-2">
                             <label class="flex items-center">
                                 <input type="checkbox" {% if product.notify_on_drop %}checked{% endif %}
                                        class="rounded border-gray-300 text-primary-600 focus:ring-primary-500">
-                                <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Price drops</span>
+                                <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Prisfall</span>
                             </label>
                             <label class="flex items-center">
                                 <input type="checkbox" {% if product.notify_on_restock %}checked{% endif %}
                                        class="rounded border-gray-300 text-primary-600 focus:ring-primary-500">
-                                <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Back in stock</span>
+                                <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Tilbake på lager</span>
                             </label>
                         </div>
                     </div>
@@ -196,16 +196,16 @@
                     <!-- Check Frequency -->
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            Check Frequency
+                            Sjekkfrekvens
                         </label>
                         <select class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
-                            <option value="normal" {% if product.priority == 'normal' %}selected{% endif %}>Every hour</option>
-                            <option value="low" {% if product.priority == 'low' %}selected{% endif %}>Daily</option>
+                            <option value="normal" {% if product.priority == 'normal' %}selected{% endif %}>Hver time</option>
+                            <option value="low" {% if product.priority == 'low' %}selected{% endif %}>Daglig</option>
                         </select>
                     </div>
 
                     <button class="w-full px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium">
-                        Save Settings
+                        Lagre innstillinger
                     </button>
                 </div>
             </div>
@@ -213,19 +213,19 @@
             <!-- Danger Zone -->
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-red-200 dark:border-red-900 p-6">
                 <h3 class="text-lg font-bold text-red-600 dark:text-red-400 mb-4">
-                    Danger Zone
+                    Faresone
                 </h3>
                 <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    Delete this product from your tracking list. This action cannot be undone.
+                    Slett dette produktet fra følgelisten din. Denne handlingen kan ikke angres.
                 </p>
-                <form method="post" action="{% url 'delete_product' product.id %}" class="inline" onsubmit="return confirm('Are you sure you want to delete this product? This action cannot be undone.');">
+                <form method="post" action="{% url 'delete_product' product.id %}" class="inline" onsubmit="return confirm('Er du sikker på at du vil slette dette produktet? Denne handlingen kan ikke angres.');">
                     {% csrf_token %}
                     <input type="hidden" name="_method" value="DELETE">
                     <button type="submit" class="w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium">
                         <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                         </svg>
-                        Delete Product
+                        Slett produkt
                     </button>
                 </form>
             </div>
@@ -235,13 +235,13 @@
             <!-- Guest CTA -->
             <div class="bg-primary-50 dark:bg-primary-900/20 rounded-xl shadow-sm border border-primary-200 dark:border-primary-800 p-6">
                 <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-2">
-                    Want to track this product?
+                    Vil du følge dette produktet?
                 </h3>
                 <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    Sign in to track prices, set alerts, and get notifications when prices drop.
+                    Logg inn for å følge priser, sette varsler og få beskjed når prisene faller.
                 </p>
                 <a href="{% url 'login' %}" class="block w-full px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium text-center">
-                    Sign In
+                    Logg inn
                 </a>
             </div>
             {% endif %}

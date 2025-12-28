@@ -3,7 +3,7 @@
 <div class="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
     <div class="bg-gray-50 dark:bg-gray-900/50 px-6 py-3 border-b border-gray-200 dark:border-gray-700">
         <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300">
-            Found {{ products|length }} product{{ products|length|pluralize }} matching "{{ query }}"
+            Fant {{ products|length }} produkt{{ products|length|pluralize:"er" }} som matcher "{{ query }}"
         </h3>
     </div>
 
@@ -30,7 +30,7 @@
                         {{ product.name }}
                     </h4>
                     <p class="text-sm text-gray-500 dark:text-gray-400">
-                        From {{ product.listings.first.store.name|default:"store" }}
+                        Fra {{ product.listings.first.store.name|default:"butikk" }}
                     </p>
                 </div>
 
@@ -40,11 +40,11 @@
                         {{ product.lowest_price_listing.current_price|format_currency:product.lowest_price_listing.currency }}
                     </p>
                     <p class="text-xs text-gray-500 dark:text-gray-400">
-                        at {{ product.lowest_price_listing.store.name }}
+                        hos {{ product.lowest_price_listing.store.name }}
                     </p>
                     {% else %}
                     <p class="text-sm text-gray-500 dark:text-gray-400">
-                        No price available
+                        Ingen pris tilgjengelig
                     </p>
                     {% endif %}
                 </div>
@@ -55,7 +55,7 @@
 
     <div class="bg-gray-50 dark:bg-gray-900/50 px-6 py-3 border-t border-gray-200 dark:border-gray-700">
         <p class="text-xs text-gray-500 dark:text-gray-400 text-center">
-            Want to track a new product? Paste its URL in the search box
+            Vil du følge et nytt produkt? Lim inn URL-en i søkefeltet
         </p>
     </div>
 </div>
