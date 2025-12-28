@@ -1,5 +1,4 @@
 {% extends 'base.html' %}
-{% load app_constants %}
 
 {% block title %}Brukeradministrasjon - PriceTracker Admin{% endblock %}
 
@@ -10,7 +9,7 @@
         <div class="flex items-center justify-between">
             <div>
                 <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
-                    {% const 'ADMIN_USER_MANAGEMENT' %}
+                    Brukeradministrasjon
                 </h1>
                 <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
                     Administrer brukere og abonnementer
@@ -30,7 +29,7 @@
             <div class="flex items-center justify-between">
                 <div>
                     <p class="text-sm font-medium text-gray-600 dark:text-gray-400">
-                        {% const 'ADMIN_TOTAL_USERS' %}
+                        Totalt antall brukere
                     </p>
                     <p class="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
                         {{ tier_stats.total }}
@@ -102,31 +101,31 @@
             <!-- Search -->
             <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    {% const 'ADMIN_SEARCH_USERS' %}
+                    Søk brukere...
                 </label>
                 <input type="text"
                        name="search"
                        value="{{ search_query }}"
-                       placeholder="{% const 'ADMIN_SEARCH_USERS' %}"
+                       placeholder="Søk brukere..."
                        class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent">
             </div>
 
             <!-- Tier Filter -->
             <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    {% const 'ADMIN_FILTER_BY_TIER' %}
+                    Filtrer etter abonnement
                 </label>
                 <div class="flex gap-2">
                     <select name="tier"
                             class="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent">
-                        <option value="all" {% if tier_filter == 'all' %}selected{% endif %}>{% const 'ADMIN_ALL_TIERS' %}</option>
+                        <option value="all" {% if tier_filter == 'all' %}selected{% endif %}>Alle abonnementer</option>
                         <option value="free" {% if tier_filter == 'free' %}selected{% endif %}>Registrert bruker</option>
                         <option value="supporter" {% if tier_filter == 'supporter' %}selected{% endif %}>Støttebruker</option>
                         <option value="ultimate" {% if tier_filter == 'ultimate' %}selected{% endif %}>Ultimate</option>
                     </select>
                     <button type="submit"
                             class="px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition">
-                        {% const 'ACTION_SEARCH' %}
+                        Søk
                     </button>
                 </div>
             </div>
@@ -140,28 +139,28 @@
                 <thead class="bg-gray-50 dark:bg-gray-900">
                     <tr>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                            {% const 'ADMIN_USERNAME' %}
+                            Brukernavn
                         </th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                            {% const 'ADMIN_EMAIL' %}
+                            E-post
                         </th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                            {% const 'ADMIN_TIER' %}
+                            Abonnement
                         </th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                            {% const 'ADMIN_PRODUCTS_ACTIVE' %}
+                            Aktive produkter
                         </th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                            {% const 'ADMIN_PRODUCTS_REMAINING' %}
+                            Gjenstående
                         </th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                            {% const 'ADMIN_USAGE_PERCENT' %}
+                            Bruk %
                         </th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                            {% const 'ADMIN_MEMBER_SINCE' %}
+                            Medlem siden
                         </th>
                         <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                            {% const 'ADMIN_LAST_LOGIN' %}
+                            Sist innlogget
                         </th>
                     </tr>
                 </thead>

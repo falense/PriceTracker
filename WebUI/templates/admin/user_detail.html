@@ -1,5 +1,4 @@
 {% extends 'base.html' %}
-{% load app_constants %}
 
 {% block title %}{{ viewed_user.username }} - Brukerdetaljer{% endblock %}
 
@@ -30,15 +29,15 @@
         </h2>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-                <p class="text-sm text-gray-500 dark:text-gray-400">{% const 'ADMIN_USERNAME' %}</p>
+                <p class="text-sm text-gray-500 dark:text-gray-400">Brukernavn</p>
                 <p class="mt-1 text-lg font-medium text-gray-900 dark:text-white">{{ viewed_user.username }}</p>
             </div>
             <div>
-                <p class="text-sm text-gray-500 dark:text-gray-400">{% const 'ADMIN_EMAIL' %}</p>
+                <p class="text-sm text-gray-500 dark:text-gray-400">E-post</p>
                 <p class="mt-1 text-lg font-medium text-gray-900 dark:text-white">{{ viewed_user.email }}</p>
             </div>
             <div>
-                <p class="text-sm text-gray-500 dark:text-gray-400">{% const 'ADMIN_TIER' %}</p>
+                <p class="text-sm text-gray-500 dark:text-gray-400">Abonnement</p>
                 <p class="mt-1">
                     {% if viewed_user.tier == 'free' %}
                     <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
@@ -80,16 +79,16 @@
                 </div>
             </div>
             <div>
-                <p class="text-sm text-gray-500 dark:text-gray-400">{% const 'ADMIN_MEMBER_SINCE' %}</p>
+                <p class="text-sm text-gray-500 dark:text-gray-400">Medlem siden</p>
                 <p class="mt-1 text-lg font-medium text-gray-900 dark:text-white">{{ viewed_user.date_joined|date:"d.m.Y" }}</p>
             </div>
             <div>
-                <p class="text-sm text-gray-500 dark:text-gray-400">{% const 'ADMIN_LAST_LOGIN' %}</p>
+                <p class="text-sm text-gray-500 dark:text-gray-400">Sist innlogget</p>
                 <p class="mt-1 text-lg font-medium text-gray-900 dark:text-white">
                     {% if viewed_user.last_login %}
                         {{ viewed_user.last_login|date:"d.m.Y H:i" }}
                     {% else %}
-                        <span class="text-gray-500 dark:text-gray-400">{% const 'ADMIN_NEVER' %}</span>
+                        <span class="text-gray-500 dark:text-gray-400">Aldri</span>
                     {% endif %}
                 </p>
             </div>
@@ -112,7 +111,7 @@
         </h2>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
-                <p class="text-sm text-gray-500 dark:text-gray-400">{% const 'ADMIN_PRODUCTS_ACTIVE' %}</p>
+                <p class="text-sm text-gray-500 dark:text-gray-400">Aktive produkter</p>
                 <p class="mt-1 text-3xl font-bold text-gray-900 dark:text-white">
                     {{ viewed_user.active_product_count }}
                     {% if viewed_user.get_product_limit %}
@@ -121,17 +120,17 @@
                 </p>
             </div>
             <div>
-                <p class="text-sm text-gray-500 dark:text-gray-400">{% const 'ADMIN_PRODUCTS_REMAINING' %}</p>
+                <p class="text-sm text-gray-500 dark:text-gray-400">Gjenstående</p>
                 <p class="mt-1 text-3xl font-bold text-gray-900 dark:text-white">
                     {% if products_remaining is None %}
-                        <span class="text-purple-600 dark:text-purple-400">{% const 'ADMIN_UNLIMITED' %}</span>
+                        <span class="text-purple-600 dark:text-purple-400">Ubegrenset</span>
                     {% else %}
                         {{ products_remaining }}
                     {% endif %}
                 </p>
             </div>
             <div>
-                <p class="text-sm text-gray-500 dark:text-gray-400">{% const 'ADMIN_USAGE_PERCENT' %}</p>
+                <p class="text-sm text-gray-500 dark:text-gray-400">Bruk %</p>
                 {% if viewed_user.get_product_limit is None %}
                     <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">-</p>
                 {% else %}
