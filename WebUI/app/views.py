@@ -2347,7 +2347,7 @@ def referral_landing(request, code):
         user_agent=request.META.get('HTTP_USER_AGENT', '')[:500],
         referer=request.META.get('HTTP_REFERER', '')[:500],
         landing_page=request.path,
-        session_key=request.session.session_key,
+        session_key=request.session.session_key or '',  # Use empty string if None
         is_unique=is_unique,
         duplicate_reason=duplicate_reason if not is_unique else ''
     )
