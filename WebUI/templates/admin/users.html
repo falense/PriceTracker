@@ -1,0 +1,211 @@
+{% extends 'base.html' %}
+{% load app_constants %}
+
+{% block title %}Brukeradministrasjon - PriceTracker Admin{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+                    {% const 'ADMIN_USER_MANAGEMENT' %}
+                </h1>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    Administrer brukere og abonnementer
+                </p>
+            </div>
+            <a href="{% url 'admin_dashboard' %}"
+               class="inline-flex items-center px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition">
+                ← Tilbake til Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+        <!-- Total Users -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">
+                        {% const 'ADMIN_TOTAL_USERS' %}
+                    </p>
+                    <p class="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
+                        {{ tier_stats.total }}
+                    </p>
+                </div>
+                <div class="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
+                    <svg class="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Free Tier -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">
+                        Registrert bruker
+                    </p>
+                    <p class="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
+                        {{ tier_stats.free }}
+                    </p>
+                </div>
+                <div class="w-12 h-12 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
+                    <span class="text-2xl">🆓</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Supporter Tier -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">
+                        Støttebruker
+                    </p>
+                    <p class="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
+                        {{ tier_stats.supporter }}
+                    </p>
+                </div>
+                <div class="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
+                    <span class="text-2xl">💙</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ultimate Tier -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">
+                        Ultimate
+                    </p>
+                    <p class="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
+                        {{ tier_stats.ultimate }}
+                    </p>
+                </div>
+                <div class="w-12 h-12 bg-purple-100 dark:bg-purple-900 rounded-lg flex items-center justify-center">
+                    <span class="text-2xl">⭐</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search and Filter -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
+        <form method="get" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Search -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    {% const 'ADMIN_SEARCH_USERS' %}
+                </label>
+                <input type="text"
+                       name="search"
+                       value="{{ search_query }}"
+                       placeholder="{% const 'ADMIN_SEARCH_USERS' %}"
+                       class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+            </div>
+
+            <!-- Tier Filter -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    {% const 'ADMIN_FILTER_BY_TIER' %}
+                </label>
+                <div class="flex gap-2">
+                    <select name="tier"
+                            class="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                        <option value="all" {% if tier_filter == 'all' %}selected{% endif %}>{% const 'ADMIN_ALL_TIERS' %}</option>
+                        <option value="free" {% if tier_filter == 'free' %}selected{% endif %}>Registrert bruker</option>
+                        <option value="supporter" {% if tier_filter == 'supporter' %}selected{% endif %}>Støttebruker</option>
+                        <option value="ultimate" {% if tier_filter == 'ultimate' %}selected{% endif %}>Ultimate</option>
+                    </select>
+                    <button type="submit"
+                            class="px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition">
+                        {% const 'ACTION_SEARCH' %}
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Users Table -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead class="bg-gray-50 dark:bg-gray-900">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            {% const 'ADMIN_USERNAME' %}
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            {% const 'ADMIN_EMAIL' %}
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            {% const 'ADMIN_TIER' %}
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            {% const 'ADMIN_PRODUCTS_ACTIVE' %}
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            {% const 'ADMIN_PRODUCTS_REMAINING' %}
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            {% const 'ADMIN_USAGE_PERCENT' %}
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            {% const 'ADMIN_MEMBER_SINCE' %}
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            {% const 'ADMIN_LAST_LOGIN' %}
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    {% for user in users %}
+                        {% include 'admin/partials/user_row.html' with user=user %}
+                    {% empty %}
+                        <tr>
+                            <td colspan="8" class="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                                Ingen brukere funnet
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Pagination -->
+    {% if page_obj.has_other_pages %}
+    <div class="flex items-center justify-between mt-6">
+        <div class="text-sm text-gray-700 dark:text-gray-300">
+            Viser {{ page_obj.start_index }}-{{ page_obj.end_index }} av {{ page_obj.paginator.count }} brukere
+        </div>
+        <div class="flex space-x-2">
+            {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}&search={{ search_query }}&tier={{ tier_filter }}"
+               class="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                Forrige
+            </a>
+            {% endif %}
+
+            <span class="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg">
+                Side {{ page_obj.number }} av {{ page_obj.paginator.num_pages }}
+            </span>
+
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}&search={{ search_query }}&tier={{ tier_filter }}"
+               class="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                Neste
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

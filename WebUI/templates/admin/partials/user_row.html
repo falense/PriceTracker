@@ -1,0 +1,109 @@
+{% load app_constants %}
+<tr id="user-row-{{ user.id }}" class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
+    <!-- Username -->
+    <td class="px-6 py-4 whitespace-nowrap">
+        <div class="flex items-center">
+            <div>
+                <div class="text-sm font-medium text-gray-900 dark:text-white">
+                    {{ user.username }}
+                </div>
+                {% if user.is_staff %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200">
+                    Staff
+                </span>
+                {% endif %}
+            </div>
+        </div>
+    </td>
+
+    <!-- Email -->
+    <td class="px-6 py-4 whitespace-nowrap">
+        <div class="text-sm text-gray-900 dark:text-white">
+            {{ user.email }}
+        </div>
+    </td>
+
+    <!-- Tier (Inline Dropdown) -->
+    <td class="px-6 py-4 whitespace-nowrap">
+        <select
+            hx-post="{% url 'admin_update_user_tier' user.id %}"
+            hx-trigger="change"
+            hx-swap="outerHTML"
+            hx-target="closest tr"
+            hx-indicator="#tier-updating-{{ user.id }}"
+            class="px-3 py-1.5 text-sm font-medium rounded-lg border transition focus:ring-2 focus:ring-primary-500 focus:border-transparent
+                   {% if user.tier == 'free' %}bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600
+                   {% elif user.tier == 'supporter' %}bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 border-blue-300 dark:border-blue-700
+                   {% elif user.tier == 'ultimate' %}bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 border-purple-300 dark:border-purple-700
+                   {% endif %}">
+            <option value="free" {% if user.tier == 'free' %}selected{% endif %}>Registrert bruker</option>
+            <option value="supporter" {% if user.tier == 'supporter' %}selected{% endif %}>Støttebruker</option>
+            <option value="ultimate" {% if user.tier == 'ultimate' %}selected{% endif %}>Ultimate</option>
+        </select>
+        <span id="tier-updating-{{ user.id }}" class="htmx-indicator ml-2">
+            <svg class="animate-spin h-4 w-4 text-primary-600 inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+        </span>
+    </td>
+
+    <!-- Active Products -->
+    <td class="px-6 py-4 whitespace-nowrap">
+        <div class="text-sm text-gray-900 dark:text-white">
+            {{ user.active_product_count }}
+            {% if user.get_product_limit %}
+                <span class="text-gray-500 dark:text-gray-400">/ {{ user.get_product_limit }}</span>
+            {% endif %}
+        </div>
+    </td>
+
+    <!-- Products Remaining -->
+    <td class="px-6 py-4 whitespace-nowrap">
+        <div class="text-sm text-gray-900 dark:text-white">
+            {% if user.products_remaining is None %}
+                <span class="text-purple-600 dark:text-purple-400 font-medium">{% const 'ADMIN_UNLIMITED' %}</span>
+            {% else %}
+                {{ user.products_remaining }}
+            {% endif %}
+        </div>
+    </td>
+
+    <!-- Usage Percentage -->
+    <td class="px-6 py-4 whitespace-nowrap">
+        {% if user.get_product_limit is None %}
+            <span class="text-xs text-gray-500 dark:text-gray-400">-</span>
+        {% else %}
+            <div class="flex items-center space-x-2">
+                <div class="flex-1 w-24 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div class="h-2 rounded-full transition-all
+                                {% if user.usage_percentage >= 90 %}bg-red-600 dark:bg-red-500
+                                {% elif user.usage_percentage >= 70 %}bg-yellow-600 dark:bg-yellow-500
+                                {% else %}bg-blue-600 dark:bg-blue-500
+                                {% endif %}"
+                         style="width: {{ user.usage_percentage }}%">
+                    </div>
+                </div>
+                <span class="text-xs text-gray-600 dark:text-gray-400 w-10 text-right">{{ user.usage_percentage }}%</span>
+            </div>
+        {% endif %}
+    </td>
+
+    <!-- Member Since -->
+    <td class="px-6 py-4 whitespace-nowrap">
+        <div class="text-sm text-gray-900 dark:text-white">
+            {{ user.date_joined|date:"d.m.Y" }}
+        </div>
+    </td>
+
+    <!-- Last Login -->
+    <td class="px-6 py-4 whitespace-nowrap">
+        <div class="text-sm text-gray-900 dark:text-white">
+            {% if user.last_login %}
+                {{ user.last_login|date:"d.m.Y H:i" }}
+            {% else %}
+                <span class="text-gray-500 dark:text-gray-400">{% const 'ADMIN_NEVER' %}</span>
+            {% endif %}
+        </div>
+    </td>
+</tr>

@@ -128,6 +128,18 @@ urlpatterns = [
         views.resolve_admin_flag,
         name="resolve_admin_flag",
     ),
+    # User Management (Admin)
+    path("admin-dashboard/users/", views.admin_users_list, name="admin_users_list"),
+    path(
+        "admin-dashboard/users/<int:user_id>/update-tier/",
+        views.admin_update_user_tier,
+        name="admin_update_user_tier",
+    ),
+    path(
+        "admin-dashboard/users/<int:user_id>/",
+        views.admin_user_detail,
+        name="admin_user_detail",
+    ),
     # Extractor health and version history
     path(
         "admin-dashboard/patterns/", views.patterns_status, name="patterns_status"

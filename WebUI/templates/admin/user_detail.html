@@ -1,0 +1,191 @@
+{% extends 'base.html' %}
+{% load app_constants %}
+
+{% block title %}{{ viewed_user.username }} - Brukerdetaljer{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+                    {{ viewed_user.username }}
+                </h1>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    Brukerdetaljer og abonnementer
+                </p>
+            </div>
+            <a href="{% url 'admin_users_list' %}"
+               class="inline-flex items-center px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition">
+                ← Tilbake til brukerliste
+            </a>
+        </div>
+    </div>
+
+    <!-- User Info Card -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
+        <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">
+            Brukerinformasjon
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+                <p class="text-sm text-gray-500 dark:text-gray-400">{% const 'ADMIN_USERNAME' %}</p>
+                <p class="mt-1 text-lg font-medium text-gray-900 dark:text-white">{{ viewed_user.username }}</p>
+            </div>
+            <div>
+                <p class="text-sm text-gray-500 dark:text-gray-400">{% const 'ADMIN_EMAIL' %}</p>
+                <p class="mt-1 text-lg font-medium text-gray-900 dark:text-white">{{ viewed_user.email }}</p>
+            </div>
+            <div>
+                <p class="text-sm text-gray-500 dark:text-gray-400">{% const 'ADMIN_TIER' %}</p>
+                <p class="mt-1">
+                    {% if viewed_user.tier == 'free' %}
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
+                        Registrert bruker
+                    </span>
+                    {% elif viewed_user.tier == 'supporter' %}
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                        Støttebruker
+                    </span>
+                    {% elif viewed_user.tier == 'ultimate' %}
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200">
+                        Ultimate
+                    </span>
+                    {% endif %}
+                </p>
+            </div>
+            <div>
+                <p class="text-sm text-gray-500 dark:text-gray-400">Status</p>
+                <div class="mt-1 flex gap-2">
+                    {% if viewed_user.is_staff %}
+                    <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200">
+                        Staff
+                    </span>
+                    {% endif %}
+                    {% if viewed_user.is_superuser %}
+                    <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200">
+                        Superuser
+                    </span>
+                    {% endif %}
+                    {% if viewed_user.is_active %}
+                    <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
+                        Aktiv
+                    </span>
+                    {% else %}
+                    <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
+                        Inaktiv
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+            <div>
+                <p class="text-sm text-gray-500 dark:text-gray-400">{% const 'ADMIN_MEMBER_SINCE' %}</p>
+                <p class="mt-1 text-lg font-medium text-gray-900 dark:text-white">{{ viewed_user.date_joined|date:"d.m.Y" }}</p>
+            </div>
+            <div>
+                <p class="text-sm text-gray-500 dark:text-gray-400">{% const 'ADMIN_LAST_LOGIN' %}</p>
+                <p class="mt-1 text-lg font-medium text-gray-900 dark:text-white">
+                    {% if viewed_user.last_login %}
+                        {{ viewed_user.last_login|date:"d.m.Y H:i" }}
+                    {% else %}
+                        <span class="text-gray-500 dark:text-gray-400">{% const 'ADMIN_NEVER' %}</span>
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+
+        {% if viewed_user.tier_updated_by %}
+        <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+            <p class="text-sm text-gray-500 dark:text-gray-400">
+                Abonnement sist oppdatert av <span class="font-medium">{{ viewed_user.tier_updated_by.username }}</span>
+                den {{ viewed_user.tier_updated_at|date:"d.m.Y H:i" }}
+            </p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Product Usage Card -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
+        <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">
+            Produktbruk
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+                <p class="text-sm text-gray-500 dark:text-gray-400">{% const 'ADMIN_PRODUCTS_ACTIVE' %}</p>
+                <p class="mt-1 text-3xl font-bold text-gray-900 dark:text-white">
+                    {{ viewed_user.active_product_count }}
+                    {% if viewed_user.get_product_limit %}
+                        <span class="text-lg text-gray-500 dark:text-gray-400">/ {{ viewed_user.get_product_limit }}</span>
+                    {% endif %}
+                </p>
+            </div>
+            <div>
+                <p class="text-sm text-gray-500 dark:text-gray-400">{% const 'ADMIN_PRODUCTS_REMAINING' %}</p>
+                <p class="mt-1 text-3xl font-bold text-gray-900 dark:text-white">
+                    {% if products_remaining is None %}
+                        <span class="text-purple-600 dark:text-purple-400">{% const 'ADMIN_UNLIMITED' %}</span>
+                    {% else %}
+                        {{ products_remaining }}
+                    {% endif %}
+                </p>
+            </div>
+            <div>
+                <p class="text-sm text-gray-500 dark:text-gray-400">{% const 'ADMIN_USAGE_PERCENT' %}</p>
+                {% if viewed_user.get_product_limit is None %}
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">-</p>
+                {% else %}
+                    <div class="mt-2">
+                        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 mb-2">
+                            <div class="h-4 rounded-full transition-all
+                                        {% if usage_percentage >= 90 %}bg-red-600 dark:bg-red-500
+                                        {% elif usage_percentage >= 70 %}bg-yellow-600 dark:bg-yellow-500
+                                        {% else %}bg-blue-600 dark:bg-blue-500
+                                        {% endif %}"
+                                 style="width: {{ usage_percentage }}%">
+                            </div>
+                        </div>
+                        <p class="text-xl font-bold text-gray-900 dark:text-white">{{ usage_percentage }}%</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Subscriptions -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">
+            Siste abonnementer (maks 10)
+        </h2>
+        {% if subscriptions %}
+            <div class="space-y-3">
+                {% for subscription in subscriptions %}
+                <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                    <div class="flex-1">
+                        <p class="font-medium text-gray-900 dark:text-white">
+                            {{ subscription.product.name }}
+                        </p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                            Opprettet: {{ subscription.created_at|date:"d.m.Y H:i" }}
+                        </p>
+                    </div>
+                    {% if subscription.active %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
+                        Aktiv
+                    </span>
+                    {% else %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
+                        Inaktiv
+                    </span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="text-gray-500 dark:text-gray-400 text-center py-8">
+                Ingen aktive abonnementer
+            </p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
