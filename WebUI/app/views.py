@@ -2337,8 +2337,12 @@ def referral_landing(request, code):
             # Staff bypass - allow for testing (message added later after success)
             is_staff_testing = True
 
-    # Check if this is a unique visit
-    is_unique, duplicate_reason = ReferralService.is_unique_visit(referral_code, request)
+    # Check if this is a unique visit (bypass deduplication for staff testing)
+    if is_staff_testing:
+        is_unique = True
+        duplicate_reason = ''
+    else:
+        is_unique, duplicate_reason = ReferralService.is_unique_visit(referral_code, request)
 
     # Get visitor identifiers
     cookie_id = request.COOKIES.get('ref_visitor_id')
