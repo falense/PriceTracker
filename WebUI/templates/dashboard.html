@@ -59,18 +59,18 @@
 
     <!-- ALTERNATIVE 3: Benefit-Focused -->
     <div class="mb-12">
-        <div class="text-center mb-12">
-            <h1 class="text-6xl md:text-8xl font-black text-gray-900 dark:text-white mb-8 tracking-tight">
+        <div class="text-center mb-24">
+            <h1 class="text-6xl md:text-8xl font-black text-gray-900 dark:text-white mb-10 tracking-tight">
                 Følgpris
             </h1>
-            <p class="text-2xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto mb-8">
+            <p class="text-2xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto leading-relaxed">
                 Din personlige prisvakt – ingen annonser, ingen sponsede resultater
             </p>
         </div>
 
         <!-- Search Section for non-authenticated users -->
-        <div class="max-w-3xl mx-auto mb-16">
-            <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-6 text-center">
+        <div class="max-w-3xl mx-auto mb-20">
+            <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-6 -ml-3">
                 Søk eller prøv med ditt produkt her
             </h2>
             <div>
@@ -102,88 +102,67 @@
             </div>
         </div>
 
-        <div class="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
-            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-8">
-                <div class="flex items-start space-x-4">
-                    <div class="flex-shrink-0">
-                        <div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center">
-                            <svg class="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
-                            </svg>
-                        </div>
-                    </div>
-                    <div>
-                        <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
-                            Brukerfokus
-                        </h3>
-                        <p class="text-gray-600 dark:text-gray-400">
-                            Ingen annonser eller sponsede resultater – du er i fokus, ikke butikkene.
-                            Vi setter deg som bruker i sentrum og hjelper deg å holde øye med de prisene du er interessert i.
-                        </p>
-                    </div>
+        <!-- Benefits Section with subtle background -->
+        <div class="bg-gray-50 dark:bg-gray-900/30 py-20 px-4 mb-20 rounded-3xl">
+            <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <!-- Card 1: Brukerfokus -->
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-8 text-center">
+                <div class="w-16 h-16 bg-blue-100 dark:bg-blue-900/20 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                    <svg class="w-8 h-8 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+                    </svg>
                 </div>
+                <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-3">
+                    Brukerfokus
+                </h3>
+                <p class="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">
+                    Ingen annonser – du er i fokus, ikke butikkene
+                </p>
             </div>
 
-            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-8">
-                <div class="flex items-start space-x-4">
-                    <div class="flex-shrink-0">
-                        <div class="w-12 h-12 bg-purple-100 dark:bg-purple-900/20 rounded-lg flex items-center justify-center">
-                            <svg class="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
-                            </svg>
-                        </div>
-                    </div>
-                    <div>
-                        <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
-                            Fungerer på "alle" butikker
-                        </h3>
-                        <p class="text-gray-600 dark:text-gray-400">
-                            Vi prøver å gjøre det mulig å følge priser på alle nettbutikker, ikke bare de største.
-                            Modellen vår gir ikke preferanse til noen enkelt leverandør.
-                        </p>
-                    </div>
+                <!-- Card 2: Alle butikker -->
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-8 text-center">
+                <div class="w-16 h-16 bg-purple-100 dark:bg-purple-900/20 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                    <svg class="w-8 h-8 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                    </svg>
                 </div>
+                <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-3">
+                    Alle butikker
+                </h3>
+                <p class="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">
+                    Følg priser på alle nettbutikker, ikke bare de største
+                </p>
             </div>
 
-            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-8">
-                <div class="flex items-start space-x-4">
-                    <div class="flex-shrink-0">
-                        <div class="w-12 h-12 bg-green-100 dark:bg-green-900/20 rounded-lg flex items-center justify-center">
-                            <svg class="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-                            </svg>
-                        </div>
-                    </div>
-                    <div>
-                        <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
-                            Unngå å bli fristet
-                        </h3>
-                        <p class="text-gray-600 dark:text-gray-400">
-                            Du vil kun få se de produktene du selv har lagt inn. Vi følger ikke priser som ingen er interessert i,
-                            og tjenesten fungerer som bokmerker eller en huskeliste for deg.
-                        </p>
-                    </div>
+                <!-- Card 3: Unngå fristelse -->
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-8 text-center">
+                <div class="w-16 h-16 bg-green-100 dark:bg-green-900/20 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                    <svg class="w-8 h-8 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                    </svg>
                 </div>
+                <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-3">
+                    Unngå fristelse
+                </h3>
+                <p class="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">
+                    Kun produktene du selv har lagt inn. Ingen støy
+                </p>
             </div>
 
-            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-8">
-                <div class="flex items-start space-x-4">
-                    <div class="flex-shrink-0">
-                        <div class="w-12 h-12 bg-orange-100 dark:bg-orange-900/20 rounded-lg flex items-center justify-center">
-                            <svg class="w-6 h-6 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
-                            </svg>
-                        </div>
-                    </div>
-                    <div>
-                        <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
-                            Motmiddel mot jojopriser
-                        </h3>
-                        <p class="text-gray-600 dark:text-gray-400">
-                            Hold øye med prisen over tid. Tjenesten gir deg mulighet til å følge de varene
-                            du har bestemt deg for uten støy. Du er igjen i førersetet på hva som er viktig for deg.
-                        </p>
-                    </div>
+                <!-- Card 4: Motmiddel mot jojopriser -->
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-8 text-center">
+                <div class="w-16 h-16 bg-orange-100 dark:bg-orange-900/20 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                    <svg class="w-8 h-8 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-3">
+                    Motmiddel mot jojopriser
+                </h3>
+                <p class="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">
+                    Se prisutviklingen og kjøp når tiden er riktig
+                </p>
                 </div>
             </div>
         </div>
@@ -440,20 +419,19 @@
     -->
 
     <!-- ALTERNATIVE 3 FEATURES: Call-to-action focused -->
-    <div class="max-w-4xl mx-auto mb-16">
-        <div class="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/10 dark:to-purple-900/10 rounded-2xl border-2 border-blue-200 dark:border-blue-800 p-12 text-center">
-            <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+    <div class="max-w-4xl mx-auto mb-20">
+        <div class="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/10 dark:to-purple-900/10 rounded-3xl border-2 border-blue-200 dark:border-blue-800 p-12 text-center">
+            <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-6">
                 Klar til å ta kontroll?
             </h2>
-            <p class="text-xl text-gray-600 dark:text-gray-400 mb-8 max-w-2xl mx-auto">
-                Registrer deg gratis og begynn å følge priser på produkter du er interessert i.
-                Ingen skjulte kostnader, ingen reklame – bare prisovervåking som fungerer.
+            <p class="text-lg text-gray-600 dark:text-gray-400 mb-10 max-w-xl mx-auto leading-relaxed">
+                Registrer deg gratis og begynn å følge priser. Ingen skjulte kostnader, ingen reklame.
             </p>
             <div class="flex flex-col sm:flex-row gap-4 justify-center">
-                <a href="{% url 'register' %}" class="px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all">
+                <a href="{% url 'register' %}" class="px-10 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all">
                     Kom i gang gratis
                 </a>
-                <a href="{% url 'about' %}" class="px-8 py-4 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-900 dark:text-white border-2 border-gray-200 dark:border-gray-700 rounded-xl font-semibold text-lg transition-all">
+                <a href="{% url 'about' %}" class="px-10 py-4 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-900 dark:text-white border-2 border-gray-300 dark:border-gray-600 rounded-xl font-semibold text-lg transition-all">
                     Les mer om oss
                 </a>
             </div>
