@@ -141,6 +141,18 @@ def dashboard(request):
 
         unread_count = notifications.count()
 
+        # Get total stores tracked (distinct stores across all user's subscriptions)
+        stores_tracked = (
+            ProductListing.objects.filter(
+                product__subscriptions__user=request.user,
+                product__subscriptions__active=True,
+                active=True,
+            )
+            .values("store")
+            .distinct()
+            .count()
+        )
+
         stats = {
             "total_products": UserSubscription.objects.filter(
                 user=request.user, active=True
@@ -161,6 +173,7 @@ def dashboard(request):
             "unread_count": unread_count,
             "stats": stats,
             "tier_info": tier_info,
+            "stores_tracked": stores_tracked,
         }
     else:
         # Non-authenticated users see the search page
