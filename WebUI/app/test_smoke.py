@@ -257,6 +257,11 @@ class AdminPagesTest(SmokeTestCase):
         response = self.client.get(f"/admin-dashboard/users/{self.user.id}/")
         self.assertEqual(response.status_code, 200)
 
+    def test_admin_top_products(self):
+        """Test top subscribed products page loads."""
+        response = self.client.get("/admin-dashboard/top-products/")
+        self.assertEqual(response.status_code, 200)
+
 
 class PermissionsTest(SmokeTestCase):
     """Test that authentication and permissions are enforced."""

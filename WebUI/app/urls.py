@@ -94,6 +94,7 @@ urlpatterns = [
     path("admin-dashboard/operation-analytics/", views.operation_log_analytics, name="operation_log_analytics"),
     path("admin-dashboard/operation-health/", views.operation_log_health, name="operation_log_health"),
     path("admin-dashboard/task/<str:task_id>/", views.task_timeline, name="task_timeline"),
+    path("admin-dashboard/top-products/", views.top_subscribed_products, name="top_subscribed_products"),
     # Pattern API endpoints
     path(
         "api/patterns/regenerate/",

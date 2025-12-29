@@ -25,6 +25,9 @@ from .users import (
     admin_user_detail,
     admin_delete_user,
 )
+from .products import (
+    top_subscribed_products,
+)
 
 __all__ = [
     'admin_dashboard',
@@ -39,4 +42,5 @@ __all__ = [
     'admin_update_user_tier',
     'admin_user_detail',
     'admin_delete_user',
+    'top_subscribed_products',
 ]

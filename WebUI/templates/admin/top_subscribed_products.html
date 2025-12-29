@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+
+{% block title %}Top Abonnert Produkter - PriceTracker Admin{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+                    Top 3 Abonnert Produkter
+                </h1>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    Oversikt over de mest fulgte produktene på plattformen
+                </p>
+            </div>
+            <a href="{% url 'admin_dashboard' %}"
+               class="inline-flex items-center px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition">
+                ← Tilbake til Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Products Grid -->
+    {% if top_products %}
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {% for product in top_products %}
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-lg transition-shadow">
+            <!-- Product Image -->
+            {% if product.image_url %}
+            <div class="w-full h-48 bg-gray-100 dark:bg-gray-700 flex items-center justify-center overflow-hidden">
+                <img src="{{ product.image_url }}" alt="{{ product.name }}" class="w-full h-full object-cover">
+            </div>
+            {% else %}
+            <div class="w-full h-48 bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-600 flex items-center justify-center">
+                <svg class="w-12 h-12 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/>
+                    <circle cx="8" cy="8" r="1.5" stroke="currentColor" stroke-width="2"/>
+                </svg>
+            </div>
+            {% endif %}
+
+            <!-- Product Details -->
+            <div class="p-6">
+                <!-- Rank Badge -->
+                <div class="mb-2 inline-block">
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium {% if forloop.counter == 1 %}bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200{% elif forloop.counter == 2 %}bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-gray-200{% else %}bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200{% endif %}">
+                        #{{ forloop.counter }}
+                    </span>
+                </div>
+
+                <!-- Product Name -->
+                <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-2 line-clamp-2">
+                    {{ product.name }}
+                </h2>
+
+                <!-- Brand and Model -->
+                <div class="mb-4 space-y-1">
+                    {% if product.brand %}
+                    <p class="text-sm text-gray-600 dark:text-gray-400">
+                        <span class="font-medium">Merke:</span> {{ product.brand }}
+                    </p>
+                    {% endif %}
+                    {% if product.model_number %}
+                    <p class="text-sm text-gray-600 dark:text-gray-400">
+                        <span class="font-medium">Modell:</span> {{ product.model_number }}
+                    </p>
+                    {% endif %}
+                </div>
+
+                <!-- Subscriber Count -->
+                <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900 dark:to-indigo-900 rounded-lg p-4 mb-4">
+                    <p class="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-1">
+                        Abonnenter
+                    </p>
+                    <p class="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                        {{ product.subscriber_count }}
+                    </p>
+                </div>
+
+                <!-- Product Details Link -->
+                <a href="{% url 'product_detail' product.id %}"
+                   class="block w-full text-center px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition font-medium">
+                    Vis Produktdetaljer
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <!-- No Products Message -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-12 text-center">
+        <svg class="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
+        </svg>
+        <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
+            Ingen produkter funnet
+        </h3>
+        <p class="text-gray-600 dark:text-gray-400">
+            Vent til noen produkter har blitt lagt til av brukere
+        </p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

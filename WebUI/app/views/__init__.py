@@ -78,6 +78,7 @@ from .admin import (
     admin_update_user_tier,
     admin_user_detail,
     admin_delete_user,
+    top_subscribed_products,
 )
 
 __all__ = [
@@ -134,4 +135,5 @@ __all__ = [
     'admin_update_user_tier',
     'admin_user_detail',
     'admin_delete_user',
+    'top_subscribed_products',
 ]
