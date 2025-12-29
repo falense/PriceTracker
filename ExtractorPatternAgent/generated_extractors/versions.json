@@ -208,6 +208,12 @@
     "version": "1.0"
   },
   "skinister_com": {
+    "commit_author": "Sondre Engebraten",
+    "commit_date": "2025-12-27T13:59:12+01:00",
+    "commit_email": "sondre.engebraten@gmail.com",
+    "commit_hash": "a97d9873295d7c3a267418cd9ca2b1c2d133a6c3",
+    "commit_hash_short": "a97d987",
+    "commit_message": "feat: Add pattern skinister",
     "confidence": 0.95,
     "domain": "skinister.com",
     "generated_at": "2025-12-26T22:18:35",
@@ -226,6 +232,19 @@
     "generated_at": "2025-12-26T21:01:42",
     "module": "store_steampowered_com",
     "version": "1.1"
+  },
+  "www_bangerhead_no": {
+    "commit_author": "Copilot",
+    "commit_date": "2025-12-27T20:25:29+01:00",
+    "commit_email": "198982749+Copilot@users.noreply.github.com",
+    "commit_hash": "0f4d8bd44e1eda918914a291133c5a9c4f5346da",
+    "commit_hash_short": "0f4d8bd",
+    "commit_message": "feat: Add bangerhead.no extraction pattern with microdata-based parsing (#16)",
+    "confidence": 0.95,
+    "domain": "bangerhead.no",
+    "generated_at": "2025-12-27T17:33:00",
+    "module": "www_bangerhead_no",
+    "version": "1.0"
   },
   "www_blivakker_no": {
     "commit_author": "Copilot",
@@ -264,6 +283,19 @@
     "domain": "dreammask.net",
     "generated_at": "2025-12-22T23:00:00",
     "module": "www_dreammask_net",
+    "version": "1.0"
+  },
+  "www_hair247_no": {
+    "commit_author": "Copilot",
+    "commit_date": "2025-12-27T20:25:56+01:00",
+    "commit_email": "198982749+Copilot@users.noreply.github.com",
+    "commit_hash": "4d0d8c22e3dbeb4c9130940da3eb128a3e424987",
+    "commit_hash_short": "4d0d8c2",
+    "commit_message": "feat: Add extraction pattern for hair247.no (#17)",
+    "confidence": 0.95,
+    "domain": "hair247.no",
+    "generated_at": "2025-12-27T17:34:00",
+    "module": "www_hair247_no",
     "version": "1.0"
   },
   "www_sinful_no": {
