@@ -238,9 +238,11 @@ class PriceStorage:
                 logger.debug("found_existing_version", version_id=row["id"], extractor_module=extractor_module)
                 return row["id"]
 
+            # Extract domain from manifest
+            domain = version_info.get('domain', '')
+
             # Prepare metadata - include all version info
             metadata = {
-                'domain': version_info.get('domain'),
                 'version': version_info.get('version'),
                 'confidence': version_info.get('confidence'),
                 'generated_at': version_info.get('generated_at'),
@@ -264,17 +266,23 @@ class PriceStorage:
             cursor.execute(
                 """
                 INSERT INTO app_extractorversion
-                (commit_hash, extractor_module, commit_message, commit_author,
-                 commit_date, metadata, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (commit_hash, extractor_module, domain, commit_message, commit_author,
+                 commit_date, metadata, is_active, success_rate, total_attempts,
+                 successful_attempts, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     commit_hash,
                     extractor_module,
+                    domain,
                     commit_message,
                     commit_author,
                     commit_date_str,
                     json.dumps(metadata),
+                    False,  # is_active defaults to False
+                    0.0,    # success_rate defaults to 0.0
+                    0,      # total_attempts defaults to 0
+                    0,      # successful_attempts defaults to 0
                     format_datetime_for_django_sqlite(),
                 ),
             )
@@ -910,6 +918,10 @@ class PriceStorage:
         finally:
             conn.close()
 
+        # Update extractor stats AFTER transaction closes (prevents nested connection deadlock)
+        if operation_succeeded and extractor_version_id:
+            self.update_extractor_stats(extractor_version_id, success=True)
+
         # Log to OperationLog AFTER transaction closes (prevents nested connection deadlock)
         if operation_succeeded and log_context:
             self.log_operation(**log_context)
@@ -981,6 +993,74 @@ class PriceStorage:
         finally:
             conn.close()
 
+
+    def update_extractor_stats(
+        self,
+        extractor_version_id: Optional[int],
+        success: bool
+    ) -> None:
+        """
+        Update stats for an ExtractorVersion after a fetch attempt.
+
+        Args:
+            extractor_version_id: ExtractorVersion ID to update
+            success: Whether the extraction was successful
+        """
+        if not extractor_version_id:
+            logger.debug("no_extractor_version_to_update")
+            return
+
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            # Increment counters
+            if success:
+                cursor.execute(
+                    """
+                    UPDATE app_extractorversion
+                    SET total_attempts = total_attempts + 1,
+                        successful_attempts = successful_attempts + 1,
+                        success_rate = CAST(successful_attempts + 1 AS REAL) / (total_attempts + 1),
+                        updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        format_datetime_for_django_sqlite(),
+                        extractor_version_id,
+                    ),
+                )
+            else:
+                cursor.execute(
+                    """
+                    UPDATE app_extractorversion
+                    SET total_attempts = total_attempts + 1,
+                        success_rate = CAST(successful_attempts AS REAL) / (total_attempts + 1),
+                        updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        format_datetime_for_django_sqlite(),
+                        extractor_version_id,
+                    ),
+                )
+
+            conn.commit()
+            logger.debug(
+                "extractor_stats_updated",
+                version_id=extractor_version_id,
+                success=success
+            )
+
+        except Exception as e:
+            conn.rollback()
+            logger.exception(
+                "extractor_stats_update_failed",
+                version_id=extractor_version_id,
+                error=str(e)
+            )
+        finally:
+            conn.close()
 
     def update_last_checked(self, listing_id: str) -> None:
         """

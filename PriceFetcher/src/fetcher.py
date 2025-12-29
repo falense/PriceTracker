@@ -261,6 +261,12 @@ class PriceFetcher:
                 if product.listing_id:
                     self.storage.update_last_checked(product.listing_id)
 
+                # Track failed extraction attempt in stats
+                if extractor_module:
+                    extractor_version_id = self.storage.get_or_create_extractor_version(extractor_module)
+                    if extractor_version_id:
+                        self.storage.update_extractor_stats(extractor_version_id, success=False)
+
             # Duration tracking for logging
             duration_ms = int((time.time() - start_time) * 1000)
 

@@ -55,11 +55,17 @@ class TestVersionTracking:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 commit_hash VARCHAR(40) NOT NULL,
                 extractor_module VARCHAR(255) NOT NULL,
+                domain VARCHAR(255) NOT NULL,
                 commit_message TEXT,
                 commit_author VARCHAR(200),
                 commit_date DATETIME,
                 metadata TEXT,
-                created_at DATETIME NOT NULL
+                is_active BOOLEAN DEFAULT 0,
+                success_rate REAL DEFAULT 0.0,
+                total_attempts INTEGER DEFAULT 0,
+                successful_attempts INTEGER DEFAULT 0,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME
             )
         """)
 
@@ -212,3 +218,164 @@ class TestVersionTracking:
         assert row is not None
         assert row[0] == listing_id.replace("-", "")
         assert row[1] == product_id.replace("-", "")
+
+
+class TestExtractorStats:
+    """Test ExtractorVersion stats tracking."""
+
+    @pytest.fixture
+    def temp_db(self):
+        """Create a temporary test database with required tables."""
+        with tempfile.NamedTemporaryFile(suffix='.sqlite3', delete=False) as f:
+            db_path = f.name
+
+        # Create minimal schema for testing
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        # ExtractorVersion table
+        cursor.execute("""
+            CREATE TABLE app_extractorversion (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                commit_hash VARCHAR(40) NOT NULL,
+                extractor_module VARCHAR(255) NOT NULL,
+                domain VARCHAR(255) NOT NULL,
+                commit_message TEXT,
+                commit_author VARCHAR(200),
+                commit_date DATETIME,
+                metadata TEXT,
+                is_active BOOLEAN DEFAULT 0,
+                success_rate REAL DEFAULT 0.0,
+                total_attempts INTEGER DEFAULT 0,
+                successful_attempts INTEGER DEFAULT 0,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME
+            )
+        """)
+
+        conn.commit()
+        conn.close()
+
+        yield db_path
+
+        # Cleanup
+        Path(db_path).unlink()
+
+    def test_update_extractor_stats_success(self, temp_db):
+        """Test updating extractor stats for successful extraction."""
+        storage = PriceStorage(temp_db)
+
+        # Insert a test extractor version
+        conn = sqlite3.connect(temp_db)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO app_extractorversion
+            (commit_hash, extractor_module, domain, total_attempts,
+             successful_attempts, success_rate, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, ("a" * 40, "test_extractor", "test.com", 0, 0, 0.0,
+              datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')))
+        conn.commit()
+        version_id = cursor.lastrowid
+        conn.close()
+
+        # Update stats for success
+        storage.update_extractor_stats(version_id, success=True)
+
+        # Verify stats were updated
+        conn = sqlite3.connect(temp_db)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT total_attempts, successful_attempts, success_rate FROM app_extractorversion WHERE id = ?",
+            (version_id,)
+        )
+        row = cursor.fetchone()
+        conn.close()
+
+        assert row is not None
+        assert row[0] == 1  # total_attempts
+        assert row[1] == 1  # successful_attempts
+        assert row[2] == 1.0  # success_rate (100%)
+
+    def test_update_extractor_stats_failure(self, temp_db):
+        """Test updating extractor stats for failed extraction."""
+        storage = PriceStorage(temp_db)
+
+        # Insert a test extractor version
+        conn = sqlite3.connect(temp_db)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO app_extractorversion
+            (commit_hash, extractor_module, domain, total_attempts,
+             successful_attempts, success_rate, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, ("b" * 40, "test_extractor", "test.com", 0, 0, 0.0,
+              datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')))
+        conn.commit()
+        version_id = cursor.lastrowid
+        conn.close()
+
+        # Update stats for failure
+        storage.update_extractor_stats(version_id, success=False)
+
+        # Verify stats were updated
+        conn = sqlite3.connect(temp_db)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT total_attempts, successful_attempts, success_rate FROM app_extractorversion WHERE id = ?",
+            (version_id,)
+        )
+        row = cursor.fetchone()
+        conn.close()
+
+        assert row is not None
+        assert row[0] == 1  # total_attempts
+        assert row[1] == 0  # successful_attempts (no change)
+        assert row[2] == 0.0  # success_rate (0%)
+
+    def test_update_extractor_stats_mixed(self, temp_db):
+        """Test updating extractor stats with mixed success/failure."""
+        storage = PriceStorage(temp_db)
+
+        # Insert a test extractor version
+        conn = sqlite3.connect(temp_db)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO app_extractorversion
+            (commit_hash, extractor_module, domain, total_attempts,
+             successful_attempts, success_rate, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, ("c" * 40, "test_extractor", "test.com", 0, 0, 0.0,
+              datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')))
+        conn.commit()
+        version_id = cursor.lastrowid
+        conn.close()
+
+        # Record multiple attempts: 3 successes, 2 failures
+        storage.update_extractor_stats(version_id, success=True)
+        storage.update_extractor_stats(version_id, success=True)
+        storage.update_extractor_stats(version_id, success=False)
+        storage.update_extractor_stats(version_id, success=True)
+        storage.update_extractor_stats(version_id, success=False)
+
+        # Verify final stats
+        conn = sqlite3.connect(temp_db)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT total_attempts, successful_attempts, success_rate FROM app_extractorversion WHERE id = ?",
+            (version_id,)
+        )
+        row = cursor.fetchone()
+        conn.close()
+
+        assert row is not None
+        assert row[0] == 5  # total_attempts
+        assert row[1] == 3  # successful_attempts
+        assert abs(row[2] - 0.6) < 0.01  # success_rate (60%)
+
+    def test_update_extractor_stats_none_version_id(self, temp_db):
+        """Test that update_extractor_stats handles None gracefully."""
+        storage = PriceStorage(temp_db)
+
+        # Should not raise an exception
+        storage.update_extractor_stats(None, success=True)
