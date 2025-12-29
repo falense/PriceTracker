@@ -1079,11 +1079,19 @@ class ReferralService:
                 # Already granted for this milestone
                 return False
 
-        # Check if user has paid tier - payment supersedes referrals
-        if user.referral_tier_source == 'payment':
+        # Skip if user has non-referral tier source (payment/admin) or higher tier
+        if user.referral_tier_source in ['payment', 'admin']:
             logger.info(
-                f"Skipping referral reward for {user.username} - has paid tier",
-                extra={'user_id': user.id, 'unique_visits': unique_visits}
+                f"Skipping referral reward for {user.username} - has {user.referral_tier_source} tier source",
+                extra={'user_id': user.id, 'tier_source': user.referral_tier_source, 'unique_visits': unique_visits}
+            )
+            return False
+
+        # Skip if user has higher tier than supporter
+        if user.tier == 'ultimate':
+            logger.info(
+                f"Skipping referral reward for {user.username} - already has ultimate tier",
+                extra={'user_id': user.id, 'tier': user.tier, 'unique_visits': unique_visits}
             )
             return False
 

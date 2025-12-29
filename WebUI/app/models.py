@@ -64,6 +64,7 @@ class CustomUser(AbstractUser):
         ('none', 'No Active Tier Source'),
         ('referral', 'Referral Earned'),
         ('payment', 'Paid Subscription'),
+        ('admin', 'Manually Assigned'),
     ]
 
     referral_tier_source = models.CharField(
