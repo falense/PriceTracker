@@ -65,12 +65,16 @@ python3 manage.py test app.test_smoke
 Run this after making template, view, or URL changes:
 
 ```bash
+# Sequential (slower, ~21s)
 docker exec pricetracker-web-1 python manage.py test app.test_smoke
+
+# Parallel (faster, ~8s) - Recommended
+docker exec pricetracker-web-1 python manage.py test app.test_smoke --parallel auto
 ```
 
 Expected output:
 ```
-Ran 40 tests in ~15-20s
+Ran 40 tests in 6.5s
 
 OK
 ```

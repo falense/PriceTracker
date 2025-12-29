@@ -97,7 +97,7 @@
           {
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/run-smoke-tests.sh",
-            "timeout": 120
+            "timeout": 30
           }
         ]
       }
