@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Henvisningssystem - {{ SITE_NAME }}{% endblock %}
+{% block title %}Fordelsprogram - {{ SITE_NAME }}{% endblock %}
 
 {% block content %}
 <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -10,17 +10,17 @@
             ← Tilbake til innstillinger
         </a>
         <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
-            🎁 Henvisningssystem
+            🎁 Fordelsprogram
         </h1>
         <p class="text-gray-600 dark:text-gray-400 mt-2">
-            Del din henvisningslenke og tjen gratis Støttebruker-nivå!
+            Fortell andre du kjenner om tjenesten og få gratis Støttebruker-nivå!
         </p>
     </div>
 
     <!-- Hero Card - Your Referral Link -->
     <div class="bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg border border-primary-600 p-8 text-white mb-6">
         <div class="text-center mb-6">
-            <h2 class="text-2xl font-bold mb-2">Din henvisningskode</h2>
+            <h2 class="text-2xl font-bold mb-2">Din fordelskode</h2>
             <div class="inline-block bg-white/20 backdrop-blur-sm rounded-lg px-6 py-3 text-3xl font-mono font-bold tracking-wider">
                 {{ referral_code.code }}
             </div>
@@ -231,7 +231,7 @@
                 </div>
                 <h3 class="font-bold text-gray-900 dark:text-white mb-2">Del lenken din</h3>
                 <p class="text-sm text-gray-600 dark:text-gray-400">
-                    Kopier henvisningslenken din og del den med venner, familie eller på sosiale medier.
+                    Kopier lenken din og del den med venner, familie eller på sosiale medier.
                 </p>
             </div>
 
@@ -286,13 +286,13 @@
                         Hva skjer hvis jeg allerede har et betalt abonnement?
                     </h4>
                     <p class="text-sm text-gray-600 dark:text-gray-400">
-                        Betalte abonnementer har alltid forrang over henvisningsbelønninger. Henvisningsbelønninger aktiveres kun når du er på gratisnivået.
+                        Betalte abonnementer har alltid forrang. Fordelsbelønninger aktiveres kun når du er på gratisnivået.
                     </p>
                 </div>
 
                 <div>
                     <h4 class="font-semibold text-gray-900 dark:text-white text-sm mb-1">
-                        Kan jeg bruke min egen henvisningslenke?
+                        Kan jeg bruke min egen lenke?
                     </h4>
                     <p class="text-sm text-gray-600 dark:text-gray-400">
                         Nei, egne klikk telles ikke. Systemet ser automatisk om du er pålogget og ignorerer dine besøk.
