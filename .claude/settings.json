@@ -1,0 +1,106 @@
+{
+  "env": {
+    "DISABLE_BUG_COMMAND": "1",
+    "DISABLE_TELEMETRY": "1",
+    "CLAUDE_DEFAULT_SUBAGENT_MODEL": "haiku"
+  },
+  "includeCoAuthoredBy": false,
+  "enableAllProjectMcpServers": true,
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "mcp__GoldenPath__list_doc_sources",
+      "mcp__GoldenPath__fetch_docs",
+      "mcp__terraform__searchModules",
+      "mcp__terraform__moduleDetails",
+      "mcp__terraform__resolveProviderDocID",
+      "mcp__terraform__getProviderDocs",
+      "mcp__terraform__searchModules",
+      "Bash(git add:*)",
+      "Bash(git commit -m :*)",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_snapshot",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_evaluate",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_wait_for",
+      "Bash(mkdir:*)",
+      "Skill(uv)",
+      "Skill(bedrock)",
+      "Skill(claude-hooks)"
+    ],
+    "deny": [
+      "Read(**.ssh/**)",
+      "Read(.gnupg/**)",
+      "Read(.aws/**)",
+      "Read(.docker/config.json)",
+      "Read(secrets**)",
+      "Read(.secrets**)",
+      "Read(.env**)",
+      "Read(*.pem)",
+      "Read(*.key)",
+      "Read(*.p12)",
+      "Read(*.pfx)",
+      "Read(id_rsa*)",
+      "Read(id_ed25519*)",
+      "Read(id_ecdsa*)",
+      "Read(*.crt)",
+      "Read(*.csr)",
+      "Read(.devcontainer/devcontainer.env)"
+    ]
+  },
+  "hooks": {
+    "Notification": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 scripts/log-hook-event.py Notification"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 scripts/log-hook-event.py PreCompact"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run scripts/load-memories.py"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 scripts/review_session.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/run-smoke-tests.sh",
+            "timeout": 120
+          }
+        ]
+      }
+    ]
+  }
+}
