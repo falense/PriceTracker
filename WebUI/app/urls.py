@@ -140,6 +140,11 @@ urlpatterns = [
         views.admin_user_detail,
         name="admin_user_detail",
     ),
+    path(
+        "admin-dashboard/users/<int:user_id>/delete/",
+        views.admin_delete_user,
+        name="admin_delete_user",
+    ),
     # Extractor health and version history
     path(
         "admin-dashboard/patterns/", views.patterns_status, name="patterns_status"

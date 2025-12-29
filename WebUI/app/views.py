@@ -121,6 +121,8 @@ def logout_view(request):
 def dashboard(request):
     """Main dashboard view - accessible to everyone."""
     if request.user.is_authenticated:
+        from .services import TierService
+
         # Get user's active subscriptions with product and best price info
         subscriptions = (
             UserSubscription.objects.filter(user=request.user, active=True)
@@ -150,11 +152,15 @@ def dashboard(request):
             ).count(),
         }
 
+        # Get tier usage information
+        tier_info = TierService.get_user_tier_info(request.user)
+
         context = {
             "subscriptions": subscriptions,
             "notifications": notifications,
             "unread_count": unread_count,
             "stats": stats,
+            "tier_info": tier_info,
         }
     else:
         # Non-authenticated users see the search page
@@ -1814,6 +1820,9 @@ def admin_update_user_tier(request, user_id):
     if new_tier != user.tier:
         user.tier = new_tier
         user.tier_updated_by = request.user
+        # Mark tier as admin-assigned to prevent referral system from overriding
+        user.referral_tier_source = 'admin'
+        user.referral_tier_expires_at = None  # Admin tiers don't expire
         user.save()
         logger.info(f"Admin {request.user.username} updated tier for user {user.username} to {new_tier}")
 
@@ -1870,6 +1879,39 @@ def admin_user_detail(request, user_id):
     return render(request, 'admin/user_detail.html', context)
 
 
+@login_required
+def admin_delete_user(request, user_id):
+    """Delete a user (admin only)."""
+    if not request.user.is_staff:
+        messages.error(request, 'Du må være administrator for å utføre denne handlingen.')
+        return redirect('dashboard')
+
+    if request.method != 'POST':
+        messages.error(request, 'Ugyldig forespørsel.')
+        return redirect('admin_users_list')
+
+    # Get user
+    try:
+        user = CustomUser.objects.get(id=user_id)
+    except CustomUser.DoesNotExist:
+        messages.error(request, 'Bruker ikke funnet.')
+        return redirect('admin_users_list')
+
+    # Prevent deleting yourself
+    if user.id == request.user.id:
+        messages.error(request, 'Du kan ikke slette din egen bruker.')
+        return redirect('admin_users_list')
+
+    # Store username for message
+    username = user.username
+
+    # Delete the user (CASCADE will handle related objects)
+    user.delete()
+
+    messages.success(request, f'Brukeren "{username}" ble slettet.')
+    return redirect('admin_users_list')
+
+
 # Settings
 @login_required
 def user_settings(request):
@@ -1914,10 +1956,27 @@ def user_settings(request):
         reverse('referral_landing', kwargs={'code': referral_code.code})
     )
 
+    # Get user tier and usage information
+    product_limit = request.user.get_product_limit()
+    products_remaining = request.user.get_products_remaining()
+
+    # Calculate usage percentage
+    if product_limit is not None and product_limit > 0:
+        usage_percentage = int((active_subscriptions / product_limit) * 100)
+    else:
+        usage_percentage = 0
+
     context = {
         "active_subscriptions": active_subscriptions,
         "stores_tracked": stores_tracked,
         "unread_notifications": unread_notifications,
+        # Tier and usage information
+        "user_tier": request.user.tier,
+        "user_tier_display": request.user.get_tier_display(),
+        "product_limit": product_limit,
+        "product_limit_display": request.user.get_product_limit_display(),
+        "products_remaining": products_remaining,
+        "usage_percentage": usage_percentage,
         # Referral system
         "referral_code": referral_code,
         "referral_url": referral_url,
