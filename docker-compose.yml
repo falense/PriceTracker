@@ -25,11 +25,9 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - ./db.sqlite3:/app/db.sqlite3
       - ./WebUI:/app
     environment:
       - REDIS_URL=redis://redis:6379/0
-      - DATABASE_PATH=/app/db.sqlite3
       - DEBUG=True
     restart: unless-stopped
 
@@ -43,13 +41,11 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - ./db.sqlite3:/app/db.sqlite3
       - ./WebUI:/app
       - ./ExtractorPatternAgent:/ExtractorPatternAgent
       - ./PriceFetcher:/PriceFetcher
     environment:
       - REDIS_URL=redis://redis:6379/0
-      - DATABASE_PATH=/app/db.sqlite3
       - EXTRACTOR_PATH=/ExtractorPatternAgent
       - FETCHER_PATH=/PriceFetcher
       - PYTHONPATH=/app:/
@@ -65,11 +61,9 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - ./db.sqlite3:/app/db.sqlite3
       - ./WebUI:/app
     environment:
       - REDIS_URL=redis://redis:6379/0
-      - DATABASE_PATH=/app/db.sqlite3
     restart: unless-stopped
 
   # Flower - Celery monitoring (optional)
