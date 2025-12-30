@@ -3,6 +3,7 @@
 .devcontainer/
 .tool_logs/
 .screenshots/
+minio-data/
 *.pyc
 __pycache__/
 *.log

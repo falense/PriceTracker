@@ -213,8 +213,24 @@ class PriceFetcher:
                     duration_ms=int((time.time() - start_time) * 1000),
                 )
 
-            # Fetch HTML
-            html = await self._fetch_html(url)
+            # Fetch HTML and screenshot
+            html, screenshot_bytes = await self._fetch_html(url)
+
+            # Upload artifacts to MinIO (non-blocking, no DB dependency)
+            try:
+                from app.storage import minio_client, get_artifact_path
+
+                # Upload HTML artifact
+                html_path = get_artifact_path(url, 'html')
+                minio_client.upload_html(html_path, html)
+
+                # Upload screenshot if captured
+                if screenshot_bytes:
+                    screenshot_path = get_artifact_path(url, 'screenshot')
+                    minio_client.upload_screenshot(screenshot_path, screenshot_bytes)
+
+            except Exception as e:
+                logger.warning("artifact_upload_failed", url=url, error=str(e))
 
             # Extract data using Python extractor
             extraction, extractor_module = self.extractor.extract_with_domain(html, product.domain)
@@ -381,6 +397,18 @@ class PriceFetcher:
                     # Get rendered HTML
                     html = await page.content()
 
+                    # Capture screenshot for artifact storage
+                    screenshot_bytes = None
+                    try:
+                        screenshot_bytes = await page.screenshot(full_page=True)
+                        logger.debug(
+                            "screenshot_captured",
+                            url=url,
+                            screenshot_size=len(screenshot_bytes),
+                        )
+                    except Exception as e:
+                        logger.warning("screenshot_capture_failed", url=url, error=str(e))
+
                     logger.debug(
                         "browser_fetch_success",
                         url=url,
@@ -388,7 +416,7 @@ class PriceFetcher:
                         html_length=len(html),
                     )
 
-                    return html
+                    return html, screenshot_bytes
 
                 finally:
                     # Cleanup in reverse order: page -> context -> browser -> playwright

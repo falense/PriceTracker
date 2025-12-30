@@ -12,7 +12,7 @@ from urllib.parse import unquote
 
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, JsonResponse, HttpResponseRedirect
 from django.views.decorators.http import require_http_methods
 
 from ..models import ProductListing
@@ -22,9 +22,15 @@ logger = logging.getLogger(__name__)
 
 def proxy_image(request):
     """
-    Proxy external images to bypass hotlink protection.
+    Proxy external images with MinIO caching.
 
     Usage: /proxy-image/?url=https://example.com/image.jpg
+
+    Flow:
+    1. Check MinIO cache - if hit, redirect to presigned URL
+    2. Cache miss - fetch from source
+    3. Upload to MinIO cache (fire and forget)
+    4. Return image content
     """
     image_url = request.GET.get("url")
 
@@ -39,7 +45,17 @@ def proxy_image(request):
         return HttpResponse("Invalid URL", status=400)
 
     try:
-        # Fetch image with proper headers to bypass hotlink protection
+        from app.storage import minio_client
+
+        # Check MinIO cache first
+        cached_url = minio_client.get_cached_image_url(image_url)
+        if cached_url:
+            # Redirect to MinIO (faster than proxying through Django)
+            logger.debug("image_cache_hit", url=image_url)
+            return HttpResponseRedirect(cached_url)
+
+        # Cache miss - fetch from source
+        logger.debug("image_cache_miss", url=image_url)
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             "Referer": image_url.split("/")[0] + "//" + image_url.split("/")[2] + "/",
@@ -53,7 +69,14 @@ def proxy_image(request):
                 # Determine content type
                 content_type = response.headers.get("Content-Type", "image/jpeg")
 
-                # Return the image
+                # Upload to MinIO cache (non-blocking - fire and forget)
+                try:
+                    minio_client.cache_image(image_url, response.content, content_type)
+                    logger.debug("image_cached", url=image_url, size=len(response.content))
+                except Exception as e:
+                    logger.warning(f"Image cache upload failed: {e}")
+
+                # Return image immediately (don't wait for upload)
                 return HttpResponse(response.content, content_type=content_type)
             else:
                 # Return placeholder or error

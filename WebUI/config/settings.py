@@ -148,6 +148,12 @@ CELERY_RESULT_EXTENDED = True  # Store additional task metadata including task n
 CELERY_TASK_TRACK_STARTED = True  # Track when tasks start
 CELERY_TASK_SEND_SENT_EVENT = True  # Enable task-sent events
 
+# MinIO Object Storage
+MINIO_ENDPOINT = os.getenv('MINIO_ENDPOINT', 'minio:9000')
+MINIO_ACCESS_KEY = os.getenv('MINIO_ROOT_USER', 'minioadmin')
+MINIO_SECRET_KEY = os.getenv('MINIO_ROOT_PASSWORD', 'minioadmin')
+MINIO_SECURE = os.getenv('MINIO_SECURE', 'False').lower() == 'true'
+
 # Logging
 # Note: Structlog is configured in app/apps.py AppConfig.ready() and config/celery.py
 # This minimal Django LOGGING configuration is kept for compatibility but will be

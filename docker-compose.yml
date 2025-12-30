@@ -24,11 +24,17 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      minio:
+        condition: service_healthy
     volumes:
       - ./WebUI:/app
     environment:
       - REDIS_URL=redis://redis:6379/0
       - DEBUG=True
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+      - MINIO_SECURE=False
     restart: unless-stopped
 
   # Celery Worker - Handles async tasks
@@ -40,6 +46,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      minio:
+        condition: service_healthy
     volumes:
       - ./WebUI:/app
       - ./ExtractorPatternAgent:/ExtractorPatternAgent
@@ -49,6 +57,10 @@ services:
       - EXTRACTOR_PATH=/ExtractorPatternAgent
       - FETCHER_PATH=/PriceFetcher
       - PYTHONPATH=/app:/
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+      - MINIO_SECURE=False
     restart: unless-stopped
 
   # Celery Beat - Scheduler for periodic tasks
@@ -60,10 +72,16 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      minio:
+        condition: service_healthy
     volumes:
       - ./WebUI:/app
     environment:
       - REDIS_URL=redis://redis:6379/0
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+      - MINIO_SECURE=False
     restart: unless-stopped
 
   # Flower - Celery monitoring (optional)
@@ -80,6 +98,25 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379/0
       - FLOWER_UNAUTHENTICATED_API=true
+    restart: unless-stopped
+
+  # MinIO - Object storage for artifacts and cached images
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"   # API
+      - "9001:9001"   # Console UI
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    volumes:
+      - ./minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
 volumes:

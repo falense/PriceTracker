@@ -454,3 +454,105 @@ def expire_referral_tiers():
         error_msg = f"{type(e).__name__}: {str(e)}" if str(e) else type(e).__name__
         logger.exception("Error in expire_referral_tiers task")
         return {"status": "error", "error": error_msg}
+
+
+@shared_task(bind=True, soft_time_limit=1800, time_limit=1900)  # 30 min soft, 31.67 min hard
+def cache_all_product_images(self):
+    """
+    Background task to cache all product images to MinIO.
+
+    Fetches and caches images for all active products with image URLs.
+    Skips images that are already cached. Can be run manually via management
+    command or scheduled periodically.
+
+    Returns:
+        dict: Statistics (total, cached, skipped, failed)
+    """
+    from app.models import Product
+    from app.storage import minio_client
+    import httpx
+
+    clear_contextvars()
+    bind_contextvars(
+        task_id=self.request.id,
+        task_name="cache_all_product_images",
+        service="celery",
+    )
+
+    try:
+        products = Product.objects.filter(active=True).exclude(image_url__isnull=True).exclude(image_url='')
+
+        total = products.count()
+        cached = 0
+        skipped = 0
+        failed = 0
+
+        logger.info(f"image_cache_backfill_started", total_products=total)
+
+        for i, product in enumerate(products, 1):
+            try:
+                # Check if already cached
+                if minio_client.is_image_cached(product.image_url):
+                    skipped += 1
+                    logger.debug(f"image_already_cached", product_id=product.id, progress=f"{i}/{total}")
+                    continue
+
+                # Fetch image with hotlink protection headers
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                    "Referer": product.image_url.split("/")[0] + "//" + product.image_url.split("/")[2] + "/",
+                    "Accept": "image/*,*/*;q=0.8",
+                }
+
+                with httpx.Client(timeout=10.0, follow_redirects=True) as client:
+                    response = client.get(product.image_url, headers=headers)
+
+                    if response.status_code == 200:
+                        content_type = response.headers.get("Content-Type", "image/jpeg")
+                        minio_client.cache_image(product.image_url, response.content, content_type)
+                        cached += 1
+                        logger.info(
+                            f"image_cached",
+                            product_id=product.id,
+                            product_name=product.name,
+                            size=len(response.content),
+                            progress=f"{i}/{total}",
+                        )
+                    else:
+                        failed += 1
+                        logger.warning(
+                            f"image_fetch_failed",
+                            product_id=product.id,
+                            status_code=response.status_code,
+                            url=product.image_url,
+                        )
+
+            except Exception as e:
+                failed += 1
+                logger.error(
+                    f"image_cache_error",
+                    product_id=product.id,
+                    error=str(e),
+                    url=product.image_url,
+                )
+
+        logger.info(
+            f"image_cache_backfill_completed",
+            total=total,
+            cached=cached,
+            skipped=skipped,
+            failed=failed,
+        )
+
+        return {
+            "status": "success",
+            "total": total,
+            "cached": cached,
+            "skipped": skipped,
+            "failed": failed,
+        }
+
+    except Exception as e:
+        error_msg = f"{type(e).__name__}: {str(e)}" if str(e) else type(e).__name__
+        logger.exception("Error in cache_all_product_images task")
+        return {"status": "error", "error": error_msg}
