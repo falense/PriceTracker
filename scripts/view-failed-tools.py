@@ -3,12 +3,13 @@
 View the top N most common failed Bash commands.
 
 Usage:
-    python3 view-failed-tools.py [N]
+    python3 view-failed-tools.py [N] [--clear]
 
     Default N is 10. Examples:
     - python3 view-failed-tools.py      # Show top 10
     - python3 view-failed-tools.py 5    # Show top 5
     - python3 view-failed-tools.py 20   # Show top 20
+    - python3 view-failed-tools.py --clear  # Clear all logs
 """
 
 import json
@@ -35,15 +36,48 @@ def load_failures():
     return records
 
 
+def clear_logs():
+    """Clear all failed tools logs."""
+    STATS_FILE = LOG_DIR / "failed_tools_stats.txt"
+
+    files_to_clear = [FAILED_TOOLS_LOG, STATS_FILE]
+    cleared_count = 0
+
+    for file_path in files_to_clear:
+        if file_path.exists():
+            file_path.unlink()
+            cleared_count += 1
+            print(f"Cleared: {file_path}")
+
+    if cleared_count > 0:
+        print(f"\nCleared {cleared_count} log file(s)")
+    else:
+        print("No log files found to clear")
+
+
 def main():
-    # Parse command line argument for number of items
+    # Parse command line arguments
     n = 10
+    clear_mode = False
+
     if len(sys.argv) > 1:
-        try:
-            n = int(sys.argv[1])
-        except ValueError:
-            print("Usage: python3 view-failed-tools.py [N]", file=sys.stderr)
-            sys.exit(1)
+        # Check for --clear flag
+        if "--clear" in sys.argv:
+            clear_mode = True
+            sys.argv.remove("--clear")
+
+        # Try to parse N
+        if len(sys.argv) > 1:
+            try:
+                n = int(sys.argv[1])
+            except ValueError:
+                print("Usage: python3 view-failed-tools.py [N] [--clear]", file=sys.stderr)
+                sys.exit(1)
+
+    # Handle clear mode
+    if clear_mode:
+        clear_logs()
+        return
 
     records = load_failures()
 
