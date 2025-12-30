@@ -2,6 +2,7 @@
 .claude/
 .devcontainer/
 .tool_logs/
+.screenshots/
 *.pyc
 __pycache__/
 *.log
