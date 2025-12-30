@@ -50,15 +50,19 @@ def main():
     if not records:
         return
 
-    # Count failures by error message
-    error_counts = Counter(r.get("error", "unknown") for r in records)
+    # Group by (command, error) pair and count occurrences
+    failure_pairs = Counter()
+    for r in records:
+        command = r.get("command", "unknown")
+        error = r.get("error", "unknown")
+        failure_pairs[(command, error)] += 1
 
-    # Get top N
-    top_n = error_counts.most_common(n)
+    # Get top N by frequency
+    top_n = failure_pairs.most_common(n)
 
-    # Print as numbered list
-    for i, (error, count) in enumerate(top_n, 1):
-        print(f"{i}. {error}")
+    # Print as numbered list: command | error
+    for i, ((command, error), count) in enumerate(top_n, 1):
+        print(f"{i}. {command} | {error}")
 
 
 if __name__ == "__main__":

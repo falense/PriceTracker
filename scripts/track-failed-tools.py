@@ -54,11 +54,12 @@ def is_bash_failed(tool_response: dict) -> tuple:
     return True, error_msg
 
 
-def log_failure(tool_name: str, error_msg: str = ""):
+def log_failure(tool_name: str, command: str = "", error_msg: str = ""):
     """Log a failed tool call to the JSONL file."""
     failure_record = {
         "timestamp": datetime.now().isoformat(),
         "tool": tool_name,
+        "command": command.strip()[:500],  # Limit command length
         "error": error_msg.strip()[:200],  # Limit error length
     }
 
@@ -115,7 +116,11 @@ def main():
     if not is_failed:
         sys.exit(0)
 
-    log_failure(tool_name, error_msg)
+    # Extract the command that was run
+    tool_input = hook_input.get("tool_input", {})
+    command = tool_input.get("command", "unknown")
+
+    log_failure(tool_name, command, error_msg)
     generate_stats()
 
     # Exit 0 to not block Claude execution
