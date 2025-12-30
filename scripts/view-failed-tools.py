@@ -39,6 +39,14 @@ def load_failures():
     return records
 
 
+def _get_first_line(text: str) -> str:
+    """Get the first line of text, strip extra whitespace."""
+    if not text:
+        return ""
+    first_line = text.split("\n")[0].strip()
+    return first_line
+
+
 def clear_logs():
     """Clear all failed tools logs."""
     STATS_FILE = LOG_DIR / "failed_tools_stats.txt"
@@ -92,7 +100,9 @@ def main():
     for r in records:
         command = r.get("command", "unknown")
         error = r.get("error", "unknown")
-        failure_pairs[(command, error)] += 1
+        # Use only first line of error message
+        error_first_line = _get_first_line(error)
+        failure_pairs[(command, error_first_line)] += 1
 
     # Get top N by frequency
     top_n = failure_pairs.most_common(n)
