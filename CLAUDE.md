@@ -8,6 +8,23 @@
 
 This project requires Python 3 and the `python` command may not be available on all systems. Always use `python3` for running scripts, tests, and other Python commands.
 
+### Docker Compose
+
+**ALWAYS use `docker compose` command**, not `docker-compose`.
+
+This project uses Docker Compose V2 which is integrated into the Docker CLI. The standalone `docker-compose` command may not be available on all systems. Always use `docker compose` (with a space) for all Docker Compose operations:
+
+```bash
+# Correct
+docker compose up -d
+docker compose exec webui python manage.py migrate
+docker compose stop
+
+# Incorrect - may not work
+docker-compose up -d
+docker-compose exec webui python manage.py migrate
+```
+
 ### Database Migrations
 
 **Always run migrations in the Docker container**, not on the host machine.
@@ -22,14 +39,14 @@ docker exec -it <webui-container> python manage.py makemigrations --name <migrat
 docker exec -it <webui-container> python manage.py migrate
 ```
 
-Or if using docker-compose:
+Or using docker compose:
 
 ```bash
 # Create migrations
-docker-compose exec webui python manage.py makemigrations --name <migration_name>
+docker compose exec webui python manage.py makemigrations --name <migration_name>
 
 # Run migrations
-docker-compose exec webui python manage.py migrate
+docker compose exec webui python manage.py migrate
 ```
 
 This ensures migrations are created with the correct Python environment and database configuration.
