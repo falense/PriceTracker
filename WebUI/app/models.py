@@ -322,6 +322,12 @@ class ProductListing(models.Model):
 
     # Listing-specific data
     url = models.URLField(max_length=1000, unique=True, db_index=True)
+    url_base = models.CharField(
+        max_length=1000,
+        db_index=True,
+        default='',
+        help_text='Normalized URL without query params or fragments for duplicate detection'
+    )
     store_product_id = models.CharField(
         max_length=200,
         blank=True,

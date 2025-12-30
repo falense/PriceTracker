@@ -1,0 +1,56 @@
+{% load currency_filters %}
+<!-- Existing product found (not subscribed yet) -->
+<div class="bg-purple-50 dark:bg-purple-900/20 border-2 border-purple-200 dark:border-purple-800 rounded-xl p-6">
+    <div class="flex items-start space-x-4">
+        <div class="flex-shrink-0">
+            <div class="w-12 h-12 bg-purple-100 dark:bg-purple-900/40 rounded-full flex items-center justify-center">
+                <svg class="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+                </svg>
+            </div>
+        </div>
+
+        <div class="flex-1">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-2">
+                Dette produktet finnes allerede
+            </h3>
+
+            <p class="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                {{ product.name }}
+            </p>
+
+            <p class="text-xs text-gray-600 dark:text-gray-400 mb-4">
+                URL-en du søkte etter peker til et produkt vi allerede sporer. Klikk nedenfor for å se produktet og begynne å følge det.
+            </p>
+
+            {% if listing.current_price %}
+            <div class="mb-4">
+                <p class="text-sm text-gray-500 dark:text-gray-400">Nåværende pris</p>
+                <p class="text-2xl font-bold text-gray-900 dark:text-white">
+                    {{ listing.current_price|format_currency:listing.currency }}
+                </p>
+            </div>
+            {% endif %}
+
+            <div class="flex flex-col sm:flex-row gap-3">
+                <form method="post" action="{% url 'add_product' %}" class="inline-block">
+                    {% csrf_token %}
+                    <input type="hidden" name="url" value="{{ query }}">
+                    <button type="submit"
+                            class="w-full sm:w-auto px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors">
+                        Følg dette produktet
+                    </button>
+                </form>
+                <button type="button"
+                        onclick="document.getElementById('search-input').value = ''; document.getElementById('search-results').innerHTML = '';"
+                        class="px-6 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-white rounded-lg font-medium transition-colors">
+                    Tøm søk
+                </button>
+            </div>
+
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-3">
+                💡 Produktet er allerede i systemet, så prisovervåkning startes umiddelbart
+            </p>
+        </div>
+    </div>
+</div>

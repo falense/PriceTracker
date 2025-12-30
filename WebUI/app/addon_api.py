@@ -16,7 +16,7 @@ from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.middleware.csrf import get_token, CsrfViewMiddleware
 from app.models import ProductListing, UserSubscription
-from app.services import ProductService
+from app.services import ProductService, get_url_base_for_comparison, strip_url_fragment
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -85,8 +85,12 @@ def addon_check_tracking(request):
         }, status=400)
 
     try:
-        # Check if listing exists for this URL
-        listing = ProductListing.objects.filter(url=url).first()
+        # Normalize URL for duplicate detection
+        normalized_url = strip_url_fragment(url)
+        url_base = get_url_base_for_comparison(normalized_url)
+
+        # Check if listing exists using normalized URL base
+        listing = ProductListing.objects.filter(url_base=url_base).first()
 
         if not listing:
             # URL not tracked by anyone
@@ -242,8 +246,12 @@ def addon_untrack_product(request):
                 'error': 'URL is required'
             }, status=400)
 
-        # Find listing by URL
-        listing = ProductListing.objects.filter(url=url).first()
+        # Normalize URL for duplicate detection
+        normalized_url = strip_url_fragment(url)
+        url_base = get_url_base_for_comparison(normalized_url)
+
+        # Find listing using normalized URL base
+        listing = ProductListing.objects.filter(url_base=url_base).first()
 
         if not listing:
             return JsonResponse({

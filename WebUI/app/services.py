@@ -22,7 +22,7 @@ from django.utils import timezone
 from django.contrib.auth import get_user_model
 from django.db.models import Max, Q
 from django.db import transaction
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 from decimal import Decimal
 from datetime import timedelta
 import uuid
@@ -41,6 +41,65 @@ class TierLimitReached(Exception):
     pass
 
 PLACEHOLDER_PRODUCT_PREFIX = "Product from "
+
+
+def strip_url_fragment(url):
+    """
+    Remove fragment (everything after #) from URL.
+
+    Preserves:
+    - Query parameters
+    - Path case
+    - Trailing slashes
+
+    Example:
+        https://shop.com/product?ref=123#reviews -> https://shop.com/product?ref=123
+
+    Args:
+        url: URL string to process
+
+    Returns:
+        URL without fragment, or original URL if parsing fails
+    """
+    try:
+        parsed = urlparse(url)
+        # Remove fragment by setting it to empty string
+        normalized = parsed._replace(fragment='')
+        return urlunparse(normalized)
+    except Exception as e:
+        logger.warning(f"Failed to strip fragment from URL {url}: {e}")
+        return url
+
+
+def get_url_base_for_comparison(url):
+    """
+    Get normalized URL base for duplicate detection.
+
+    Removes:
+    - Fragment (everything after #)
+    - Query parameters (everything after ?)
+
+    Preserves:
+    - Path case
+    - Trailing slashes
+
+    Example:
+        https://shop.com/product?ref=123#reviews -> https://shop.com/product
+
+    Args:
+        url: URL string to process
+
+    Returns:
+        Normalized URL without query params or fragment, or original URL if parsing fails
+    """
+    try:
+        parsed = urlparse(url)
+        # Remove both query and fragment
+        normalized = parsed._replace(query='', fragment='')
+        return urlunparse(normalized)
+    except Exception as e:
+        logger.warning(f"Failed to normalize URL {url}: {e}")
+        return url
 
 
 def find_matching_product(name, brand=None):
@@ -99,6 +158,12 @@ class ProductService:
             raise TierLimitReached(error_message)
         # === END TIER CHECK ===
 
+        # Step 0: Normalize URL
+        # Strip fragment (everything after #) for storage
+        url = strip_url_fragment(url)
+        # Get base URL (without query params) for duplicate detection
+        url_base = get_url_base_for_comparison(url)
+
         # Step 1: Parse URL and get/create Store
         parsed = urlparse(url)
         domain = parsed.netloc.replace("www.", "").lower()
@@ -123,8 +188,8 @@ class ProductService:
         if store_created:
             logger.info(f"Created new store: {store.name} (currency: {store.currency})")
 
-        # Step 2: Check if listing exists
-        listing = ProductListing.objects.filter(url=url).first()
+        # Step 2: Check if listing exists (using url_base for duplicate detection)
+        listing = ProductListing.objects.filter(url_base=url_base).first()
 
         if listing:
             # Listing exists, reuse product
@@ -153,6 +218,7 @@ class ProductService:
                 product=product,
                 store=store,
                 url=url,
+                url_base=url_base,  # Store normalized URL for duplicate detection
                 active=True,
                 currency=store.currency,  # Inherit currency from store
             )

@@ -13,6 +13,7 @@ from django.views.decorators.http import require_http_methods
 from django.db.models import Min
 
 from ..models import Product, ProductListing, UserSubscription
+from ..services import get_url_base_for_comparison, strip_url_fragment
 
 logger = logging.getLogger(__name__)
 
@@ -30,26 +31,39 @@ def search_product(request):
     is_url = query.startswith(("http://", "https://"))
 
     if is_url:
-        # Query is a URL - show confirmation dialog
+        # Query is a URL - normalize and check for existing listing
         if not request.user.is_authenticated:
             # Guest user - prompt to register
             context = {"url": query}
             return render(request, "search/guest_prompt.html", context)
 
-        # Check if user already has a subscription to this URL
-        existing_listing = ProductListing.objects.filter(url=query).first()
+        # Normalize URL for duplicate detection
+        normalized_url = strip_url_fragment(query)
+        url_base = get_url_base_for_comparison(normalized_url)
+
+        # Check if listing already exists using normalized URL base
+        existing_listing = ProductListing.objects.filter(url_base=url_base).first()
 
         if existing_listing:
+            # Listing exists - check if user is already subscribed
             existing_subscription = UserSubscription.objects.filter(
                 user=request.user, product=existing_listing.product, active=True
             ).first()
 
             if existing_subscription:
-                # User already subscribed to this product
+                # User already subscribed - show link to subscription
                 context = {"subscription": existing_subscription}
                 return render(request, "search/already_subscribed.html", context)
+            else:
+                # Listing exists but user not subscribed - show existing product
+                context = {
+                    "product": existing_listing.product,
+                    "listing": existing_listing,
+                    "query": query
+                }
+                return render(request, "search/existing_product.html", context)
 
-        # Show URL confirmation
+        # No existing listing - show URL confirmation
         context = {"url": query}
         return render(request, "search/url_confirm.html", context)
 
