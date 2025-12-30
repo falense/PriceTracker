@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
 """
-Utility to view and analyze failed tool call logs.
+View the top N most common failed Bash commands.
 
 Usage:
-    python3 view-failed-tools.py [--top N] [--tool TOOL_NAME] [--clear]
+    python3 view-failed-tools.py [N]
+
+    Default N is 10. Examples:
+    - python3 view-failed-tools.py      # Show top 10
+    - python3 view-failed-tools.py 5    # Show top 5
+    - python3 view-failed-tools.py 20   # Show top 20
 """
 
 import json
 import sys
 from pathlib import Path
 from collections import Counter
-from datetime import datetime
 
 LOG_DIR = Path.home() / ".claude" / "logs"
 FAILED_TOOLS_LOG = LOG_DIR / "failed_tools.jsonl"
@@ -31,75 +35,30 @@ def load_failures():
     return records
 
 
-def display_stats(records):
-    """Display overall statistics."""
-    if not records:
-        print("No failed tool calls recorded yet.")
-        return
-
-    tool_counts = Counter(r["tool"] for r in records)
-    total = len(records)
-
-    print("\n📊 Failed Tool Call Statistics")
-    print("=" * 50)
-    print(f"Total failures: {total}")
-    print(f"Unique tools: {len(tool_counts)}")
-    print(f"First failure: {records[0]['timestamp']}")
-    print(f"Latest failure: {records[-1]['timestamp']}\n")
-
-    print("Sorted by frequency (most common first):")
-    print("-" * 50)
-    for tool, count in tool_counts.most_common():
-        pct = (count / total) * 100
-        bar = "█" * int(pct / 5)
-        print(f"{tool:20} {count:4} ({pct:5.1f}%) {bar}")
-
-
-def display_recent(records, limit=10):
-    """Display recent failures."""
-    if not records:
-        return
-
-    print(f"\n📋 Recent {min(limit, len(records))} Failures")
-    print("=" * 50)
-    for record in records[-limit:]:
-        ts = record["timestamp"]
-        tool = record["tool"]
-        code = record["exit_code"]
-        error = record["error"][:50] if record["error"] else "(no error)"
-        print(f"{ts} | {tool:10} (exit {code:3}) | {error}")
-
-
-def filter_by_tool(records, tool_name):
-    """Filter records by tool name."""
-    return [r for r in records if r["tool"].lower() == tool_name.lower()]
-
-
-def clear_logs():
-    """Clear the log files."""
-    if FAILED_TOOLS_LOG.exists():
-        FAILED_TOOLS_LOG.unlink()
-        print(f"✓ Cleared {FAILED_TOOLS_LOG}")
-
-
 def main():
-    args = sys.argv[1:] if len(sys.argv) > 1 else []
-
-    if "--clear" in args:
-        clear_logs()
-        return
+    # Parse command line argument for number of items
+    n = 10
+    if len(sys.argv) > 1:
+        try:
+            n = int(sys.argv[1])
+        except ValueError:
+            print("Usage: python3 view-failed-tools.py [N]", file=sys.stderr)
+            sys.exit(1)
 
     records = load_failures()
 
-    if "--tool" in args:
-        idx = args.index("--tool")
-        if idx + 1 < len(args):
-            tool_name = args[idx + 1]
-            records = filter_by_tool(records, tool_name)
-            print(f"\nFiltered to {len(records)} failures for '{tool_name}'")
+    if not records:
+        return
 
-    display_stats(records)
-    display_recent(records, limit=15)
+    # Count failures by error message
+    error_counts = Counter(r.get("error", "unknown") for r in records)
+
+    # Get top N
+    top_n = error_counts.most_common(n)
+
+    # Print as numbered list
+    for i, (error, count) in enumerate(top_n, 1):
+        print(f"{i}. {error}")
 
 
 if __name__ == "__main__":
