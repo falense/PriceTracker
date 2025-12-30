@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Track failed tool calls and maintain a sorted log of frequency.
+Track failed Bash tool calls and maintain a sorted log of frequency.
 
-This hook runs after each tool execution. If the tool failed (exit code != 0),
-it logs the failure and maintains a sorted frequency report.
+This hook runs after PostToolUse events. It checks the tool_response
+for Bash commands that failed (non-zero exit code).
 """
 
 import json
@@ -28,13 +28,38 @@ def parse_hook_input():
         return {}
 
 
-def log_failure(tool_name: str, exit_code: int, error_msg: str = ""):
+def is_bash_failed(tool_response: dict) -> tuple:
+    """
+    Check if a Bash tool execution failed.
+
+    Bash responses include exit_code. Non-zero means failure.
+    Returns: (is_failed: bool, error_msg: str)
+    """
+    if not isinstance(tool_response, dict):
+        return False, ""
+
+    exit_code = tool_response.get("exit_code")
+
+    # If exit_code is 0 or not present, tool succeeded
+    if exit_code is None or exit_code == 0:
+        return False, ""
+
+    # Tool failed with non-zero exit code
+    error_msg = tool_response.get("stderr", "").strip()
+    if not error_msg:
+        error_msg = tool_response.get("stdout", "").strip()
+    if not error_msg:
+        error_msg = f"Exit code: {exit_code}"
+
+    return True, error_msg
+
+
+def log_failure(tool_name: str, error_msg: str = ""):
     """Log a failed tool call to the JSONL file."""
     failure_record = {
         "timestamp": datetime.now().isoformat(),
         "tool": tool_name,
-        "exit_code": exit_code,
-        "error": error_msg.strip(),
+        "error": error_msg.strip()[:200],  # Limit error length
     }
 
     with open(FAILED_TOOLS_LOG, "a") as f:
@@ -78,15 +103,19 @@ def generate_stats():
 def main():
     hook_input = parse_hook_input()
 
-    # Only process if tool failed (exit_code != 0)
-    exit_code = hook_input.get("exit_code", 0)
-    if exit_code == 0:
+    # Only process Bash tool calls
+    tool_name = hook_input.get("tool_name", "")
+    if tool_name != "Bash":
         sys.exit(0)
 
-    tool_name = hook_input.get("tool_name", "unknown")
-    error_msg = hook_input.get("stdout", "") or hook_input.get("stderr", "")
+    # Check if the Bash command failed
+    tool_response = hook_input.get("tool_response", {})
+    is_failed, error_msg = is_bash_failed(tool_response)
 
-    log_failure(tool_name, exit_code, error_msg)
+    if not is_failed:
+        sys.exit(0)
+
+    log_failure(tool_name, error_msg)
     generate_stats()
 
     # Exit 0 to not block Claude execution
