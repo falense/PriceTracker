@@ -294,12 +294,9 @@ class MinIOClient:
             # Check if object exists
             self._client.stat_object('images', object_path)
 
-            # Generate presigned URL (valid for 1 hour)
-            url = self._client.presigned_get_object(
-                'images',
-                object_path,
-                expires=timedelta(hours=1)
-            )
+            # For public images bucket, return direct URL without presigning
+            # This works because the bucket has public read policy
+            url = f"http://localhost:9000/images/{object_path}"
             return url
 
         except S3Error as e:
