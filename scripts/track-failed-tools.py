@@ -42,6 +42,7 @@ def is_bash_failed(tool_response: dict) -> tuple:
     Check if a Bash tool execution failed.
 
     PostToolUse includes returnCodeInterpretation when Bash exits with non-zero code.
+    Also checks for stderr as a secondary indicator of failure.
     Returns: (is_failed: bool, error_msg: str)
     """
     if not isinstance(tool_response, dict):
@@ -52,6 +53,13 @@ def is_bash_failed(tool_response: dict) -> tuple:
     if rci:
         debug(f"Detected failure via returnCodeInterpretation: {rci}")
         return True, rci
+
+    # Fallback: Check for stderr as indicator of failure
+    # (Some failures may not have returnCodeInterpretation but still have stderr)
+    stderr = tool_response.get("stderr", "").strip()
+    if stderr:
+        debug(f"Detected failure via stderr: {stderr}")
+        return True, stderr
 
     return False, ""
 
