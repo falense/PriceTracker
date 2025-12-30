@@ -60,9 +60,14 @@ def main():
     # Get top N by frequency
     top_n = failure_pairs.most_common(n)
 
-    # Print as numbered list: command | error
+    # Print header
+    print("Top Failed Bash Commands")
+    print("=" * 80)
+    print()
+
+    # Print as numbered list: command | error | count
     for i, ((command, error), count) in enumerate(top_n, 1):
-        print(f"{i}. {command} | {error}")
+        print(f"{i}. [{count:3d}x] {command} | {error}")
 
 
 if __name__ == "__main__":
