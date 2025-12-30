@@ -14,10 +14,13 @@ Usage:
 
 import json
 import sys
+import os
 from pathlib import Path
 from collections import Counter
 
-LOG_DIR = Path.home() / ".claude" / "logs"
+# Use project-specific log directory
+PROJECT_DIR = Path(os.getenv("CLAUDE_PROJECT_DIR", "."))
+LOG_DIR = PROJECT_DIR / ".tool_logs"
 FAILED_TOOLS_LOG = LOG_DIR / "failed_tools.jsonl"
 
 

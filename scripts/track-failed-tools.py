@@ -8,11 +8,14 @@ for Bash commands that failed (non-zero exit code).
 
 import json
 import sys
+import os
 from pathlib import Path
 from collections import Counter
 from datetime import datetime
 
-LOG_DIR = Path.home() / ".claude" / "logs"
+# Use project-specific log directory
+PROJECT_DIR = Path(os.getenv("CLAUDE_PROJECT_DIR", "."))
+LOG_DIR = PROJECT_DIR / ".tool_logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 FAILED_TOOLS_LOG = LOG_DIR / "failed_tools.jsonl"

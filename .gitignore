@@ -1,6 +1,7 @@
 # Development files
 .claude/
 .devcontainer/
+.tool_logs/
 *.pyc
 __pycache__/
 *.log
