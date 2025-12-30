@@ -5,7 +5,7 @@ Contains miscellaneous utility views like image proxy, feedback submission,
 and public information pages.
 """
 
-import logging
+import structlog
 import json
 import httpx
 from urllib.parse import unquote
@@ -17,7 +17,7 @@ from django.views.decorators.http import require_http_methods
 
 from ..models import ProductListing
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def proxy_image(request):
@@ -74,7 +74,7 @@ def proxy_image(request):
                     minio_client.cache_image(image_url, response.content, content_type)
                     logger.debug("image_cached", url=image_url, size=len(response.content))
                 except Exception as e:
-                    logger.warning(f"Image cache upload failed: {e}")
+                    logger.warning("image_cache_upload_failed", error=str(e))
 
                 # Return image immediately (don't wait for upload)
                 return HttpResponse(response.content, content_type=content_type)
@@ -86,7 +86,7 @@ def proxy_image(request):
                 )
 
     except Exception as e:
-        logger.error(f"Image proxy error for {image_url}: {e}")
+        logger.error("image_proxy_error", url=image_url, error=str(e))
         return HttpResponse("Failed to fetch image", status=500)
 
 
@@ -182,7 +182,7 @@ def submit_feedback(request):
             context_data=context_data
         )
 
-        logger.info(f"User feedback submitted: user={request.user.username}, feedback_id={feedback.id}, page_url={page_url}")
+        logger.info("user_feedback_submitted", user=request.user.username, feedback_id=feedback.id, page_url=page_url)
 
         return JsonResponse({
             'success': True,
@@ -191,7 +191,7 @@ def submit_feedback(request):
         })
 
     except Exception as e:
-        logger.error(f"Error submitting feedback: user={request.user.username}, error={str(e)}", exc_info=True)
+        logger.error("error_submitting_feedback", user=request.user.username, error=str(e), exc_info=True)
         return JsonResponse({'success': False, 'error': 'An error occurred while submitting feedback'}, status=500)
 
 
