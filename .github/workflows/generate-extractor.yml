@@ -1,0 +1,336 @@
+name: Generate Extractor Pattern
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'Product URL to create extractor for'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: read
+  id-token: write
+
+jobs:
+  generate-extractor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      domain: ${{ steps.extract-domain.outputs.domain }}
+      pr_number: ${{ steps.create-pr.outputs.pr_number }}
+      has_changes: ${{ steps.check-changes.outputs.has_changes }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        working-directory: ExtractorPatternAgent
+        run: |
+          uv pip install --system -r requirements.txt
+          uv pip install --system claude-agent-sdk
+
+      - name: Install Playwright
+        run: |
+          playwright install chromium
+          playwright install-deps chromium
+
+      - name: Configure git
+        run: |
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+
+      - name: Extract domain from URL
+        id: extract-domain
+        run: |
+          DOMAIN=$(python3 -c "
+          from urllib.parse import urlparse
+          import re
+          url = '${{ github.event.inputs.url }}'
+          if not url.startswith(('http://', 'https://')):
+              url = 'https://' + url
+          parsed = urlparse(url)
+          domain = parsed.netloc or parsed.path
+          domain = domain.lower()
+          domain = re.sub(r'^www\.', '', domain)
+          domain = re.sub(r':\d+$', '', domain)
+          print(domain)
+          ")
+          echo "domain=$DOMAIN" >> $GITHUB_OUTPUT
+          echo "Extracted domain: $DOMAIN"
+
+      - name: Create feature branch
+        run: |
+          git checkout -b extractor/${{ steps.extract-domain.outputs.domain }}
+
+      - name: Run extractor generation
+        id: generate
+        working-directory: ExtractorPatternAgent
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          uv run generate_pattern.py "${{ github.event.inputs.url }}"
+
+      - name: Check for changes
+        id: check-changes
+        run: |
+          if git diff --quiet HEAD^ HEAD; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "❌ ERROR: No extractor was created"
+            exit 1
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "✅ Extractor created successfully"
+          fi
+
+      - name: Push branch
+        run: |
+          git push origin extractor/${{ steps.extract-domain.outputs.domain }}
+
+      - name: Create pull request
+        id: create-pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DOMAIN="${{ steps.extract-domain.outputs.domain }}"
+          MODULE_NAME=$(echo "$DOMAIN" | tr '.' '_')
+
+          PR_URL=$(gh pr create \
+            --title "feat: Create extraction pattern for ${DOMAIN} products" \
+            --body "$(cat <<'EOF'
+          ## Automated Extractor Generation
+
+          **URL**: ${{ github.event.inputs.url }}
+          **Domain**: ${DOMAIN}
+          **Generator**: ExtractorPatternAgent (autonomous)
+
+          ### Generated Files
+          - ExtractorPatternAgent/generated_extractors/${MODULE_NAME}.py
+
+          ### Workflow
+          This PR was created by the autonomous extractor generation workflow.
+
+          The review agent will:
+          1. ✅ Validate code quality & security
+          2. ✅ Run tests against sample data
+          3. ✅ Approve if all checks pass
+
+          Auto-merge will be enabled if review succeeds.
+          EOF
+          )")
+
+          PR_NUMBER=$(gh pr view extractor/${DOMAIN} --json number -q .number)
+          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          echo "✅ Created PR #$PR_NUMBER: $PR_URL"
+
+  review-extractor:
+    runs-on: ubuntu-latest
+    needs: generate-extractor
+    if: needs.generate-extractor.outputs.has_changes == 'true'
+    timeout-minutes: 15
+    outputs:
+      review_approved: ${{ steps.check-review.outputs.review_approved }}
+      test_passed: ${{ steps.test-extractor.outputs.test_passed }}
+      success_rate: ${{ steps.test-extractor.outputs.success_rate }}
+      extracted: ${{ steps.test-extractor.outputs.extracted }}
+      total: ${{ steps.test-extractor.outputs.total }}
+
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+      id-token: write
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: extractor/${{ needs.generate-extractor.outputs.domain }}
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        working-directory: ExtractorPatternAgent
+        run: |
+          uv pip install --system -r requirements.txt
+
+      - name: Test extractor
+        id: test-extractor
+        working-directory: ExtractorPatternAgent
+        run: |
+          uv run scripts/test_extractor.py \
+            ${{ needs.generate-extractor.outputs.domain }} \
+            --json > test_results.json
+
+          echo "📊 Test Results:"
+          cat test_results.json | jq .
+
+          # Parse results
+          CRITICAL_OK=$(jq -r '.summary.critical_fields_ok' test_results.json)
+          SUCCESS_RATE=$(jq -r '.summary.success_rate' test_results.json)
+          EXTRACTED=$(jq -r '.summary.extracted' test_results.json)
+          TOTAL=$(jq -r '.summary.total_fields' test_results.json)
+
+          echo "critical_ok=$CRITICAL_OK" >> $GITHUB_OUTPUT
+          echo "success_rate=$SUCCESS_RATE" >> $GITHUB_OUTPUT
+          echo "extracted=$EXTRACTED" >> $GITHUB_OUTPUT
+          echo "total=$TOTAL" >> $GITHUB_OUTPUT
+
+          if [ "$CRITICAL_OK" != "true" ]; then
+            echo "test_passed=false" >> $GITHUB_OUTPUT
+            echo "❌ ERROR: Critical fields (price, title, currency) failed extraction"
+            exit 1
+          fi
+
+          echo "test_passed=true" >> $GITHUB_OUTPUT
+          echo "✅ Tests passed: $EXTRACTED/$TOTAL fields extracted"
+
+      - name: Claude Code Review
+        id: claude-review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ needs.generate-extractor.outputs.pr_number }}
+            DOMAIN: ${{ needs.generate-extractor.outputs.domain }}
+
+            Review this auto-generated extractor pattern for:
+
+            **Code Quality:**
+            - Follows BaseExtractor patterns
+            - Has 2-3 fallback methods per field
+            - Proper error handling (returns None on failure)
+            - Uses BaseExtractor.clean_price() and clean_text()
+            - No eval() or exec() usage
+
+            **Security:**
+            - No network calls (should only parse HTML)
+            - No file system access
+            - Safe BeautifulSoup usage
+            - No dangerous imports (subprocess, os.system, etc.)
+
+            **Test Results:**
+            - Critical fields passing: ${{ steps.test-extractor.outputs.critical_ok }}
+            - Success rate: ${{ steps.test-extractor.outputs.success_rate }}
+            - Fields extracted: ${{ steps.test-extractor.outputs.extracted }}/${{ steps.test-extractor.outputs.total }}
+
+            Review the generated extractor file, then post your assessment.
+
+            If ALL checks pass (quality + security + tests), post this comment:
+            ```bash
+            gh pr comment ${{ needs.generate-extractor.outputs.pr_number }} --body "✅ **Auto-review: APPROVED**
+
+            **Code Quality**: PASS
+            **Security**: PASS
+            **Tests**: PASS (${{ steps.test-extractor.outputs.success_rate }} success rate)"
+            ```
+
+            If ANY check fails, post this comment:
+            ```bash
+            gh pr comment ${{ needs.generate-extractor.outputs.pr_number }} --body "❌ **Auto-review: REJECTED**
+
+            **Reason**: [explain what failed]"
+            ```
+          claude_args: '--allowed-tools "Bash(gh pr:*)"'
+
+      - name: Wait for review comment
+        run: |
+          echo "⏳ Waiting for Claude Code review to post comment..."
+          sleep 15
+
+      - name: Check review decision
+        id: check-review
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get latest comments
+          REVIEW_COMMENT=$(gh pr view ${{ needs.generate-extractor.outputs.pr_number }} \
+            --json comments -q '.comments[-1].body')
+
+          echo "📝 Latest comment:"
+          echo "$REVIEW_COMMENT"
+
+          if echo "$REVIEW_COMMENT" | grep -q "✅.*APPROVED"; then
+            echo "review_approved=true" >> $GITHUB_OUTPUT
+            echo "✅ Review approved!"
+          else
+            echo "review_approved=false" >> $GITHUB_OUTPUT
+            echo "❌ Review rejected or inconclusive"
+            exit 1
+          fi
+
+      - name: Approve PR
+        if: steps.check-review.outputs.review_approved == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr review ${{ needs.generate-extractor.outputs.pr_number }} \
+            --approve \
+            --body "✅ **Automated review passed**
+
+          - **Code quality**: PASS
+          - **Security**: PASS
+          - **Tests**: PASS (${{ steps.test-extractor.outputs.extracted }}/${{ steps.test-extractor.outputs.total }} fields)
+          - **Critical fields**: PASS (price, title, currency)
+
+          Auto-merge will be enabled."
+
+  auto-merge-extractor:
+    runs-on: ubuntu-latest
+    needs: [generate-extractor, review-extractor]
+    if: needs.review-extractor.outputs.review_approved == 'true'
+    timeout-minutes: 5
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Enable auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr merge ${{ needs.generate-extractor.outputs.pr_number }} \
+            --auto \
+            --squash \
+            --delete-branch
+
+          echo "✅ Auto-merge enabled for PR #${{ needs.generate-extractor.outputs.pr_number }}"
+
+      - name: Post merge comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment ${{ needs.generate-extractor.outputs.pr_number }} \
+            --body "🎉 **Auto-merge enabled!**
+
+          This PR will merge automatically when all required status checks pass.
+
+          **Review Summary:**
+          - Code Quality: ✅ PASS
+          - Security: ✅ PASS
+          - Tests: ✅ PASS (${{ needs.review-extractor.outputs.success_rate }} success rate)
+          - Critical Fields: ✅ PASS (price, title, currency)
+
+          Branch will be deleted after merge."
