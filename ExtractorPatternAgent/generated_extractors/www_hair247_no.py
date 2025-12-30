@@ -38,6 +38,7 @@ def extract_price(soup: BeautifulSoup) -> Optional[Decimal]:
     Primary: itemprop="price" with content or data-unitprice attribute
     Confidence: 0.95
     """
+    
     # Primary selector: itemprop="price" with content attribute
     elem = soup.select_one('[itemprop="price"][content]')
     if elem:
