@@ -17,14 +17,23 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 FAILED_TOOLS_LOG = LOG_DIR / "failed_tools.jsonl"
 STATS_FILE = LOG_DIR / "failed_tools_stats.txt"
+DEBUG_LOG = LOG_DIR / "track_failed_tools_debug.log"
+
+
+def debug(msg: str):
+    """Write debug message."""
+    with open(DEBUG_LOG, "a") as f:
+        f.write(f"[{datetime.now().isoformat()}] {msg}\n")
 
 
 def parse_hook_input():
     """Parse the hook input from stdin."""
     try:
         data = json.load(sys.stdin)
+        debug(f"Parsed hook input: tool_name={data.get('tool_name')}, event={data.get('hook_event_name')}")
         return data
-    except (json.JSONDecodeError, ValueError):
+    except (json.JSONDecodeError, ValueError) as e:
+        debug(f"Failed to parse JSON: {e}")
         return {}
 
 
@@ -32,26 +41,19 @@ def is_bash_failed(tool_response: dict) -> tuple:
     """
     Check if a Bash tool execution failed.
 
-    Bash responses include exit_code. Non-zero means failure.
+    PostToolUse includes returnCodeInterpretation when Bash exits with non-zero code.
     Returns: (is_failed: bool, error_msg: str)
     """
     if not isinstance(tool_response, dict):
         return False, ""
 
-    exit_code = tool_response.get("exit_code")
+    # returnCodeInterpretation field indicates non-zero exit code
+    rci = tool_response.get("returnCodeInterpretation")
+    if rci:
+        debug(f"Detected failure via returnCodeInterpretation: {rci}")
+        return True, rci
 
-    # If exit_code is 0 or not present, tool succeeded
-    if exit_code is None or exit_code == 0:
-        return False, ""
-
-    # Tool failed with non-zero exit code
-    error_msg = tool_response.get("stderr", "").strip()
-    if not error_msg:
-        error_msg = tool_response.get("stdout", "").strip()
-    if not error_msg:
-        error_msg = f"Exit code: {exit_code}"
-
-    return True, error_msg
+    return False, ""
 
 
 def log_failure(tool_name: str, command: str = "", error_msg: str = ""):
@@ -65,6 +67,8 @@ def log_failure(tool_name: str, command: str = "", error_msg: str = ""):
 
     with open(FAILED_TOOLS_LOG, "a") as f:
         f.write(json.dumps(failure_record) + "\n")
+
+    debug(f"Logged failure: {command} -> {error_msg}")
 
 
 def generate_stats():
@@ -102,23 +106,33 @@ def generate_stats():
 
 
 def main():
+    debug("Hook invoked")
+
     hook_input = parse_hook_input()
 
     # Only process Bash tool calls
     tool_name = hook_input.get("tool_name", "")
+    debug(f"Tool name: {tool_name}")
+
     if tool_name != "Bash":
+        debug(f"Skipping non-Bash tool: {tool_name}")
         sys.exit(0)
 
     # Check if the Bash command failed
     tool_response = hook_input.get("tool_response", {})
+    debug(f"Tool response: {json.dumps(tool_response)}")
+
     is_failed, error_msg = is_bash_failed(tool_response)
+    debug(f"Is failed: {is_failed}, error: {error_msg}")
 
     if not is_failed:
+        debug("Command succeeded, not logging")
         sys.exit(0)
 
     # Extract the command that was run
     tool_input = hook_input.get("tool_input", {})
     command = tool_input.get("command", "unknown")
+    debug(f"Command: {command}")
 
     log_failure(tool_name, command, error_msg)
     generate_stats()
