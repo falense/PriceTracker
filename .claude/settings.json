@@ -77,6 +77,10 @@
           {
             "type": "command",
             "command": "uv run scripts/load-memories.py"
+          },
+          {
+            "type": "command",
+            "command": "python3 scripts/view-failed-tools.py 10 2>/dev/null | head -20"
           }
         ]
       }
@@ -97,7 +101,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/track-failed-tools.py",
+            "command": "python3 scripts/track-failed-tools.py",
             "timeout": 5
           }
         ]
