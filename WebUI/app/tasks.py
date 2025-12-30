@@ -461,7 +461,7 @@ def cache_all_product_images(self):
     """
     Background task to cache all product images to MinIO.
 
-    Fetches and caches images for all active products with image URLs.
+    Fetches and caches images for all products with image URLs.
     Skips images that are already cached. Can be run manually via management
     command or scheduled periodically.
 
@@ -480,7 +480,8 @@ def cache_all_product_images(self):
     )
 
     try:
-        products = Product.objects.filter(active=True).exclude(image_url__isnull=True).exclude(image_url='')
+        # Get all products with image URLs (no 'active' field in Product model)
+        products = Product.objects.exclude(image_url__isnull=True).exclude(image_url='')
 
         total = products.count()
         cached = 0
