@@ -76,3 +76,29 @@ The project has comprehensive smoke tests in `WebUI/app/test_smoke.py` that veri
 - `UtilityEndpointsTest` - Utility endpoints
 
 The Stop hook will block Claude from stopping if any smoke test fails, ensuring broken pages are fixed immediately.
+
+### Screenshot Tool
+
+**ALWAYS take screenshots when the user asks about visual/UI issues.**
+
+This is MANDATORY - never make suggestions about visual styling, layout, or UI appearance without first taking a screenshot to see what it actually looks like.
+
+When working on UI bugs, layout problems, or any visual issues, take screenshots to see what the page actually looks like:
+
+```bash
+# Screenshot with existing session
+./scripts/screenshot.sh --session local http://localhost:8000/page-url
+
+# Screenshots are saved to .screenshots/ directory
+# View the most recent screenshot with:
+Read .screenshots/screenshot_localhost_8000_local_TIMESTAMP.png
+```
+
+**Common scenarios requiring screenshots:**
+- User mentions page looks "messy", "broken", "weird", or similar
+- User asks about styling improvements
+- User reports layout issues
+- User asks "what can be improved" for UI/UX
+- Any discussion about visual appearance
+
+See `scripts/README_SCREENSHOT.md` for full documentation including interactive login for creating sessions.
