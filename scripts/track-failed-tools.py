@@ -42,26 +42,71 @@ def is_bash_failed(tool_response: dict) -> tuple:
     Check if a Bash tool execution failed.
 
     PostToolUse includes returnCodeInterpretation when Bash exits with non-zero code.
-    Also checks for stderr as a secondary indicator of failure.
+    Also checks stderr and error patterns in stdout as secondary indicators.
     Returns: (is_failed: bool, error_msg: str)
     """
     if not isinstance(tool_response, dict):
         return False, ""
 
-    # returnCodeInterpretation field indicates non-zero exit code
+    # Primary: returnCodeInterpretation field indicates non-zero exit code
     rci = tool_response.get("returnCodeInterpretation")
     if rci:
         debug(f"Detected failure via returnCodeInterpretation: {rci}")
         return True, rci
 
-    # Fallback: Check for stderr as indicator of failure
-    # (Some failures may not have returnCodeInterpretation but still have stderr)
+    # Secondary: Check stderr for error messages
     stderr = tool_response.get("stderr", "").strip()
     if stderr:
         debug(f"Detected failure via stderr: {stderr}")
         return True, stderr
 
+    # Tertiary: Check stdout for common error patterns
+    # (errors redirected to stdout via 2>&1)
+    stdout = tool_response.get("stdout", "").strip()
+    if stdout and _is_error_pattern(stdout):
+        debug(f"Detected failure via error pattern in stdout")
+        return True, stdout
+
     return False, ""
+
+
+def _is_error_pattern(text: str) -> bool:
+    """
+    Check if stdout text contains actual command error patterns.
+
+    Looks for patterns that typically indicate real command failures:
+    - "command: message" format (e.g., "grep: /file: No such file or directory")
+    - "Error:" or "ERROR:" at start
+    - Python tracebacks (Traceback, Exception)
+    - Messages ending with typical error markers
+    """
+    if not text:
+        return False
+
+    lines = text.split("\n")
+    first_line = lines[0].lower()
+
+    # Pattern: "command: error message" (most common for CLI errors)
+    # E.g., "cat: /file: No such file or directory"
+    #       "grep: /file: No such file"
+    if ":" in first_line and any(
+        keyword in first_line for keyword in [
+            "no such",
+            "cannot",
+            "not found",
+            "permission denied",
+            "denied",
+            "error",
+            "failed",
+        ]
+    ):
+        return True
+
+    # Python errors: Traceback or Exception
+    if any(keyword in text for keyword in ["Traceback", "Exception", "Error:", "ERROR:"]):
+        return True
+
+    return False
 
 
 def log_failure(tool_name: str, command: str = "", error_msg: str = ""):
