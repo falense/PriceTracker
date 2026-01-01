@@ -28,7 +28,7 @@
 
                 <div class="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400 mb-6">
                     {% if product.lowest_price_listing %}
-                    <span>{{ product.lowest_price_listing.store.name }}</span>
+                    <a href="https://{{ product.lowest_price_listing.store.domain }}" target="_blank" rel="noopener noreferrer" class="text-primary-600 dark:text-primary-400 hover:underline">{{ product.lowest_price_listing.store.domain }}</a>
                     <span>•</span>
                     {% endif %}
                     <span>Lagt til {{ product.created_at|date:"M d, Y" }}</span>
@@ -50,7 +50,7 @@
                             {{ product.lowest_price_listing.current_price|format_currency:product.lowest_price_listing.currency }}
                         </span>
                         <span class="text-sm text-gray-500 dark:text-gray-400">
-                            hos {{ product.lowest_price_listing.store.name }}
+                            hos <a href="https://{{ product.lowest_price_listing.store.domain }}" target="_blank" rel="noopener noreferrer" class="text-primary-600 dark:text-primary-400 hover:underline">{{ product.lowest_price_listing.store.domain }}</a>
                         </span>
                     </div>
                 </div>
@@ -63,7 +63,7 @@
                         {% for listing in listings %}
                         <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                             <div>
-                                <p class="font-medium text-gray-900 dark:text-white">{{ listing.store.name }}</p>
+                                <a href="https://{{ listing.store.domain }}" target="_blank" rel="noopener noreferrer" class="font-medium text-primary-600 dark:text-primary-400 hover:underline">{{ listing.store.domain }}</a>
                                 <p class="text-xs text-gray-500 dark:text-gray-400">
                                     Oppdatert for {{ listing.last_checked|timesince }} siden
                                 </p>

@@ -63,7 +63,7 @@
                                 {{ best_item.listing.current_price|format_currency:best_item.listing.currency }}
                             </span>
                             <span class="text-lg text-green-700 dark:text-green-300">
-                                hos {{ best_item.listing.store.name }}
+                                hos <a href="https://{{ best_item.listing.store.domain }}" target="_blank" rel="noopener noreferrer" class="text-primary-600 dark:text-primary-400 hover:underline">{{ best_item.listing.store.domain }}</a>
                             </span>
                         </div>
                         {% if subscription.target_price %}
@@ -82,7 +82,7 @@
                                 {{ best_item.best_listing.current_price|format_currency:best_item.best_listing.currency }}
                             </span>
                             <span class="text-lg text-green-700 dark:text-green-300">
-                                hos {{ best_item.best_listing.store.name }}
+                                hos <a href="https://{{ best_item.best_listing.store.domain }}" target="_blank" rel="noopener noreferrer" class="text-primary-600 dark:text-primary-400 hover:underline">{{ best_item.best_listing.store.domain }}</a>
                             </span>
                         </div>
                         <div class="flex items-center gap-2 mb-2">

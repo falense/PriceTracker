@@ -30,7 +30,7 @@
                         {{ product.name }}
                     </h4>
                     <p class="text-sm text-gray-500 dark:text-gray-400">
-                        Fra {{ product.listings.first.store.name|default:"butikk" }}
+                        Fra <a href="https://{{ product.listings.first.store.domain }}" target="_blank" rel="noopener noreferrer" class="text-primary-600 dark:text-primary-400 hover:underline" onclick="event.stopPropagation()">{{ product.listings.first.store.domain|default:"butikk" }}</a>
                     </p>
                 </div>
 
@@ -40,7 +40,7 @@
                         {{ product.lowest_price_listing.current_price|format_currency:product.lowest_price_listing.currency }}
                     </p>
                     <p class="text-xs text-gray-500 dark:text-gray-400">
-                        hos {{ product.lowest_price_listing.store.name }}
+                        hos <a href="https://{{ product.lowest_price_listing.store.domain }}" target="_blank" rel="noopener noreferrer" class="text-primary-600 dark:text-primary-400 hover:underline" onclick="event.stopPropagation()">{{ product.lowest_price_listing.store.domain }}</a>
                     </p>
                     {% else %}
                     <p class="text-sm text-gray-500 dark:text-gray-400">
