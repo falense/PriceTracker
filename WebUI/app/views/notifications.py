@@ -41,3 +41,20 @@ def mark_notifications_read(request):
     """Mark all notifications as read."""
     Notification.objects.filter(user=request.user, read=False).update(read=True)
     return redirect("notifications_list")
+
+
+@login_required
+@require_http_methods(["POST"])
+def mark_notification_read(request, notification_id):
+    """Mark a single notification as read."""
+    try:
+        notification = Notification.objects.get(
+            id=notification_id, user=request.user
+        )
+        notification.read = True
+        notification.save()
+        logger.info(f"Notification {notification_id} marked as read by user {request.user.username}")
+    except Notification.DoesNotExist:
+        logger.warning(f"Notification {notification_id} not found or not owned by user {request.user.username}")
+
+    return redirect("notifications_list")

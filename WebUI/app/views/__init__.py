@@ -41,6 +41,7 @@ from .search import (
 from .notifications import (
     notifications_list,
     mark_notifications_read,
+    mark_notification_read,
 )
 
 # User settings
@@ -110,6 +111,7 @@ __all__ = [
     # Notifications
     'notifications_list',
     'mark_notifications_read',
+    'mark_notification_read',
     # Settings
     'user_settings',
     'change_password',
