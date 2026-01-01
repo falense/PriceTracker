@@ -185,6 +185,12 @@ class PriceStorage:
         instead of querying git directly. This allows version tracking to work in
         containerized environments without git installed.
 
+        **Automatic Activation Logic:**
+        - When creating a new version, it is automatically activated (is_active=True)
+        - Any existing active versions for the same domain are deactivated
+        - When finding an existing inactive version, it is automatically activated
+        - This ensures exactly one active version per domain at all times
+
         Args:
             extractor_module: Extractor module name (e.g., "komplett_no", "finn_no")
                              If None, returns None (no version tracking)
@@ -227,7 +233,7 @@ class PriceStorage:
             # Check if version already exists
             cursor.execute(
                 """
-                SELECT id FROM app_extractorversion
+                SELECT id, domain, is_active FROM app_extractorversion
                 WHERE commit_hash = ? AND extractor_module = ?
                 """,
                 (commit_hash, extractor_module),
@@ -235,8 +241,48 @@ class PriceStorage:
             row = cursor.fetchone()
 
             if row:
-                logger.debug("found_existing_version", version_id=row["id"], extractor_module=extractor_module)
-                return row["id"]
+                version_id = row["id"]
+                existing_domain = row["domain"]
+                is_active = row["is_active"]
+
+                # Ensure this version is active (in case it was created inactive before this fix)
+                if not is_active and existing_domain:
+                    # Deactivate other versions for this domain
+                    cursor.execute(
+                        """
+                        UPDATE app_extractorversion
+                        SET is_active = 0
+                        WHERE domain = ? AND is_active = 1 AND id != ?
+                        """,
+                        (existing_domain, version_id)
+                    )
+
+                    # Activate this version
+                    cursor.execute(
+                        """
+                        UPDATE app_extractorversion
+                        SET is_active = 1
+                        WHERE id = ?
+                        """,
+                        (version_id,)
+                    )
+                    conn.commit()
+
+                    logger.info(
+                        "activated_existing_version",
+                        version_id=version_id,
+                        extractor_module=extractor_module,
+                        domain=existing_domain
+                    )
+                else:
+                    logger.debug(
+                        "found_existing_version",
+                        version_id=version_id,
+                        extractor_module=extractor_module,
+                        is_active=is_active
+                    )
+
+                return version_id
 
             # Extract domain from manifest
             domain = version_info.get('domain', '')
@@ -262,7 +308,26 @@ class PriceStorage:
                 except (ValueError, TypeError) as e:
                     logger.warning("failed_to_parse_commit_date", error=str(e))
 
-            # Create new version
+            # Deactivate any existing active versions for this domain
+            # This ensures only one active version per domain
+            if domain:
+                cursor.execute(
+                    """
+                    UPDATE app_extractorversion
+                    SET is_active = 0
+                    WHERE domain = ? AND is_active = 1
+                    """,
+                    (domain,)
+                )
+                deactivated = cursor.rowcount
+                if deactivated > 0:
+                    logger.info(
+                        "deactivated_old_extractors",
+                        domain=domain,
+                        count=deactivated
+                    )
+
+            # Create new version and activate it
             cursor.execute(
                 """
                 INSERT INTO app_extractorversion
@@ -279,7 +344,7 @@ class PriceStorage:
                     commit_author,
                     commit_date_str,
                     json.dumps(metadata),
-                    False,  # is_active defaults to False
+                    True,  # Activate new extractors automatically
                     0.0,    # success_rate defaults to 0.0
                     0,      # total_attempts defaults to 0
                     0,      # successful_attempts defaults to 0
@@ -295,6 +360,8 @@ class PriceStorage:
                 version_id=version_id,
                 commit_hash=commit_hash[:7],
                 extractor_module=extractor_module,
+                domain=domain,
+                is_active=True,
                 extractor_version=version_info.get('version'),
             )
 
