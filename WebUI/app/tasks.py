@@ -162,13 +162,39 @@ async def _fetch_listing_price_async(task_self, listing_id: str):
             price=result.get("price"),
         )
 
+        # Record extraction attempt on ExtractorVersion for statistics
+        # Also refetch listing to get updated data for notification checks below
+        updated_listing = None
+        try:
+            # Refetch listing to get the extractor_version that was set during save_price
+            updated_listing = await sync_to_async(
+                lambda: ProductListing.objects.select_related('extractor_version').get(id=listing_id)
+            )()
+
+            if updated_listing.extractor_version:
+                success = result.get("status") == "success"
+                await sync_to_async(updated_listing.extractor_version.record_attempt)(success)
+                logger.debug(
+                    "extractor_stats_updated",
+                    extractor_version_id=updated_listing.extractor_version.id,
+                    success=success,
+                )
+        except Exception as e:
+            # Don't fail the task if stats update fails
+            logger.warning(
+                "extractor_stats_update_failed",
+                listing_id=listing_id,
+                error=str(e),
+            )
+
         # Check for restock notifications after successful fetch
         if result.get("status") == "success":
             try:
-                # Refetch listing to get updated availability status
-                updated_listing = await sync_to_async(
-                    lambda: ProductListing.objects.get(id=listing_id)
-                )()
+                # Use the already-fetched listing if available, otherwise refetch
+                if not updated_listing:
+                    updated_listing = await sync_to_async(
+                        lambda: ProductListing.objects.get(id=listing_id)
+                    )()
 
                 # Check if any subscriptions should trigger notifications
                 await sync_to_async(
