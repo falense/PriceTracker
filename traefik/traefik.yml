@@ -1,0 +1,66 @@
+# Traefik Static Configuration
+# Production configuration for SSL termination and routing
+
+# Global configuration
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+# API and dashboard (disabled in production for security)
+api:
+  dashboard: false
+  insecure: false
+
+# Entry points
+entryPoints:
+  # HTTP entry point (port 80) - redirect all to HTTPS
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+
+  # HTTPS entry point (port 443)
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        certResolver: letsencrypt
+      middlewares:
+        - security-headers@file
+
+# Let's Encrypt certificate resolver
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: ${ACME_EMAIL}  # Set via environment variable
+      storage: /letsencrypt/acme.json
+      httpChallenge:
+        entryPoint: web
+      # For testing, use staging server to avoid rate limits:
+      # caServer: https://acme-staging-v02.api.letsencrypt.org/directory
+
+# Providers
+providers:
+  # Docker provider for automatic service discovery
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false  # Only expose services with traefik.enable=true
+    network: frontend  # Use frontend network for routing
+
+  # File provider for dynamic configuration
+  file:
+    filename: /etc/traefik/dynamic.yml
+    watch: true
+
+# Logging
+log:
+  level: INFO
+  format: json
+
+# Access logs
+accessLog:
+  format: json

@@ -1,0 +1,27 @@
+# Production Requirements
+# Include all base requirements plus production-specific dependencies
+
+# Include base requirements
+-r requirements.txt
+
+# Production Dependencies
+# ============================================
+
+# PostgreSQL database adapter
+psycopg2-binary>=2.9.9
+
+# Database URL parsing
+dj-database-url>=2.1.0
+
+# Database-backed Celery beat scheduler
+django-celery-beat>=2.5.0
+
+# Static file serving
+whitenoise>=6.6.0
+
+# S3-compatible storage backend (for MinIO)
+django-storages[s3]>=1.14.2
+boto3>=1.34.0
+
+# Production WSGI server (may already be in requirements.txt)
+gunicorn>=21.2.0

@@ -1,0 +1,475 @@
+version: '3.8'
+
+# ====================================================================================
+# PRODUCTION DOCKER COMPOSE CONFIGURATION
+# ====================================================================================
+# Hardened production setup with Traefik SSL termination, PostgreSQL, private MinIO
+# ====================================================================================
+
+services:
+  # ====================================================================================
+  # Traefik - Reverse Proxy & SSL Termination
+  # ====================================================================================
+  traefik:
+    image: traefik:v2.11
+    container_name: pricetracker-traefik
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - frontend
+    ports:
+      - "80:80"    # HTTP (redirects to HTTPS)
+      - "443:443"  # HTTPS
+    environment:
+      - ACME_EMAIL=${ACME_EMAIL}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+      - traefik-certificates:/letsencrypt
+    labels:
+      - "traefik.enable=false"
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  # ====================================================================================
+  # Web - Django Application (Gunicorn)
+  # ====================================================================================
+  web:
+    build:
+      context: ./WebUI
+      dockerfile: Dockerfile.prod
+      args:
+        DJANGO_ENV: production
+    container_name: pricetracker-web
+    restart: unless-stopped
+    command: >
+      sh -c "
+        python manage.py collectstatic --noinput &&
+        python manage.py migrate --noinput &&
+        gunicorn config.wsgi:application
+          --bind 0.0.0.0:8000
+          --workers 4
+          --threads 2
+          --worker-class gthread
+          --worker-tmp-dir /dev/shm
+          --access-logfile -
+          --error-logfile -
+          --log-level info
+          --timeout 120
+          --graceful-timeout 30
+          --keep-alive 5
+      "
+    networks:
+      - frontend
+      - backend
+    expose:
+      - "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    volumes:
+      - static-files:/app/staticfiles
+      - media-files:/app/media
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings
+      - SECRET_KEY=${SECRET_KEY}
+      - DEBUG=False
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
+      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - MINIO_SECURE=False
+      - AWS_STORAGE_BUCKET_NAME=pricetracker-media
+      - AWS_S3_ENDPOINT_URL=https://s3.${DOMAIN}
+      - DOMAIN=${DOMAIN}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=pricetracker_frontend"
+      - "traefik.http.routers.web.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.web.entrypoints=websecure"
+      - "traefik.http.routers.web.tls=true"
+      - "traefik.http.routers.web.tls.certresolver=letsencrypt"
+      - "traefik.http.services.web.loadbalancer.server.port=8000"
+      - "traefik.http.routers.web.middlewares=security-headers@file,rate-limit@file"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ====================================================================================
+  # PostgreSQL - Production Database
+  # ====================================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: pricetracker-postgres
+    restart: unless-stopped
+    networks:
+      - backend
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - postgres-backups:/backups
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    shm_size: 256mb
+    command: >
+      postgres
+        -c max_connections=200
+        -c shared_buffers=256MB
+        -c effective_cache_size=1GB
+        -c maintenance_work_mem=64MB
+        -c checkpoint_completion_target=0.9
+        -c wal_buffers=16MB
+        -c default_statistics_target=100
+        -c random_page_cost=1.1
+        -c effective_io_concurrency=200
+        -c work_mem=2621kB
+        -c min_wal_size=1GB
+        -c max_wal_size=4GB
+        -c log_statement=mod
+        -c log_duration=on
+        -c log_line_prefix='%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    labels:
+      - "traefik.enable=false"
+
+  # ====================================================================================
+  # Redis - Message Broker & Cache
+  # ====================================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: pricetracker-redis
+    restart: unless-stopped
+    networks:
+      - backend
+    command: >
+      redis-server
+        --requirepass ${REDIS_PASSWORD}
+        --maxmemory 512mb
+        --maxmemory-policy allkeys-lru
+        --save 60 1000
+        --appendonly yes
+        --appendfsync everysec
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    labels:
+      - "traefik.enable=false"
+
+  # ====================================================================================
+  # MinIO - S3-Compatible Object Storage (Private with Authenticated Access)
+  # ====================================================================================
+  minio:
+    image: minio/minio:latest
+    container_name: pricetracker-minio
+    restart: unless-stopped
+    networks:
+      - frontend
+      - backend
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - MINIO_BROWSER_REDIRECT_URL=https://minio.${DOMAIN}
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=pricetracker_frontend"
+      # MinIO API (S3-compatible endpoint)
+      - "traefik.http.routers.minio-api.rule=Host(`s3.${DOMAIN}`)"
+      - "traefik.http.routers.minio-api.entrypoints=websecure"
+      - "traefik.http.routers.minio-api.tls=true"
+      - "traefik.http.routers.minio-api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.minio-api.service=minio-api"
+      - "traefik.http.services.minio-api.loadbalancer.server.port=9000"
+      # MinIO Console (Web UI)
+      - "traefik.http.routers.minio-console.rule=Host(`minio.${DOMAIN}`)"
+      - "traefik.http.routers.minio-console.entrypoints=websecure"
+      - "traefik.http.routers.minio-console.tls=true"
+      - "traefik.http.routers.minio-console.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.minio-console.service=minio-console"
+      - "traefik.http.services.minio-console.loadbalancer.server.port=9001"
+
+  # ====================================================================================
+  # Celery Worker (Default Queue)
+  # ====================================================================================
+  celery:
+    build:
+      context: ./WebUI
+      dockerfile: Dockerfile.prod
+    container_name: pricetracker-celery
+    restart: unless-stopped
+    command: >
+      celery -A config worker
+        --loglevel=info
+        --pool=solo
+        --max-tasks-per-child=1000
+        --task-events
+        --without-gossip
+        --without-mingle
+        --without-heartbeat
+    networks:
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    volumes:
+      - ./ExtractorPatternAgent:/ExtractorPatternAgent:ro
+      - ./PriceFetcher:/PriceFetcher:ro
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - MINIO_SECURE=False
+      - EXTRACTOR_PATH=/ExtractorPatternAgent
+      - FETCHER_PATH=/PriceFetcher
+      - PYTHONPATH=/app:/
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A config inspect ping -d celery@$$HOSTNAME"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - "traefik.enable=false"
+
+  # ====================================================================================
+  # Celery Pattern Worker (Pattern Generation Queue)
+  # ====================================================================================
+  celery-pattern-worker:
+    build:
+      context: ./WebUI
+      dockerfile: Dockerfile.prod
+    container_name: pricetracker-celery-pattern
+    restart: unless-stopped
+    command: >
+      celery -A config worker
+        --loglevel=info
+        --pool=solo
+        --queues=pattern_generation
+        --hostname=pattern_worker@%h
+        --max-tasks-per-child=100
+        --task-events
+        --without-gossip
+        --without-mingle
+        --without-heartbeat
+    networks:
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    volumes:
+      - ./ExtractorPatternAgent:/ExtractorPatternAgent:ro
+      - ./PriceFetcher:/PriceFetcher:ro
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - MINIO_SECURE=False
+      - EXTRACTOR_PATH=/ExtractorPatternAgent
+      - FETCHER_PATH=/PriceFetcher
+      - PYTHONPATH=/app:/
+    labels:
+      - "traefik.enable=false"
+
+  # ====================================================================================
+  # Celery Beat - Periodic Task Scheduler
+  # ====================================================================================
+  celery-beat:
+    build:
+      context: ./WebUI
+      dockerfile: Dockerfile.prod
+    container_name: pricetracker-celery-beat
+    restart: unless-stopped
+    command: >
+      celery -A config beat
+        --loglevel=info
+        --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    networks:
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
+    labels:
+      - "traefik.enable=false"
+
+  # ====================================================================================
+  # Flower - Celery Monitoring UI
+  # ====================================================================================
+  flower:
+    build:
+      context: ./WebUI
+      dockerfile: Dockerfile.prod
+    container_name: pricetracker-flower
+    restart: unless-stopped
+    command: >
+      celery -A config flower
+        --port=5555
+        --basic_auth=${FLOWER_USER}:${FLOWER_PASSWORD}
+        --url_prefix=flower
+        --persistent=True
+        --db=/data/flower.db
+        --max_tasks=10000
+    networks:
+      - backend
+      - frontend
+    expose:
+      - "5555"
+    depends_on:
+      - redis
+      - celery
+    volumes:
+      - flower-data:/data
+    environment:
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=pricetracker_frontend"
+      - "traefik.http.routers.flower.rule=Host(`flower.${DOMAIN}`)"
+      - "traefik.http.routers.flower.entrypoints=websecure"
+      - "traefik.http.routers.flower.tls=true"
+      - "traefik.http.routers.flower.tls.certresolver=letsencrypt"
+      - "traefik.http.services.flower.loadbalancer.server.port=5555"
+      - "traefik.http.routers.flower.middlewares=security-headers@file"
+
+  # ====================================================================================
+  # PostgreSQL Backup - Automated Database Backups
+  # ====================================================================================
+  postgres-backup:
+    image: postgres:16-alpine
+    container_name: pricetracker-backup
+    restart: unless-stopped
+    networks:
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - postgres-backups:/backups
+      - ./scripts/backup_postgres.sh:/backup.sh:ro
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-30}
+    command: >
+      sh -c "
+        apk add --no-cache dcron &&
+        echo '${BACKUP_SCHEDULE:-0 2 * * *} /backup.sh' > /etc/crontabs/root &&
+        crond -f -l 2
+      "
+    labels:
+      - "traefik.enable=false"
+
+# ====================================================================================
+# Networks
+# ====================================================================================
+networks:
+  # Frontend network - Traefik and publicly exposed services
+  frontend:
+    driver: bridge
+    internal: false
+
+  # Backend network - Internal services only (isolated from internet)
+  backend:
+    driver: bridge
+    internal: true
+
+# ====================================================================================
+# Volumes
+# ====================================================================================
+volumes:
+  # PostgreSQL database files
+  postgres-data:
+    driver: local
+
+  # PostgreSQL automated backups
+  postgres-backups:
+    driver: local
+
+  # Redis persistence (AOF + RDB)
+  redis-data:
+    driver: local
+
+  # MinIO object storage (artifacts, images, screenshots)
+  minio-data:
+    driver: local
+
+  # Traefik Let's Encrypt certificates
+  traefik-certificates:
+    driver: local
+
+  # Flower persistent database
+  flower-data:
+    driver: local
+
+  # Static files (served via WhiteNoise)
+  static-files:
+    driver: local
+
+  # Media files (user uploads)
+  media-files:
+    driver: local

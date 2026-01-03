@@ -203,3 +203,49 @@ def pricing_view(request):
 def about_view(request):
     """About us page."""
     return render(request, 'about.html')
+
+
+def health_check(request):
+    """
+    Health check endpoint for monitoring and container orchestration.
+
+    Checks:
+    - Database connectivity (SELECT 1)
+    - Redis cache availability
+
+    Returns:
+    - HTTP 200 + JSON if healthy
+    - HTTP 503 + JSON if unhealthy
+    """
+    from django.db import connection
+    from django.core.cache import cache
+
+    health = {
+        'status': 'healthy',
+        'checks': {}
+    }
+
+    # Check database
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT 1')
+        health['checks']['database'] = 'ok'
+    except Exception as e:
+        health['status'] = 'unhealthy'
+        health['checks']['database'] = f'error: {str(e)}'
+        logger.error("health_check_database_failed", error=str(e))
+
+    # Check Redis cache
+    try:
+        cache.set('health_check', 'ok', 10)
+        if cache.get('health_check') == 'ok':
+            health['checks']['redis'] = 'ok'
+        else:
+            raise Exception('Redis cache test failed')
+    except Exception as e:
+        health['status'] = 'unhealthy'
+        health['checks']['redis'] = f'error: {str(e)}'
+        logger.error("health_check_redis_failed", error=str(e))
+
+    status_code = 200 if health['status'] == 'healthy' else 503
+    return JsonResponse(health, status=status_code)

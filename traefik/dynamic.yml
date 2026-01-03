@@ -1,0 +1,39 @@
+# Traefik Dynamic Configuration
+# Middleware and TLS options
+
+http:
+  middlewares:
+    # Security headers middleware
+    security-headers:
+      headers:
+        browserXssFilter: true
+        contentTypeNosniff: true
+        forceSTSHeader: true
+        frameDeny: false  # Allow framing for same origin
+        customFrameOptionsValue: "SAMEORIGIN"
+        stsIncludeSubdomains: true
+        stsPreload: true
+        stsSeconds: 31536000  # 1 year
+        customResponseHeaders:
+          X-Robots-Tag: "none"  # Prevent indexing
+          Server: ""  # Hide server information
+
+    # Rate limiting middleware
+    rate-limit:
+      rateLimit:
+        average: 100  # Average requests per second
+        burst: 50  # Burst capacity
+        period: 1s
+
+  # TLS options
+  options:
+    default:
+      minVersion: VersionTLS12
+      cipherSuites:
+        - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+        - TLS_AES_256_GCM_SHA384
+        - TLS_AES_128_GCM_SHA256
+        - TLS_CHACHA20_POLY1305_SHA256
+      sniStrict: true

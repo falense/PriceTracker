@@ -63,6 +63,7 @@ from .utilities import (
     pricing_view,
     about_view,
     submit_feedback,
+    health_check,
 )
 
 # Admin views
@@ -124,6 +125,7 @@ __all__ = [
     'pricing_view',
     'about_view',
     'submit_feedback',
+    'health_check',
     # Admin
     'admin_dashboard',
     'admin_logs',

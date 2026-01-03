@@ -7,6 +7,8 @@ from . import views
 from . import addon_api
 
 urlpatterns = [
+    # Health check (for production monitoring)
+    path("health/", views.health_check, name="health_check"),
     # Main pages
     path("", views.dashboard, name="dashboard"),
     path("login/", views.login_view, name="login"),
